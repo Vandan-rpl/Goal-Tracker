@@ -1,0 +1,39 @@
+.input-group{
+
+margin-bottom:20px;
+
+}
+
+.input-group label{
+
+display:block;
+
+margin-bottom:8px;
+
+font-size:14px;
+
+font-weight:600;
+
+}
+
+.input-group input{
+
+width:100%;
+
+height:46px;
+
+border:1px solid #d1d5db;
+
+border-radius:8px;
+
+padding:0 15px;
+
+font-size:14px;
+
+}
+
+.input-group input:focus{
+
+border-color:#2563eb;
+
+}
