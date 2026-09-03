@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { 
     getGoals, 
+    getAllEmployeeGoals,
     getGoalById, 
     createGoal, 
     updateGoal, 
@@ -18,15 +19,17 @@ const { verifyToken } = require('../middleware/authMiddleware');
 // AND before any wildcard '/:id' route.
 // ============================================
 
-// Public: view a single goal via email link
-router.get('/:id', getGoalById);
-
 // ============================================
 // PROTECTED ROUTES (JWT required)
 // ============================================
 router.use(verifyToken);
 
-router.get('/', getGoals);
+router.get('/all-goals', getGoals);
+router.get('/all-employee-goals', getAllEmployeeGoals);
+
+// Public: view a single goal via email link
+router.get('/:id', getGoalById);
+
 router.post('/', createGoal);
 
 // Submit HOD / Business Head review (requires login, so req.user is populated)

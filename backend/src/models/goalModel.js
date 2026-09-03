@@ -42,6 +42,11 @@ const getManagersGoalsByBusinessHeadId = async (businessHeadId) => {
         JOIN dbo.Users u ON g.UserID = u.UserID
         WHERE u.BusinessHeadID = @BusinessHeadID
           AND g.UserID <> @BusinessHeadID
+          AND (
+              (u.ReportingManagerID IS NULL AND u.HODID IS NULL)
+              OR u.ReportingManagerID = @BusinessHeadID
+              OR u.HODID = @BusinessHeadID
+          )
         ORDER BY g.CreatedDate DESC
     `);
     return result.recordset;

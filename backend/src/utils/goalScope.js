@@ -15,12 +15,15 @@ const { sql } = require('../config/db');
  * Role names match Users.Role values exactly (see constants/roles.js):
  * 'Employee', 'HOD', 'BusinessHead', 'Admin'.
  */
-const getScopedUserIds = async (pool, userId, role) => {
-    if (role === 'Employee') {
+// GoalScope.js
+const getScopedUserIds = async (pool, userId, role, { forApproval = false } = {}) => {
+    const normalizedRole = (role || '').trim().toUpperCase();
+
+    if (normalizedRole === 'EMPLOYEE') {
         return [userId];
     }
 
-    if (role === 'HOD') {
+    if (normalizedRole === 'HOD') {
         const result = await pool.request()
             .input('UserID', sql.Int, userId)
             .query(`
@@ -30,19 +33,27 @@ const getScopedUserIds = async (pool, userId, role) => {
         return result.recordset.map((r) => r.UserID);
     }
 
-    if (role === 'BusinessHead') {
+    if (normalizedRole === 'BUSINESSHEAD') {
+        if (!forApproval) {
+            // Viewing: business head sees everyone, no scoping.
+            return null;
+        }
+        // Approving: restrict to direct hierarchy only.
         const result = await pool.request()
             .input('UserID', sql.Int, userId)
             .query(`
                 SELECT UserID FROM dbo.Users
-                WHERE BusinessHeadID = @UserID OR UserID = @UserID
+                WHERE (BusinessHeadID = @UserID OR UserID = @UserID)
+                  AND (
+                      (ReportingManagerID IS NULL AND HODID IS NULL)
+                      OR ReportingManagerID = @UserID
+                      OR HODID = @UserID
+                  )
             `);
         return result.recordset.map((r) => r.UserID);
     }
 
-    // Admin (or any unrecognized role) — company-wide, no scoping. There is
-    // only one tenant/company anywhere in this schema, so "company-wide"
-    // just means "all rows".
+    // Admin (or any unrecognized role) — company-wide, no scoping.
     return null;
 };
 

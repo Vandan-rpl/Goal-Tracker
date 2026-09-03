@@ -46,8 +46,17 @@ const ViewGoal = () => {
     .replace(/_/g, ' ')
     .replace(/\s+/g, ' ');
 
-  const approverRoles = ['hod', 'cfo', 'business head', 'manager'];
+  const approverRoles = ['hod', 'cfo', 'businesshead', 'business head', 'business_head', 'manager'];
   const isAuthorizedApprover = approverRoles.includes(normalizedRole);
+
+  const getApprovalStatusForRole = () => {
+    if (['businesshead', 'business head', 'business_head'].includes(normalizedRole)) {
+      return 'Business Head Approved';
+    }
+    return 'HOD Approved';
+  };
+
+  const approvalStatus = getApprovalStatusForRole();
 
   // Statuses at which a review (rating + comment) can be submitted
   const reviewableStatuses = ['HOD Approved', 'Reviewed By HOD'];
@@ -73,7 +82,11 @@ const ViewGoal = () => {
   }
 
   const isGoalOwner = goal && loggedInUserId != null && Number(goal.UserID) === Number(loggedInUserId);
-  const canShowApproveReject = isAuthorizedApprover && !isGoalOwner && goal && goal.GoalStatus === 'Submitted';
+  const canShowApproveReject =
+    isAuthorizedApprover &&
+    !isGoalOwner &&
+    goal &&
+    ['Submitted', 'HOD Approved', 'Reviewed By HOD'].includes(goal.GoalStatus);
 
   // "Goal status allows updates" — mirrors the same judgment call made in
   // QuarterlyUpdate.jsx: any status from initial approval onward, since
@@ -494,7 +507,7 @@ const ViewGoal = () => {
                   {actionLoading ? 'Processing...' : 'Reject Goal'}
                 </button>
                 <button
-                  onClick={() => handleGoalAction('HOD Approved')}
+                  onClick={() => handleGoalAction(approvalStatus)}
                   disabled={actionLoading}
                   className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm shadow-md transition disabled:opacity-50"
                 >

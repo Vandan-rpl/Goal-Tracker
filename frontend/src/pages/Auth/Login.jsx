@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
+import {toast} from 'react-toastify';
 
 const Login = () => {
   const [username, setUsername] = useState(''); // Handles either username or email input
@@ -14,7 +15,8 @@ const Login = () => {
     setError('');
     
     // Sends the username/email field to match backend requirement
-    const res = await login(username, password); 
+    try {
+      const res = await login(username, password); 
 
     if (res.success) {
       // Check if password change is required on first login
@@ -24,10 +26,17 @@ const Login = () => {
       if (passwordChangedState === false) {
         navigate('/force-reset-password');
       } else {
+        toast.success('Login successful!');
         navigate('/dashboard');
       }
-    } else {
-      setError(res.message);
+    }else {
+      toast.error(res.message || 'Login failed. Please check your credentials.');
+      setError(res.message || 'Login failed. Please check your credentials.');
+    }
+    } catch (err) {
+      console.error('Login error: ',err);
+      toast.error('Login failed. Please check your credentials.');
+      setError(err.respones?.data?.message);
     }
   };
 

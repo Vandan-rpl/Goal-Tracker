@@ -47,7 +47,7 @@ axiosInstance.interceptors.response.use(
       case 401:
         localStorage.removeItem("token");
         sessionStorage.removeItem("token");
-        window.location.href = "/login";
+        // window.location.href = "/login";
         break;
 
       case 403:

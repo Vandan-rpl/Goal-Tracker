@@ -49,9 +49,27 @@ const notifyGoalHierarchy = async (userId, newGoalID, GoalTitle, goalStatus) => 
     const employeeName = `${employee.FirstName || ''} ${employee.LastName || ''}`.trim() || 'Employee';
     const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/goals/view/${newGoalID}`;
 
-    const superiorIds = [employee.ReportingManagerID, employee.HODID, employee.BusinessHeadID]
-        .filter((id) => id !== null && id !== undefined && id !== '')
-        .map((id) => Number(id))
+    const directApproverIds = [];
+
+    if (employee.ReportingManagerID !== null && employee.ReportingManagerID !== undefined && employee.ReportingManagerID !== '') {
+        directApproverIds.push(Number(employee.ReportingManagerID));
+    }
+
+    if (employee.HODID !== null && employee.HODID !== undefined && employee.HODID !== '') {
+        directApproverIds.push(Number(employee.HODID));
+    }
+
+    if (
+        employee.BusinessHeadID !== null &&
+        employee.BusinessHeadID !== undefined &&
+        employee.BusinessHeadID !== '' &&
+        (!employee.ReportingManagerID || employee.ReportingManagerID === '') &&
+        (!employee.HODID || employee.HODID === '')
+    ) {
+        directApproverIds.push(Number(employee.BusinessHeadID));
+    }
+
+    const superiorIds = directApproverIds
         .filter((id) => !Number.isNaN(id) && id !== userId)
         .filter((id, index, arr) => arr.indexOf(id) === index);
 
@@ -117,6 +135,43 @@ const getGoals = async (req, res) => {
     } catch (error) {
         console.error('Get Goals Error:', error);
         return res.status(500).json({ success: false, message: 'Internal server error while fetching goals.', errors: error.message });
+    }
+};
+
+const getAllEmployeeGoals = async (req, res) => {
+    try {
+        const role = (req.user?.Role || req.user?.role || '').toUpperCase();
+
+        if (role !== 'BUSINESSHEAD' && role !== 'ADMIN') {
+            return res.status(403).json({ success: false, message: 'Not authorized.' });
+        }
+
+        const managerId = req.user?.UserID || req.user?.userId;
+        const pool = await poolPromise;
+        const request = pool.request();
+        request.input('ManagerID', sql.Int, managerId);
+
+        const result = await request.query(`
+            SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
+                   g.GoalID, g.GoalTitle, g.GoalStatus, g.CreatedDate, g.ModifiedDate, g.ApprovedDate,
+                   CASE WHEN (
+                       u.BusinessHeadID = @ManagerID
+                       AND (
+                           (u.ReportingManagerID IS NULL AND u.HODID IS NULL)
+                           OR u.ReportingManagerID = @ManagerID
+                           OR u.HODID = @ManagerID
+                       )
+                   ) THEN 1 ELSE 0 END AS InApprovalScope
+            FROM dbo.Users u
+            JOIN dbo.Goals g ON g.UserID = u.UserID
+            WHERE g.GoalStatus <> 'Draft'
+            ORDER BY g.CreatedDate DESC
+        `);
+
+        return res.status(200).json({ success: true, data: result.recordset });
+    } catch (error) {
+        console.error("Get All Employee Goals Error:", error);
+        return res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
 
@@ -491,15 +546,27 @@ const canApproveOrRejectGoal = async (requesterUserId, goalOwnerUserId) => {
     const ownerHierarchy = result.recordset[0];
     if (!ownerHierarchy) return false;
 
-    const superiorIds = [
-        ownerHierarchy.ReportingManagerID,
-        ownerHierarchy.HODID,
-        ownerHierarchy.BusinessHeadID,
-    ];
+    const directApproverIds = [];
 
-    return superiorIds
-        .filter((id) => id !== null && id !== undefined && id !== '')
-        .some((id) => Number(id) === Number(requesterUserId));
+    if (ownerHierarchy.ReportingManagerID !== null && ownerHierarchy.ReportingManagerID !== undefined && ownerHierarchy.ReportingManagerID !== '') {
+        directApproverIds.push(Number(ownerHierarchy.ReportingManagerID));
+    }
+
+    if (ownerHierarchy.HODID !== null && ownerHierarchy.HODID !== undefined && ownerHierarchy.HODID !== '') {
+        directApproverIds.push(Number(ownerHierarchy.HODID));
+    }
+
+    if (
+        ownerHierarchy.BusinessHeadID !== null &&
+        ownerHierarchy.BusinessHeadID !== undefined &&
+        ownerHierarchy.BusinessHeadID !== '' &&
+        (!ownerHierarchy.ReportingManagerID || ownerHierarchy.ReportingManagerID === '') &&
+        (!ownerHierarchy.HODID || ownerHierarchy.HODID === '')
+    ) {
+        directApproverIds.push(Number(ownerHierarchy.BusinessHeadID));
+    }
+
+    return directApproverIds.some((id) => Number(id) === Number(requesterUserId));
 };
 
 // 6. Update Goal Status (Approve / Reject)
@@ -791,5 +858,6 @@ module.exports = {
     updateGoal,
     deleteGoal,
     changeGoalStatus,
-    submitGoalReview
+    submitGoalReview,
+    getAllEmployeeGoals
 };

@@ -26,10 +26,12 @@ import ReviewEmployeeGoal from './pages/manager/ReviewEmployeeGoal';
 import TeamManagement from './pages/manager/TeamManagement'; 
 import CFOAllUsersGoals from './pages/cfo/CFOAllUsersGoals';
 import Notifications from './pages/Notifications/Notifications';
+import {ToastContainer} from 'react-toastify';
 
 function App() {
-  return (
+  return ( 
     <AuthProvider>
+    <ToastContainer />
       <Router>
         <Routes>
           {/* Public Authentication Routes */}
