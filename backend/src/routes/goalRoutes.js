@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { 
-    getGoals, 
+    getGoals,
     getAllEmployeeGoals,
-    getGoalById, 
+    getGoalById,
     createGoal, 
-    updateGoal, 
+    updateGoal,
     deleteGoal,
     changeGoalStatus,
     submitGoalReview
@@ -24,7 +24,10 @@ const { verifyToken } = require('../middleware/authMiddleware');
 // ============================================
 router.use(verifyToken);
 
-router.get('/all-goals', getGoals);
+//get particular employee goals
+router.get('/', getGoals);
+
+//get all employee goals for CFO
 router.get('/all-employee-goals', getAllEmployeeGoals);
 
 // Public: view a single goal via email link

@@ -21,7 +21,7 @@ const GoalReview = () => {
 
   const fetchGoalDetails = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/v1/goals/${goalId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/goals/${goalId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       const result = await response.json();
@@ -44,7 +44,7 @@ const GoalReview = () => {
  const handleSubmitFeedback = async () => {
   setSubmitting(true);
   try {
-    const response = await fetch(`http://localhost:5000/api/goals/review`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/goals/review`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

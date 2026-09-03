@@ -16,7 +16,7 @@ const TeamManagement = () => {
   const fetchTeamUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/v1/teams/members', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/teams/members`, {
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}` 
@@ -47,7 +47,7 @@ const TeamManagement = () => {
     setSelectedUser({ id: userId, name: userName });
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/v1/teams/user-goals/${userId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/teams/user-goals/${userId}`, {
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}` 
