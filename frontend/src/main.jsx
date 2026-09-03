@@ -12,18 +12,13 @@ import store from './redux/store';
 // screen was rendering with unmodified MUI defaults regardless of what
 // the theme file said. Wiring it up here is what actually makes the
 // redesign (Part B) take effect.
-import { ThemeProvider } from '@mui/material/styles';
-import getTheme, { CssBaseline } from './theme/theme';
-
-const theme = getTheme('light');
+import { CssBaseline } from '@mui/material';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <Provider store={store}>
-      <ThemeProvider theme={theme}>
         <CssBaseline />
         <App />
-      </ThemeProvider>
     </Provider>
   </React.StrictMode>
 );
