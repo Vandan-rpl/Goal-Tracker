@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -85,6 +85,28 @@ const AddGoal = () => {
   // right next to the input it's about.
   const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const loadNextGoalNumber = async () => {
+      try {
+        const response = await api.get('/goals');
+        const goals = response.data?.data || [];
+        const highestGoalNumber = goals.reduce(
+          (highest, goal) => Math.max(highest, Number(goal.GoalNumber) || 0),
+          0,
+        );
+
+        setFormData((previous) => ({
+          ...previous,
+          GoalNumber: highestGoalNumber + 1,
+        }));
+      } catch (err) {
+        console.error('Failed to determine next goal number', err);
+      }
+    };
+
+    loadNextGoalNumber();
+  }, []);
 
   const smartChecklist = computeSmartChecklist(formData);
 
@@ -192,7 +214,7 @@ const AddGoal = () => {
                   name="GoalNumber"
                   required
                   value={formData.GoalNumber}
-                  onChange={handleChange}
+                  readOnly
                   className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
                 />
               </div>

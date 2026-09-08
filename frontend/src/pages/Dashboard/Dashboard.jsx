@@ -37,9 +37,9 @@ const Dashboard = () => {
         <Typography variant="h5" fontWeight={700}>
           Welcome back, {user?.FirstName || user?.username || 'User'}!
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        {/* <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           Role: <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>{role}</Box>
-        </Typography>
+        </Typography> */}
       </Card>
 
       {/* Supporting cards — secondary to the welcome card above */}
@@ -47,19 +47,19 @@ const Dashboard = () => {
         <Grid item xs={12} md={4}>
           <Card sx={{ p: 2.5, height: '100%' }}>
             <Typography variant="overline">Portal Status</Typography>
-            <Typography variant="h4" fontWeight={700} color="success.main" sx={{ mt: 1 }}>
+            <Typography variant="h6" fontWeight={700} color="success.main" sx={{ mt: 1 }}>
               Active
             </Typography>
           </Card>
         </Grid>
-        <Grid item xs={12} md={4}>
+        {/* <Grid item xs={12} md={4}>
           <Card sx={{ p: 2.5, height: '100%' }}>
             <Typography variant="overline">System Role</Typography>
-            <Typography variant="h4" fontWeight={700} color="primary.main" sx={{ mt: 1 }}>
+            <Typography variant="h6" fontWeight={700} color="primary.main" sx={{ mt: 1 }}>
               {role}
             </Typography>
           </Card>
-        </Grid>
+        </Grid> */}
         <Grid item xs={12} md={4}>
           <Card sx={{ p: 2.5, height: '100%' }}>
             <Typography variant="overline">Quick Actions</Typography>

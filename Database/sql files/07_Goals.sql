@@ -22,10 +22,15 @@ CREATE TABLE Goals
             'Draft',
             'Submitted',
             'HOD Approved',
+            'Reviewed By HOD',
             'Business Head Approved',
+            'Review By Business Head',
             'Rejected',
             'Completed',
-            'Cancelled'
+            'Cancelled',
+            'Running',
+            'Approved',
+            'Postpone'
         )),
     DraftVersion INT NOT NULL DEFAULT 1,
     ParentGoalID BIGINT NULL,

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../services/api';
 
 const statusBadgeClass = (status) => {
@@ -103,7 +104,12 @@ const CFOAllUsersGoals = () => {
                         <span className="text-xs text-gray-400">No action needed</span>
                       )
                     ) : (
-                      <span className="text-xs text-gray-400 italic">View only</span>
+                      <Link
+                        to={`/goals/view/${goal.GoalID}`}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+                      >
+                        View details
+                      </Link>
                     )}
                   </td>
                 </tr>
