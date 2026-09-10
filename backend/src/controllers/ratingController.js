@@ -269,7 +269,15 @@ const getQuarterlyUpdates = async (req, res) => {
         const result = await pool.request()
             .input('GoalId', sql.BigInt, goalId)
             .query(`
-                SELECT GoalId, Quarter, ProgressPercentage, Achievements, Challenges, EvidenceUrl, CreatedAt, UpdatedAt
+                SELECT
+                    GoalID AS GoalId,
+                    Quarter,
+                    ProgressPercentage,
+                    Achievements,
+                    Challenges,
+                    EvidenceFile AS EvidenceUrl,
+                    CreatedDate AS CreatedAt,
+                    ModifiedDate AS UpdatedAt
                 FROM QuarterlyUpdates
                 WHERE GoalId = @GoalId
                 ORDER BY Quarter ASC

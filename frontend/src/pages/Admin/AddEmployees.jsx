@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 
 const AddEmployees = () => {
+  const roleRanks = {
+    Employee: 1,
+    'Assistant Manager': 2,
+    Manager: 3,
+    'Senior Manager': 4,
+    HOD: 5,
+    BusinessHead: 6
+  };
+
   const [formData, setFormData] = useState({
     EmployeeCode: '',
     Username: '',
@@ -53,6 +62,10 @@ const AddEmployees = () => {
   const handleChange = (field, value) => {
     const updated = { ...formData, [field]: value };
 
+    if (field === 'Role') {
+      updated.ReportingManagerID = '';
+    }
+
     // Auto-generate Username & Email on First Name or Last Name modification
     if (field === 'FirstName' || field === 'LastName') {
       const firstSlug = slugify(field === 'FirstName' ? value : updated.FirstName);
@@ -70,7 +83,9 @@ const AddEmployees = () => {
     setFormData(updated);
   };
 
-  const managers = employees.filter((emp) => emp.Role === 'Manager');
+  const managers = employees.filter(
+    (emp) => roleRanks[emp.Role] > roleRanks[formData.Role]
+  );
   const hods = employees.filter((emp) => emp.Role === 'HOD');
   const businessHeads = employees.filter((emp) => emp.Role === 'BusinessHead');
 
@@ -299,7 +314,9 @@ const AddEmployees = () => {
             className="w-full px-3 py-2 border rounded-md"
           >
             <option value="Employee">Employee</option>
+            <option value="Assistant Manager">Assistant Manager</option>
             <option value="Manager">Manager</option>
+            <option value="Senior Manager">Senior Manager</option>
             <option value="HOD">HOD</option>
             <option value="CFO">CFO</option>
             <option value="BusinessHead">Business Head</option>
@@ -310,7 +327,7 @@ const AddEmployees = () => {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-blue-600 text-white py-2 rounded-md disabled:opacity-50"
+          className="w-full bg-blue-600 text-white py-2 rounded-md disabled:opacity-50 cursor-pointer"
         >
           {submitting ? 'Creating...' : 'Create Employee'}
         </button>

@@ -195,7 +195,7 @@ const AddGoal = () => {
             <button
               type="button"
               onClick={() => navigate('/goals')}
-              className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+              className="text-sm text-gray-600 hover:text-gray-900 font-medium cursor-pointer"
             >
               &larr; Back to Goals
             </button>
@@ -452,14 +452,14 @@ const AddGoal = () => {
               <button
                 type="button"
                 onClick={() => navigate('/goals')}
-                className="px-5 py-2 border rounded-xl text-gray-700 hover:bg-gray-100 font-medium text-sm transition"
+                className="px-5 py-2 border rounded-xl text-gray-700 hover:bg-gray-100 font-medium text-sm transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50"
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50 cursor-pointer"
               >
                 {loading ? 'Saving...' : 'Save as Draft'}
               </button>
@@ -467,7 +467,7 @@ const AddGoal = () => {
                 type="button"
                 disabled={loading}
                 onClick={(e) => handleSubmit(e, 'Submitted')}
-                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50"
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50 cursor-pointer"
               >
                 Submit Goal
               </button>

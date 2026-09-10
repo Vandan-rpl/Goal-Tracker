@@ -8,10 +8,14 @@ const { DEFAULT_PASSWORD } = require('../constants/constants');
 const REPORTING_HIERARCHY_FIELDS = ['ReportingManagerID', 'HODID', 'BusinessHeadID'];
 const ROLE_RANKS = {
     Employee: 1,
-    Manager: 2,
-    HOD: 3,
-    BusinessHead: 4,
+    'Assistant Manager': 2,
+    Manager: 3,
+    'Senior Manager': 4,
+    HOD: 5,
+    BusinessHead: 6,
 };
+
+const ALLOWED_ROLE_NAMES = Object.keys(ROLE_RANKS).join(', ');
 
 const hasHierarchyValue = (value) => value !== null && value !== undefined && String(value).trim() !== '';
 
@@ -27,7 +31,7 @@ const validateReportingHierarchyFixed = ({ Role, ReportingManagerID, HODID, Busi
     const errors = [];
 
     if (rank === null) {
-        errors.push(`Role: invalid value '${Role}'. Allowed values are Employee, Manager, HOD, BusinessHead.`);
+        errors.push(`Role: invalid value '${Role}'. Allowed values are ${ALLOWED_ROLE_NAMES}.`);
         return { isValid: false, errors };
     }
 
@@ -56,7 +60,7 @@ const validateReportingHierarchyWithDb = async ({ Role, ReportingManagerID, HODI
     if (roleRank === null) {
         return {
             isValid: false,
-            errors: [`Role: invalid value '${Role}'. Allowed values are Employee, Manager, HOD, BusinessHead.`],
+            errors: [`Role: invalid value '${Role}'. Allowed values are ${ALLOWED_ROLE_NAMES}.`],
         };
     }
 
