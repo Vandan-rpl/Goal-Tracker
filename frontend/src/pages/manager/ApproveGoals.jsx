@@ -158,7 +158,7 @@ const ApproveGoals = () => {
                     {/* Approval / Rejection Action Buttons */}
                     <div className="flex space-x-3 pt-3 border-t border-gray-200">
                       <button 
-                        onClick={() => handleStatusChange(goal.GoalID, user?.Role === 'BusinessHead' || user?.role === 'BusinessHead' ? 'Business Head Approved' : 'HOD Approved')}
+                        onClick={() => handleStatusChange(goal.GoalID, 'HOD Approved')}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition"
                       >
                         Approve Goal

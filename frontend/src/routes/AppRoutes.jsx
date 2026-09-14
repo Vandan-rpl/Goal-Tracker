@@ -64,14 +64,14 @@ const AppRoutes = () => {
               </Route>
 
               {/* HOD / Manager / CFO / Admin Routes for Team Management & Review */}
-              <Route element={<ProtectedRoute allowedRoles={['HOD', 'Manager', 'CFO', 'Admin']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['HOD', 'Manager', 'BusinessHead', 'CFO', 'Admin']} />}>
                 <Route path="/manager/team-management" element={<TeamManagement />} />
                 <Route path="/manager/review-employee-goal" element={<ReviewEmployeeGoal />} />
                 <Route path="/goals/review" element={<GoalReview />} />
               </Route>
 
               {/* CFO Specific Routes */}
-              <Route element={<ProtectedRoute allowedRoles={['CFO', 'Admin']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['CFO', 'BusinessHead', 'Admin']} />}>
                 <Route path="/cfo/all-goals" element={<CFOAllUsersGoals />} />
               </Route>
             </Route>

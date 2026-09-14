@@ -16,5 +16,5 @@ END;
 
 ALTER TABLE dbo.Users
 ADD CONSTRAINT CK_Users_Role
-CHECK (Role IN ('Employee', 'Assistant Manager', 'Manager', 'Senior Manager', 'HOD', 'BusinessHead', 'Admin'));
+CHECK (Role IN ('Employee', 'Manager', 'HOD', 'BusinessHead', 'Admin'));
 GO

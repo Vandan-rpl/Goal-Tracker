@@ -50,6 +50,9 @@ const ViewGoal = () => {
   const isAuthorizedApprover = approverRoles.includes(normalizedRole);
 
   const getApprovalStatusForRole = () => {
+    if (normalizedRole === "cfo") {
+      return "Approved";
+    }
     if (
       ["businesshead", "business head", "business_head"].includes(
         normalizedRole,
@@ -60,7 +63,13 @@ const ViewGoal = () => {
     return "HOD Approved";
   };
 
-  const approvalStatus = getApprovalStatusForRole();
+  const approvalStatus =
+    normalizedRole === "businesshead" && goal?.GoalStatus !== "Submitted"
+      ? "Approved"
+      : getApprovalStatusForRole();
+  const canCfoApprove = ["cfo", "businesshead", "business head"].includes(
+    normalizedRole,
+  );
 
   const reviewableStatuses = ["HOD Approved", "Reviewed By HOD"];
   const canSubmitReview =
@@ -84,14 +93,30 @@ const ViewGoal = () => {
     Number(goal.UserID) === Number(loggedInUserId);
 
   const canShowApproveReject =
-    goal?.CanApproveOrReject === true &&
     goal &&
+    ((canCfoApprove &&
+      [
+        "HOD Approved",
+        "Reviewed By HOD",
+        "Review By Business Head",
+        "Business Head Approved",
+      ].includes(goal.GoalStatus)) ||
+      (goal.CanApproveOrReject === true &&
+        [
+          "Submitted",
+          "HOD Approved",
+          "Reviewed By HOD",
+          "Review By Business Head",
+        ].includes(goal.GoalStatus)));
+
+  const canShowCfoActions =
+    canCfoApprove &&
     [
-      "Submitted",
       "HOD Approved",
       "Reviewed By HOD",
       "Review By Business Head",
-    ].includes(goal.GoalStatus);
+      "Business Head Approved",
+    ].includes(goal?.GoalStatus);
 
   const quarterlyUpdateEligibleStatuses = [
     "HOD Approved",
@@ -290,7 +315,7 @@ const ViewGoal = () => {
           {/* Description & Measurability */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
-              <h4 className="font-bold text-slate-800 mb-2 text-xs uppercase tracking-wider text-slate-400">
+              <h4 className="font-bold mb-2 text-xs uppercase tracking-wider text-slate-400">
                 Goal Description
               </h4>
               <p className="text-slate-600 text-sm leading-relaxed">
@@ -557,6 +582,34 @@ const ViewGoal = () => {
               >
                 Edit Goal
               </Link>
+            ) : canShowCfoActions ? (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between w-full gap-4">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  CFO approval required:
+                </span>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link
+                    to={`/goals/edit/${goal.GoalID}`}
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-center rounded-xl font-bold text-sm shadow-xs transition cursor-pointer"
+                  >
+                    Edit Goal
+                  </Link>
+                  <button
+                    onClick={() => handleGoalAction("Rejected")}
+                    disabled={actionLoading}
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm shadow-xs transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {actionLoading ? "Processing..." : "Reject Goal"}
+                  </button>
+                  <button
+                    onClick={() => handleGoalAction("Approved")}
+                    disabled={actionLoading}
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-xs transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {actionLoading ? "Processing..." : "Approve Goal"}
+                  </button>
+                </div>
+              </div>
             ) : isApproved && !reviewableStatuses.includes(goal.GoalStatus) ? (
               <div className="w-full flex items-center justify-center bg-emerald-50 border border-emerald-200/60 text-emerald-800 py-3 px-4 rounded-xl font-semibold text-sm">
                 ✓ This goal has been successfully {goal.GoalStatus}.

@@ -9,6 +9,8 @@ const statusBadgeClass = (status) => {
   return "bg-gray-100 text-gray-700";
 };
 
+const normalizedStatus = (status) => String(status || "").trim().toLowerCase();
+
 const CFOAllUsersGoals = () => {
   const [allGoals, setAllGoals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,7 @@ const CFOAllUsersGoals = () => {
   const handleStatusUpdate = async (goalId, goalStatus) => {
     try {
       setActingOn(goalId);
-      await api.put(`/goals/${goalId}/status`, { goalStatus });
+      await api.put(`/goals/status/${goalId}`, { goalStatus });
       setAllGoals((prev) =>
         prev.map((g) =>
           g.GoalID === goalId ? { ...g, GoalStatus: goalStatus } : g,
@@ -103,8 +105,13 @@ const CFOAllUsersGoals = () => {
                         : "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {Number(goal.InApprovalScope) === 1 ? (
-                        goal.GoalStatus === "Submitted" ? (
+                      <div className="flex gap-2 items-center">
+                        {[
+                          "hod approved",
+                          "reviewed by hod",
+                          "review by business head",
+                          "business head approved",
+                        ].includes(normalizedStatus(goal.GoalStatus)) && (
                           <div className="flex gap-2">
                             <button
                               disabled={actingOn === goal.GoalID}
@@ -126,22 +133,20 @@ const CFOAllUsersGoals = () => {
                               Reject
                             </button>
                           </div>
-                        ) : (
-                          <Link
-                            to={`/goals/view/${goal.GoalID}`}
-                            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
-                          >
-                            View details
-                          </Link>
-                        )
-                      ) : (
+                        )}
                         <Link
                           to={`/goals/view/${goal.GoalID}`}
                           className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
                         >
                           View details
                         </Link>
-                      )}
+                        <Link
+                          to={`/goals/edit/${goal.GoalID}`}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          Edit
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))

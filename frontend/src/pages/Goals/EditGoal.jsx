@@ -31,6 +31,15 @@ const EditGoal = () => {
   // as AddGoal.jsx: { success:false, message, errors: { Field: "message" } }
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentRole = String(
+    currentUser.Role || currentUser.role || currentUser.userRole || '',
+  ).toUpperCase();
+  const canManageAllGoals =
+    currentRole === 'CFO' ||
+    currentRole === 'BUSINESSHEAD' ||
+    currentRole === 'ADMIN';
+
   useEffect(() => {
     fetchGoal();
   }, [id]);
@@ -141,9 +150,10 @@ const EditGoal = () => {
   const isSubmitted = formData.GoalStatus === 'Submitted';
   const isRejected = formData.GoalStatus === 'Rejected';
   const isDraft = formData.GoalStatus === 'Draft';
-  const isRestrictedEdit = !isDraft && !isSubmitted && !isRejected;
+  const isRestrictedEdit =
+    !canManageAllGoals && !isDraft && !isSubmitted && !isRejected;
 
-  if (isSubmitted || isRejected) {
+  if ((isSubmitted || isRejected) && !canManageAllGoals) {
     return (
       <div className="flex-1 bg-gray-50 min-h-screen p-8 text-center">
         <div className="bg-amber-50 text-amber-800 p-4 rounded-xl max-w-md mx-auto mb-4 font-medium">
@@ -265,6 +275,9 @@ const EditGoal = () => {
                 className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
               >
                 {isDraft && <option value="Draft">Draft</option>}
+                {['Submitted', 'HOD Approved', 'Approved', 'Rejected'].includes(formData.GoalStatus) && (
+                  <option value={formData.GoalStatus}>{formData.GoalStatus}</option>
+                )}
                 <option value="Running">Running</option>
                 <option value="Completed">Completed</option>
                 <option value="Cancelled">Cancelled</option>

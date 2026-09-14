@@ -16,7 +16,7 @@ CREATE TABLE Users
     HODID INT NULL,
     BusinessHeadID INT NULL,
     Role VARCHAR(30) NOT NULL
-        CHECK (Role IN ('Employee','Assistant Manager','Manager','Senior Manager','HOD','BusinessHead','Admin')),
+        CHECK (Role IN ('Employee','Manager','HOD','BusinessHead','Admin')),
     IsActive BIT NOT NULL DEFAULT 1,
     CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
     ModifiedDate DATETIME NULL,

@@ -4,11 +4,9 @@ import api from '../../services/api';
 const AddEmployees = () => {
   const roleRanks = {
     Employee: 1,
-    'Assistant Manager': 2,
-    Manager: 3,
-    'Senior Manager': 4,
-    HOD: 5,
-    BusinessHead: 6
+    Manager: 2,
+    HOD: 3,
+    BusinessHead: 4
   };
 
   const [formData, setFormData] = useState({
@@ -122,218 +120,282 @@ const AddEmployees = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-2">Add Employee</h2>
-      <p className="text-sm text-gray-500 mb-6">
-        New employees are created with default password <strong>Rubamin@123</strong>.
-      </p>
+    <div className="max-w-4xl mx-auto my-8 bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden">
+      {/* Form Header */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+        <h2 className="text-2xl font-bold tracking-tight text-white">Add New Employee</h2>
+        <p className="text-slate-300 text-sm mt-1">Create profiles, assign hierarchy, and manage access roles.</p>
 
-      {message && <div className="mb-4 bg-green-50 text-green-600 p-3 rounded text-sm">{message}</div>}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Employee Code</label>
-            <input
-              type="text"
-              required
-              value={formData.EmployeeCode}
-              onChange={(e) => handleChange('EmployeeCode', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-              placeholder="e.g. EMP005"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Username (Auto-generated)</label>
-            <input
-              type="text"
-              required
-              readOnly
-              value={formData.Username}
-              onChange={() => {}} // Satisfies React controlled input requirement for readOnly fields
-              className="w-full px-3 py-2 border rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
-              placeholder="firstname.lastname"
-            />
-          </div>
+        {/* Default Password Banner */}
+        <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs text-indigo-200">
+          <svg className="w-3.5 h-3.5 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+          </svg>
+          <span>Default Initial Password:</span>
+          <code className="font-mono bg-white/20 px-2 py-0.5 rounded text-white font-medium">Rubamin@123</code>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-            <input
-              type="text"
-              required
-              value={formData.FirstName}
-              onChange={(e) => handleChange('FirstName', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-            />
+      <div className="p-8">
+        {/* Success Alert Message */}
+        {message && (
+          <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200/60 text-emerald-800 flex items-center gap-3">
+            <svg className="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm font-medium">{message}</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-            <input
-              type="text"
-              required
-              value={formData.LastName}
-              onChange={(e) => handleChange('LastName', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-            />
-          </div>
-        </div>
+        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address (Editable)</label>
-            <input
-              type="email"
-              required
-              value={formData.Email}
-              onChange={(e) => handleChange('Email', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-              placeholder="firstname.lastname@rubamin.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mobile No.</label>
-            <input
-              type="text"
-              required
-              value={formData.MobileNo}
-              onChange={(e) => handleChange('MobileNo', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-            />
-          </div>
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          
+          {/* SECTION 1: Personal & Account Identity */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-600 border-b border-slate-100 pb-2">
+              Identity & Credentials
+            </h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Employee Code</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.EmployeeCode}
+                  onChange={(e) => handleChange('EmployeeCode', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="e.g. EMP005"
+                />
+              </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Designation</label>
-            <input
-              type="text"
-              value={formData.Designation}
-              onChange={(e) => handleChange('Designation', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Grade</label>
-            <input
-              type="text"
-              value={formData.Grade}
-              onChange={(e) => handleChange('Grade', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-            />
-          </div>
-        </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Username (Auto-generated)</label>
+                <input
+                  type="text"
+                  required
+                  readOnly
+                  value={formData.Username}
+                  onChange={() => {}}
+                  className="w-full px-3.5 py-2.5 bg-slate-100/70 border border-slate-200 rounded-lg text-sm text-slate-500 font-mono cursor-not-allowed"
+                  placeholder="firstname.lastname"
+                />
+              </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Post</label>
-            <input
-              type="text"
-              value={formData.Post}
-              onChange={(e) => handleChange('Post', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-            />
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">First Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.FirstName}
+                  onChange={(e) => handleChange('FirstName', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="First Name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Last Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.LastName}
+                  onChange={(e) => handleChange('LastName', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="Last Name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.Email}
+                  onChange={(e) => handleChange('Email', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="Your Email"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Mobile Number</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.MobileNo}
+                  onChange={(e) => handleChange('MobileNo', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="+91 1234567890"
+                />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-            <select
-              value={formData.DepartmentID}
-              onChange={(e) => handleChange('DepartmentID', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-              disabled={loadingDropdowns}
+
+          {/* SECTION 2: Organization & Work Details */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-600 border-b border-slate-100 pb-2">
+              Organizational Details
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Designation</label>
+                <input
+                  type="text"
+                  value={formData.Designation}
+                  onChange={(e) => handleChange('Designation', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="Senior Developer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Grade</label>
+                <input
+                  type="text"
+                  value={formData.Grade}
+                  onChange={(e) => handleChange('Grade', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="L2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Post</label>
+                <input
+                  type="text"
+                  value={formData.Post}
+                  onChange={(e) => handleChange('Post', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="Software Engineer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Department</label>
+                <select
+                  value={formData.DepartmentID}
+                  onChange={(e) => handleChange('DepartmentID', e.target.value)}
+                  disabled={loadingDropdowns}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 disabled:opacity-50"
+                >
+                  <option value="">-- Select Department --</option>
+                  {departments.map((dept) => (
+                    <option key={dept.DepartmentID} value={dept.DepartmentID}>
+                      {dept.DepartmentName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: Hierarchy & Approvers */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-600 border-b border-slate-100 pb-2">
+              Management Hierarchy
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Reporting Manager</label>
+                <select
+                  value={formData.ReportingManagerID}
+                  onChange={(e) => handleChange('ReportingManagerID', e.target.value)}
+                  disabled={loadingDropdowns}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 disabled:opacity-50"
+                >
+                  <option value="">-- None --</option>
+                  {managers.map((emp) => (
+                    <option key={emp.UserID} value={emp.UserID}>
+                      {emp.FirstName} {emp.LastName} ({emp.Role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">HOD</label>
+                <select
+                  value={formData.HODID}
+                  onChange={(e) => handleChange('HODID', e.target.value)}
+                  disabled={loadingDropdowns}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 disabled:opacity-50"
+                >
+                  <option value="">-- None --</option>
+                  {hods.map((emp) => (
+                    <option key={emp.UserID} value={emp.UserID}>
+                      {emp.FirstName} {emp.LastName} ({emp.Role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Business Head</label>
+                <select
+                  value={formData.BusinessHeadID}
+                  onChange={(e) => handleChange('BusinessHeadID', e.target.value)}
+                  disabled={loadingDropdowns}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 disabled:opacity-50"
+                >
+                  <option value="">-- None --</option>
+                  {businessHeads.map((emp) => (
+                    <option key={emp.UserID} value={emp.UserID}>
+                      {emp.FirstName} {emp.LastName} ({emp.Role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 4: Role Assignment */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-600 border-b border-slate-100 pb-2">
+              System Access
+            </h3>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">System Role</label>
+              <select
+                value={formData.Role}
+                onChange={(e) => handleChange('Role', e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+              >
+                <option value="Employee">Employee</option>
+                <option value="Manager">Manager</option>
+                <option value="HOD">HOD</option>
+                <option value="BusinessHead">Business Head</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div className="pt-4">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-xl shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
             >
-              <option value="">-- Select Department --</option>
-              {departments.map((dept) => (
-                <option key={dept.DepartmentID} value={dept.DepartmentID}>
-                  {dept.DepartmentName}
-                </option>
-              ))}
-            </select>
+              {submitting ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Creating Employee...</span>
+                </>
+              ) : (
+                <span>Create Employee</span>
+              )}
+            </button>
           </div>
-        </div>
-
-        <hr className="my-2" />
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Manager</label>
-            <select
-              value={formData.ReportingManagerID}
-              onChange={(e) => handleChange('ReportingManagerID', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-              disabled={loadingDropdowns}
-            >
-              <option value="">-- None --</option>
-              {managers.map((emp) => (
-                <option key={emp.UserID} value={emp.UserID}>
-                  {emp.FirstName} {emp.LastName} ({emp.Role})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">HOD</label>
-            <select
-              value={formData.HODID}
-              onChange={(e) => handleChange('HODID', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-              disabled={loadingDropdowns}
-            >
-              <option value="">-- None --</option>
-              {hods.map((emp) => (
-                <option key={emp.UserID} value={emp.UserID}>
-                  {emp.FirstName} {emp.LastName} ({emp.Role})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Business Head</label>
-            <select
-              value={formData.BusinessHeadID}
-              onChange={(e) => handleChange('BusinessHeadID', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-              disabled={loadingDropdowns}
-            >
-              <option value="">-- None --</option>
-              {businessHeads.map((emp) => (
-                <option key={emp.UserID} value={emp.UserID}>
-                  {emp.FirstName} {emp.LastName} ({emp.Role})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-          <select
-            value={formData.Role}
-            onChange={(e) => handleChange('Role', e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-          >
-            <option value="Employee">Employee</option>
-            <option value="Assistant Manager">Assistant Manager</option>
-            <option value="Manager">Manager</option>
-            <option value="Senior Manager">Senior Manager</option>
-            <option value="HOD">HOD</option>
-            <option value="CFO">CFO</option>
-            <option value="BusinessHead">Business Head</option>
-            <option value="Admin">Admin</option>
-          </select>
-        </div>
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-blue-600 text-white py-2 rounded-md disabled:opacity-50 cursor-pointer"
-        >
-          {submitting ? 'Creating...' : 'Create Employee'}
-        </button>
-      </form>
+        </form>
+      </div>
     </div>
   );
-};
+}
 
 export default AddEmployees;

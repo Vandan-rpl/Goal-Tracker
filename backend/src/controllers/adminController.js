@@ -8,11 +8,9 @@ const { DEFAULT_PASSWORD } = require('../constants/constants');
 const REPORTING_HIERARCHY_FIELDS = ['ReportingManagerID', 'HODID', 'BusinessHeadID'];
 const ROLE_RANKS = {
     Employee: 1,
-    'Assistant Manager': 2,
-    Manager: 3,
-    'Senior Manager': 4,
-    HOD: 5,
-    BusinessHead: 6,
+    Manager: 2,
+    HOD: 3,
+    BusinessHead: 4,
 };
 
 const ALLOWED_ROLE_NAMES = Object.keys(ROLE_RANKS).join(', ');
@@ -181,6 +179,14 @@ const getAllEmployees = async (req, res) => {
                 u.LastName, 
                 u.Role, 
                 u.IsActive, 
+                u.MobileNo,
+                u.DepartmentID,
+                u.Designation,
+                u.Grade,
+                u.Post,
+                u.ReportingManagerID,
+                u.HODID,
+                u.BusinessHeadID,
                 d.DepartmentName
             FROM dbo.Users u
             LEFT JOIN dbo.Departments d ON u.DepartmentID = d.DepartmentID
@@ -214,7 +220,7 @@ const downloadTemplate = async (req, res) => {
 
         const departments = deptsResult.recordset.map(d => d.DepartmentName);
         const employees = usersResult.recordset.map(e => e.FullName);
-        const roles = ["Employee", "Manager", "HOD", "CFO", "BusinessHead", "Admin"];
+        const roles = ["Employee", "Manager", "HOD", "BusinessHead"];
 
         const workbook = new ExcelJS.Workbook();
         
@@ -409,6 +415,69 @@ const createEmployee = async (req, res) => {
 };
 
 /**
+ * Update a single employee's details and reporting hierarchy.
+ */
+const updateEmployee = async (req, res) => {
+    try {
+        const userId = Number(req.params.userId);
+        if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
+        const { EmployeeCode, Username, Email, FirstName, LastName, MobileNo, DepartmentID, Designation, Grade, Post, ReportingManagerID, HODID, BusinessHeadID, Role, IsActive } = req.body;
+        if (!FirstName || !Username || !Email || !Role) return res.status(400).json({ success: false, message: 'First name, username, email, and role are required.' });
+
+        const fixedValidation = validateReportingHierarchyFixed({ Role, ReportingManagerID, HODID, BusinessHeadID });
+        if (!fixedValidation.isValid) return res.status(400).json({ success: false, message: 'Reporting hierarchy validation failed.', errors: fixedValidation.errors });
+        const dbValidation = await validateReportingHierarchyWithDb({ Role, ReportingManagerID, HODID, BusinessHeadID });
+        if (!dbValidation.isValid) return res.status(400).json({ success: false, message: 'Reporting hierarchy validation failed.', errors: dbValidation.errors });
+
+        const request = (await poolPromise).request();
+        request.input('UserID', sql.Int, userId);
+        request.input('EmployeeCode', sql.VarChar, EmployeeCode || null);
+        request.input('Username', sql.VarChar, Username.trim());
+        request.input('Email', sql.NVarChar, Email.trim());
+        request.input('FirstName', sql.NVarChar, FirstName.trim());
+        request.input('LastName', sql.NVarChar, LastName?.trim() || null);
+        request.input('MobileNo', sql.VarChar, MobileNo || null);
+        request.input('DepartmentID', sql.Int, DepartmentID || null);
+        request.input('Designation', sql.NVarChar, Designation || null);
+        request.input('Grade', sql.NVarChar, Grade || null);
+        request.input('Post', sql.VarChar, Post || null);
+        request.input('ReportingManagerID', sql.Int, ReportingManagerID || null);
+        request.input('HODID', sql.Int, HODID || null);
+        request.input('BusinessHeadID', sql.Int, BusinessHeadID || null);
+        request.input('Role', sql.VarChar, Role);
+        request.input('IsActive', sql.Bit, IsActive !== false);
+        const result = await request.query(`UPDATE dbo.Users SET EmployeeCode=@EmployeeCode, Username=@Username, Email=@Email, FirstName=@FirstName, LastName=@LastName, MobileNo=@MobileNo, DepartmentID=@DepartmentID, Designation=@Designation, Grade=@Grade, Post=@Post, ReportingManagerID=@ReportingManagerID, HODID=@HODID, BusinessHeadID=@BusinessHeadID, Role=@Role, IsActive=@IsActive, ModifiedDate=GETDATE() WHERE UserID=@UserID`);
+        if (result.rowsAffected[0] === 0) return res.status(404).json({ success: false, message: 'Employee not found.' });
+        return res.json({ success: true, message: 'Employee updated successfully.' });
+    } catch (error) {
+        console.error('Update Employee Error:', error);
+        const duplicate = error.number === 2627 || error.number === 2601;
+        return res.status(duplicate ? 400 : 500).json({ success: false, message: duplicate ? 'Employee code, username, or email is already in use.' : 'Failed to update employee.' });
+    }
+};
+
+// Soft deletion preserves goal and audit history while immediately blocking login.
+const deleteEmployee = async (req, res) => {
+    try {
+        const userId = Number(req.params.userId);
+        if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+        try {
+            const result = await new sql.Request(transaction).input('UserID', sql.Int, userId).query('UPDATE dbo.Users SET IsActive=0, ModifiedDate=GETDATE() WHERE UserID=@UserID');
+            if (result.rowsAffected[0] === 0) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Employee not found.' }); }
+            await new sql.Request(transaction).input('UserID', sql.Int, userId).query(`UPDATE dbo.Users SET ReportingManagerID=CASE WHEN ReportingManagerID=@UserID THEN NULL ELSE ReportingManagerID END, HODID=CASE WHEN HODID=@UserID THEN NULL ELSE HODID END, BusinessHeadID=CASE WHEN BusinessHeadID=@UserID THEN NULL ELSE BusinessHeadID END, ModifiedDate=GETDATE() WHERE ReportingManagerID=@UserID OR HODID=@UserID OR BusinessHeadID=@UserID`);
+            await transaction.commit();
+            return res.json({ success: true, message: 'Employee deleted successfully.' });
+        } catch (error) { await transaction.rollback(); throw error; }
+    } catch (error) {
+        console.error('Delete Employee Error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to delete employee.' });
+    }
+};
+
+/**
  * Bulk Create Employees via Excel Spreadsheet Upload with Name-to-ID Mapping & Auto Email
  */
 const uploadEmployeesExcel = async (req, res) => {
@@ -512,6 +581,12 @@ const uploadEmployeesExcel = async (req, res) => {
                 PasswordHash: DEFAULT_PASSWORD || 'Rubamin@123'
             };
 
+            if (getRoleRank(userData.Role) === null) {
+                errorCount++;
+                errors.push(`Row ${i + 2}: Role '${userData.Role}' is invalid. Allowed values are ${ALLOWED_ROLE_NAMES}.`);
+                continue;
+            }
+
             const result = await registerUser(userData);
 
             if (result.success) {
@@ -546,6 +621,8 @@ module.exports = {
     getAllEmployees,
     downloadTemplate,
     createEmployee,
+    updateEmployee,
+    deleteEmployee,
     uploadEmployeesExcel,
     validateReportingHierarchyFixed,
     validateReportingHierarchyWithDb,

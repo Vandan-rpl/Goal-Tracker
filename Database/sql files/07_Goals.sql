@@ -36,6 +36,8 @@ CREATE TABLE Goals
     ParentGoalID BIGINT NULL,
     SubmittedDate DATETIME NULL,
     ApprovedDate DATETIME NULL,
+    CFOApprovedBy INT NULL,
+    CFOApprovedDate DATETIME NULL,
     CompletedDate DATETIME NULL,
     CancelledDate DATETIME NULL,
     CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
@@ -45,6 +47,9 @@ CREATE TABLE Goals
         REFERENCES Users(UserID),
     CONSTRAINT FK_Goals_ParentGoal
         FOREIGN KEY (ParentGoalID)
-        REFERENCES Goals(GoalID)
+        REFERENCES Goals(GoalID),
+    CONSTRAINT FK_Goals_CFOApprovedBy
+        FOREIGN KEY (CFOApprovedBy)
+        REFERENCES Users(UserID)
 );
 GO

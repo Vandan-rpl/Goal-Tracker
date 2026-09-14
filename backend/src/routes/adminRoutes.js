@@ -16,6 +16,9 @@ router.get('/dropdown-data', verifyToken, adminController.getDropdownData);
 // Route to create a single employee manually
 router.post('/employees', verifyToken, adminController.createEmployee);
 
+router.put('/employees/:userId', verifyToken, adminController.updateEmployee);
+router.delete('/employees/:userId', verifyToken, adminController.deleteEmployee);
+
 // Route to upload and process employees via Excel spreadsheet
 router.post('/upload-employees', verifyToken, upload.single('file'), adminController.uploadEmployeesExcel);
 

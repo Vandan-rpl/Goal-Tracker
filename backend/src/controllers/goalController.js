@@ -169,7 +169,7 @@ const getAllEmployeeGoals = async (req, res) => {
   try {
     const role = (req.user?.Role || req.user?.role || "").toUpperCase();
 
-    if (role !== "BUSINESSHEAD" && role !== "ADMIN") {
+    if (role !== "CFO" && role !== "BUSINESSHEAD" && role !== "ADMIN") {
       return res
         .status(403)
         .json({ success: false, message: "Not authorized." });
@@ -179,11 +179,12 @@ const getAllEmployeeGoals = async (req, res) => {
     const pool = await poolPromise;
     const request = pool.request();
     request.input("ManagerID", sql.Int, managerId);
+    request.input("RequesterRole", sql.VarChar, role);
 
     const result = await request.query(`
             SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
                    g.GoalID, g.GoalTitle, g.GoalStatus, g.CreatedDate, g.ModifiedDate, g.ApprovedDate,
-                   CASE WHEN (
+                     CASE WHEN @RequesterRole IN ('CFO', 'ADMIN') OR (
                        u.BusinessHeadID = @ManagerID
                        AND (
                            (u.ReportingManagerID IS NULL AND u.HODID IS NULL)
@@ -193,7 +194,13 @@ const getAllEmployeeGoals = async (req, res) => {
                    ) THEN 1 ELSE 0 END AS InApprovalScope
             FROM dbo.Users u
             JOIN dbo.Goals g ON g.UserID = u.UserID
-            WHERE g.GoalStatus <> 'Draft'
+            WHERE g.GoalStatus IN (
+              'HOD Approved',
+              'Reviewed By HOD',
+              'Review By Business Head',
+              'Business Head Approved',
+              'Approved'
+            )
             ORDER BY g.CreatedDate DESC
         `);
 
@@ -237,10 +244,14 @@ const getGoalById = async (req, res) => {
       );
 
     const requesterUserId = req.user?.UserID || req.user?.userId;
-    const canApproveOrReject = await canApproveOrRejectGoal(
-      requesterUserId,
-      goalResult.recordset[0].UserID,
-    );
+    const requesterRole = (req.user?.Role || req.user?.role || "").toUpperCase();
+    const canApproveOrReject =
+      requesterRole === "CFO" ||
+      requesterRole === "ADMIN" ||
+      (await canApproveOrRejectGoal(
+        requesterUserId,
+        goalResult.recordset[0].UserID,
+      ));
 
     return res.status(200).json({
       success: true,
@@ -281,7 +292,7 @@ const createGoal = async (req, res) => {
     SubGoals,
   } = req.body;
 
-  const userId = req.body.UserID || req.user?.UserID || req.user?.userId;
+  const userId = req.user?.UserID || req.user?.userId;
 
   if (!GoalTitle || !Weightage || !Priority || !Timeline) {
     return res
@@ -474,7 +485,10 @@ const updateGoal = async (req, res) => {
     SubGoals,
   } = req.body;
 
-  const userId = req.body.UserID || req.user?.UserID || req.user?.userId;
+  const userId = req.user?.UserID || req.user?.userId;
+  const role = (req.user?.Role || req.user?.role || "").toUpperCase();
+  const isEnterpriseGoalManager =
+    role === "CFO" || role === "BUSINESSHEAD" || role === "ADMIN";
   const transaction = new sql.Transaction(await poolPromise);
 
   try {
@@ -495,7 +509,15 @@ const updateGoal = async (req, res) => {
     const existingGoal = checkResult.recordset[0];
     const currentStatus = existingGoal.GoalStatus;
 
-    if (currentStatus === "Submitted") {
+    if (!isEnterpriseGoalManager && Number(existingGoal.UserID) !== Number(userId)) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to modify this goal.",
+      });
+    }
+
+    if (!isEnterpriseGoalManager && currentStatus === "Submitted") {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
@@ -503,7 +525,7 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    if (currentStatus === "Rejected") {
+    if (!isEnterpriseGoalManager && currentStatus === "Rejected") {
       await transaction.rollback();
       return res
         .status(400)
@@ -512,26 +534,27 @@ const updateGoal = async (req, res) => {
 
     const newStatus = GoalStatus || currentStatus;
     const isDraft = currentStatus === "Draft";
+    const canEditAllFields = isDraft || isEnterpriseGoalManager;
 
-    const finalGoalNumber = isDraft ? GoalNumber : existingGoal.GoalNumber;
-    const finalGoalTitle = isDraft ? GoalTitle : existingGoal.GoalTitle;
-    const finalGoalDesc = isDraft
+    const finalGoalNumber = canEditAllFields ? GoalNumber : existingGoal.GoalNumber;
+    const finalGoalTitle = canEditAllFields ? GoalTitle : existingGoal.GoalTitle;
+    const finalGoalDesc = canEditAllFields
       ? GoalDescription
       : existingGoal.GoalDescription;
-    const finalMeetPerf = isDraft
+    const finalMeetPerf = canEditAllFields
       ? MeetPerformance
       : existingGoal.MeetPerformance;
-    const finalExceedPerf = isDraft
+    const finalExceedPerf = canEditAllFields
       ? ExceedPerformance
       : existingGoal.ExceedPerformance;
-    const finalValidation = isDraft
+    const finalValidation = canEditAllFields
       ? ValidationSource
       : existingGoal.ValidationSource;
-    const finalJointAcc = isDraft
+    const finalJointAcc = canEditAllFields
       ? JointAccountability
       : existingGoal.JointAccountability;
-    const finalCategory = isDraft ? GoalCategory : existingGoal.GoalCategory;
-    const finalCrossFunc = isDraft
+    const finalCategory = canEditAllFields ? GoalCategory : existingGoal.GoalCategory;
+    const finalCrossFunc = canEditAllFields
       ? CrossFunctionalGoal
         ? 1
         : 0
@@ -641,7 +664,7 @@ const updateGoal = async (req, res) => {
       sub?.SubGoalTitle?.trim(),
     );
 
-    if (isDraft && (SubGoals || []).length > 0) {
+    if (canEditAllFields && (SubGoals || []).length > 0) {
       const deleteSubRequest = new sql.Request(transaction);
       await deleteSubRequest
         .input("GoalID", sql.BigInt, id)
@@ -837,10 +860,14 @@ const changeGoalStatus = async (req, res) => {
     const goalOwnerId = oldRes.recordset[0].UserID;
     const goalTitle = oldRes.recordset[0].GoalTitle;
 
-    const isAuthorizedApprover = await canApproveOrRejectGoal(
-      userId,
-      goalOwnerId,
-    );
+    const role = (req.user?.Role || req.user?.role || "").toUpperCase();
+    const isFinalBusinessHeadAction =
+      role === "BUSINESSHEAD" && oldStatus !== "Submitted";
+    const isAuthorizedApprover =
+      role === "CFO" ||
+      role === "ADMIN" ||
+      isFinalBusinessHeadAction ||
+      (await canApproveOrRejectGoal(userId, goalOwnerId));
     if (!isAuthorizedApprover) {
       await transaction.rollback();
       return res.status(403).json({
@@ -849,14 +876,48 @@ const changeGoalStatus = async (req, res) => {
       });
     }
 
+    const isFinalApproval =
+      role === "CFO" || (role === "BUSINESSHEAD" && oldStatus !== "Submitted");
+    const isFirstStageApproval =
+      !isFinalApproval && role !== "ADMIN" && isAuthorizedApprover;
+    const validTransition =
+      role === "ADMIN" ||
+      (isFinalApproval &&
+        [
+          "HOD Approved",
+          "Reviewed By HOD",
+          "Review By Business Head",
+          "Business Head Approved",
+        ].includes(oldStatus) &&
+        ["Approved", "Rejected"].includes(goalStatus)) ||
+      (isFirstStageApproval &&
+        oldStatus === "Submitted" &&
+        ["HOD Approved", "Rejected"].includes(goalStatus));
+
+    if (!validTransition) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message:
+          isFinalApproval
+            ? "Final approval is available only after manager/HOD approval."
+            : "This goal is not awaiting your approval stage.",
+      });
+    }
+
     const updateReq = new sql.Request(transaction);
     await updateReq
       .input("GoalID", sql.BigInt, id)
-      .input("GoalStatus", sql.VarChar, goalStatus).query(`
+      .input("GoalStatus", sql.VarChar, goalStatus)
+      .input("CFOApprovedBy", sql.Int, isFinalApproval ? userId : null)
+      .input("IsCfoApproval", sql.Bit, isFinalApproval)
+      .query(`
                            UPDATE dbo.Goals 
                            SET GoalStatus = @GoalStatus, 
                                ModifiedDate = GETDATE(),
-                               ApprovedDate = CASE WHEN @GoalStatus IN ('HOD Approved', 'Business Head Approved', 'Approved') THEN GETDATE() ELSE ApprovedDate END
+                   ApprovedDate = CASE WHEN @GoalStatus IN ('HOD Approved', 'Business Head Approved', 'Approved') THEN GETDATE() ELSE ApprovedDate END,
+                   CFOApprovedBy = CASE WHEN @IsCfoApproval = 1 AND @GoalStatus = 'Approved' THEN @CFOApprovedBy ELSE CFOApprovedBy END,
+                   CFOApprovedDate = CASE WHEN @IsCfoApproval = 1 AND @GoalStatus = 'Approved' THEN GETDATE() ELSE CFOApprovedDate END
                            WHERE GoalID = @GoalID
                        `);
 
