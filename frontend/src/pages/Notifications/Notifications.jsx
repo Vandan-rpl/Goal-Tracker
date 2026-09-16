@@ -118,7 +118,7 @@ const Notifications = () => {
               className={`flex justify-between items-start gap-4 p-5 rounded-xl border-2 shadow-sm transition-all ${
                 item.IsRead
                   ? "bg-slate-50 border-slate-300 opacity-90"
-                  : "bg-white border-amber-400 border-l-[8px] border-l-amber-500 shadow-md"
+                  : "bg-white border-amber-400 border-l-8 border-l-amber-500 shadow-md"
               }`}
             >
               {/* Card Content */}

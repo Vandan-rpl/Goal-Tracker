@@ -22,6 +22,7 @@ CREATE TABLE Goals
             'Draft',
             'Submitted',
             'HOD Approved',
+            'Manager Approved',
             'Reviewed By HOD',
             'Business Head Approved',
             'Review By Business Head',

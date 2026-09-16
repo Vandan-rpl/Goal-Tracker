@@ -166,6 +166,7 @@ const QuarterlyUpdate = () => {
   // status past initial approval.
   const eligibleStatuses = [
     'HOD Approved',
+    'Manager Approved',
     'Business Head Approved',
     'Approved',
     'Reviewed By HOD',

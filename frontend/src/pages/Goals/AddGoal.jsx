@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import useAuth from '../../hooks/useAuth';
-import api from '../../services/api';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import useAuth from "../../hooks/useAuth";
+import api from "../../services/api";
 
 // Mirrors the server-side smartGoalValidator.js criteria for live,
 // pre-submit feedback. NOT a full re-implementation — the Achievable
@@ -12,17 +12,23 @@ import api from '../../services/api';
 const MIN_DESCRIPTION_LENGTH = 20;
 
 const computeSmartChecklist = (formData) => {
-  const title = (formData.GoalTitle || '').trim();
-  const description = (formData.GoalDescription || '').trim();
-  const measurability = (formData.Measurability || '').trim();
-  const meet = (formData.MeetPerformance || '').trim();
-  const exceed = (formData.ExceedPerformance || '').trim();
+  const title = (formData.GoalTitle || "").trim();
+  const description = (formData.GoalDescription || "").trim();
+  const measurability = (formData.Measurability || "").trim();
+  const meet = (formData.MeetPerformance || "").trim();
+  const exceed = (formData.ExceedPerformance || "").trim();
   const weightageNum = Number(formData.Weightage);
-  const category = (formData.GoalCategory || '').trim();
+  const category = (formData.GoalCategory || "").trim();
 
-  const specific = title.length > 0 && description.length >= MIN_DESCRIPTION_LENGTH;
-  const measurable = measurability.length > 0 && (meet.length > 0 || exceed.length > 0);
-  const achievable = formData.Weightage !== '' && !Number.isNaN(weightageNum) && weightageNum > 0 && weightageNum <= 100;
+  const specific =
+    title.length > 0 && description.length >= MIN_DESCRIPTION_LENGTH;
+  const measurable =
+    measurability.length > 0 && (meet.length > 0 || exceed.length > 0);
+  const achievable =
+    formData.Weightage !== "" &&
+    !Number.isNaN(weightageNum) &&
+    weightageNum > 0 &&
+    weightageNum <= 100;
   const relevant = category.length > 0;
 
   let timeBound = false;
@@ -41,13 +47,19 @@ const computeSmartChecklist = (formData) => {
 
 const ChecklistRow = ({ ok, label, hint }) => (
   <div className="flex items-start gap-2 py-1.5">
-    <span className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-      ok ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500'
-    }`}>
-      {ok ? '✓' : '·'}
+    <span
+      className={`mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+        ok ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-500"
+      }`}
+    >
+      {ok ? "✓" : "·"}
     </span>
     <div>
-      <p className={`text-sm font-semibold ${ok ? 'text-emerald-700' : 'text-gray-600'}`}>{label}</p>
+      <p
+        className={`text-sm font-semibold ${ok ? "text-emerald-700" : "text-gray-600"}`}
+      >
+        {label}
+      </p>
       <p className="text-xs text-gray-400">{hint}</p>
     </div>
   </div>
@@ -59,26 +71,35 @@ const AddGoal = () => {
 
   const [formData, setFormData] = useState({
     GoalNumber: 1,
-    GoalTitle: '',
-    GoalDescription: '',
-    Measurability: '',
-    JointAccountability: '',
-    Weightage: '',
-    Priority: 'Medium',
-    Timeline: '',
-    MeetPerformance: '',
-    ExceedPerformance: '',
-    ValidationSource: '',
+    GoalTitle: "",
+    GoalDescription: "",
+    Measurability: "",
+    JointAccountability: "",
+    Weightage: "",
+    Priority: "Medium",
+    Timeline: "",
+    MeetPerformance: "",
+    ExceedPerformance: "",
+    ValidationSource: "",
     CrossFunctionalGoal: false,
-    GoalCategory: '',
+    GoalCategory: "",
   });
 
   // Dynamic Sub-Goals state matching GoalSubGoals table columns
   const [subGoals, setSubGoals] = useState([
-    { SubGoalNo: 1, SubGoalTitle: '', SubGoalDescription: '', Weightage: '', Target: '' }
+    {
+      SubGoalNo: 1,
+      SubGoalTitle: "",
+      SubGoalDescription: "",
+      Weightage: "",
+      Target: "",
+    },
   ]);
 
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [jointAccountabilityUsers, setJointAccountabilityUsers] = useState([]);
+  const [jointAccountabilityUsersLoading, setJointAccountabilityUsersLoading] =
+    useState(true);
   // Field-level SMART validation errors from the backend (400 response
   // shape: { success:false, message, errors: { FieldName: "message" } }).
   // Keyed by the exact dbo.Goals field name so we can render each message
@@ -89,7 +110,7 @@ const AddGoal = () => {
   useEffect(() => {
     const loadNextGoalNumber = async () => {
       try {
-        const response = await api.get('/goals');
+        const response = await api.get("/goals");
         const goals = response.data?.data || [];
         const highestGoalNumber = goals.reduce(
           (highest, goal) => Math.max(highest, Number(goal.GoalNumber) || 0),
@@ -101,25 +122,40 @@ const AddGoal = () => {
           GoalNumber: highestGoalNumber + 1,
         }));
       } catch (err) {
-        console.error('Failed to determine next goal number', err);
+        console.error("Failed to determine next goal number", err);
       }
     };
 
     loadNextGoalNumber();
   }, []);
 
+  useEffect(() => {
+    const loadJointAccountabilityUsers = async () => {
+      try {
+        const response = await api.get("/goals/joint-accountability-users");
+        setJointAccountabilityUsers(response.data?.data || []);
+      } catch (err) {
+        console.error("Failed to load department users", err);
+      } finally {
+        setJointAccountabilityUsersLoading(false);
+      }
+    };
+
+    loadJointAccountabilityUsers();
+  }, []);
+
   const smartChecklist = computeSmartChecklist(formData);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === "checkbox" ? checked : value,
     }));
     // Clear that field's error the moment the employee edits it, rather
     // than making them re-submit to see it disappear.
     if (fieldErrors[name]) {
-      setFieldErrors(prev => {
+      setFieldErrors((prev) => {
         const next = { ...prev };
         delete next[name];
         return next;
@@ -135,19 +171,25 @@ const AddGoal = () => {
   };
 
   const addSubGoalRow = () => {
-    setSubGoals(prev => [
+    setSubGoals((prev) => [
       ...prev,
-      { SubGoalNo: prev.length + 1, SubGoalTitle: '', SubGoalDescription: '', Weightage: '', Target: '' }
+      {
+        SubGoalNo: prev.length + 1,
+        SubGoalTitle: "",
+        SubGoalDescription: "",
+        Weightage: "",
+        Target: "",
+      },
     ]);
   };
 
   const removeSubGoalRow = (index) => {
-    setSubGoals(prev => prev.filter((_, i) => i !== index));
+    setSubGoals((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e, status = 'Draft') => {
+  const handleSubmit = async (e, status = "Draft") => {
     e.preventDefault();
-    setError('');
+    setError("");
     setFieldErrors({});
     setLoading(true);
 
@@ -156,14 +198,14 @@ const AddGoal = () => {
         ...formData,
         UserID: user?.userId || user?.UserID,
         GoalStatus: status,
-        SubGoals: subGoals
+        SubGoals: subGoals,
       };
 
-      const response = await api.post('/goals', payload);
+      const response = await api.post("/goals", payload);
       if (response.data.success) {
-        navigate('/goals');
+        navigate("/goals");
       } else {
-        setError(response.data.message || 'Failed to save goal.');
+        setError(response.data.message || "Failed to save goal.");
         if (response.data.errors) {
           setFieldErrors(response.data.errors);
         }
@@ -172,7 +214,7 @@ const AddGoal = () => {
       // SMART validation failures come back as a 400 with this exact
       // shape: { success:false, message, errors: { Field: "message" } }.
       const data = err.response?.data;
-      setError(data?.message || 'Server error while saving goal.');
+      setError(data?.message || "Server error while saving goal.");
       if (data?.errors) {
         setFieldErrors(data.errors);
       }
@@ -184,31 +226,41 @@ const AddGoal = () => {
   return (
     <div className="flex-1 bg-gray-50 min-h-screen overflow-y-auto p-4 sm:p-8">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
-
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-10">
-
           <div className="flex justify-between items-center pb-6 border-b mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Create New Goal</h1>
-              <p className="text-sm text-gray-500 mt-1">Fill in the metrics, performance criteria, and sub-goals.</p>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Create New Goal
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Fill in the metrics, performance criteria, and sub-goals.
+              </p>
             </div>
             <button
               type="button"
-              onClick={() => navigate('/goals')}
+              onClick={() => navigate("/goals")}
               className="text-sm text-gray-600 hover:text-gray-900 font-medium cursor-pointer"
             >
               &larr; Back to Goals
             </button>
           </div>
 
-          {error && <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium">{error}</div>}
+          {error && (
+            <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium">
+              {error}
+            </div>
+          )}
 
-          <form onSubmit={(e) => handleSubmit(e, 'Draft')} className="space-y-6">
-
+          <form
+            onSubmit={(e) => handleSubmit(e, "Draft")}
+            className="space-y-6"
+          >
             {/* Row 1: Goal Number & Title */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Goal No *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Goal No *
+                </label>
                 <input
                   type="number"
                   name="GoalNumber"
@@ -219,7 +271,9 @@ const AddGoal = () => {
                 />
               </div>
               <div className="sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Goal Title *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Goal Title *
+                </label>
                 <input
                   type="text"
                   name="GoalTitle"
@@ -227,28 +281,40 @@ const AddGoal = () => {
                   placeholder="e.g. Production Target -- Moly 180 MT, V - 80 MT"
                   value={formData.GoalTitle}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalTitle ? 'border-red-400' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalTitle ? "border-red-400" : ""}`}
                 />
-                {fieldErrors.GoalTitle && <p className="text-red-600 text-xs mt-1">{fieldErrors.GoalTitle}</p>}
+                {fieldErrors.GoalTitle && (
+                  <p className="text-red-600 text-xs mt-1">
+                    {fieldErrors.GoalTitle}
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Row 2: Category, Priority, Weightage, Timeline */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Category
+                </label>
                 <input
                   type="text"
                   name="GoalCategory"
                   placeholder="e.g. Operational"
                   value={formData.GoalCategory}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalCategory ? 'border-red-400' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalCategory ? "border-red-400" : ""}`}
                 />
-                {fieldErrors.GoalCategory && <p className="text-red-600 text-xs mt-1">{fieldErrors.GoalCategory}</p>}
+                {fieldErrors.GoalCategory && (
+                  <p className="text-red-600 text-xs mt-1">
+                    {fieldErrors.GoalCategory}
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Priority *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Priority *
+                </label>
                 <select
                   name="Priority"
                   value={formData.Priority}
@@ -262,7 +328,9 @@ const AddGoal = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Weightage (%) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Weightage (%) *
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -271,67 +339,97 @@ const AddGoal = () => {
                   placeholder="5 - 30%"
                   value={formData.Weightage}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Weightage ? 'border-red-400' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Weightage ? "border-red-400" : ""}`}
                 />
-                {fieldErrors.Weightage && <p className="text-red-600 text-xs mt-1">{fieldErrors.Weightage}</p>}
+                {fieldErrors.Weightage && (
+                  <p className="text-red-600 text-xs mt-1">
+                    {fieldErrors.Weightage}
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Timeline *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Timeline *
+                </label>
                 <input
                   type="date"
                   name="Timeline"
                   required
                   value={formData.Timeline}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Timeline ? 'border-red-400' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Timeline ? "border-red-400" : ""}`}
                 />
-                {fieldErrors.Timeline && <p className="text-red-600 text-xs mt-1">{fieldErrors.Timeline}</p>}
+                {fieldErrors.Timeline && (
+                  <p className="text-red-600 text-xs mt-1">
+                    {fieldErrors.Timeline}
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Row 3: Descriptions & Measurability */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Goal Description</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Goal Description
+                </label>
                 <textarea
                   name="GoalDescription"
                   rows="3"
                   value={formData.GoalDescription}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalDescription ? 'border-red-400' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalDescription ? "border-red-400" : ""}`}
                 />
-                {fieldErrors.GoalDescription && <p className="text-red-600 text-xs mt-1">{fieldErrors.GoalDescription}</p>}
+                {fieldErrors.GoalDescription && (
+                  <p className="text-red-600 text-xs mt-1">
+                    {fieldErrors.GoalDescription}
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Measurability</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Measurability
+                </label>
                 <textarea
                   name="Measurability"
                   rows="3"
                   placeholder="Source of validation (e.g. As per production reports)"
                   value={formData.Measurability}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Measurability ? 'border-red-400' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Measurability ? "border-red-400" : ""}`}
                 />
-                {fieldErrors.Measurability && <p className="text-red-600 text-xs mt-1">{fieldErrors.Measurability}</p>}
+                {fieldErrors.Measurability && (
+                  <p className="text-red-600 text-xs mt-1">
+                    {fieldErrors.Measurability}
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Row 4: Performance Criteria (Meet vs Exceed) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meet Performance Target</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Meet Performance Target
+                </label>
                 <textarea
                   name="MeetPerformance"
                   rows="2"
                   placeholder="e.g. Moly - 180 MT, V - 80 MT"
                   value={formData.MeetPerformance}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.MeetPerformance ? 'border-red-400' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.MeetPerformance ? "border-red-400" : ""}`}
                 />
-                {fieldErrors.MeetPerformance && <p className="text-red-600 text-xs mt-1">{fieldErrors.MeetPerformance}</p>}
+                {fieldErrors.MeetPerformance && (
+                  <p className="text-red-600 text-xs mt-1">
+                    {fieldErrors.MeetPerformance}
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Exceed Performance Target</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Exceed Performance Target
+                </label>
                 <textarea
                   name="ExceedPerformance"
                   rows="2"
@@ -346,7 +444,9 @@ const AddGoal = () => {
             {/* Row 5: Validation Source & Joint Accountability */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Validation Source</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Validation Source
+                </label>
                 <input
                   type="text"
                   name="ValidationSource"
@@ -356,15 +456,34 @@ const AddGoal = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Joint Accountability</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Joint Accountability
+                </label>
+                <select
                   name="JointAccountability"
-                  placeholder="If shared goals with cross-functional team"
                   value={formData.JointAccountability}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
+                  disabled={jointAccountabilityUsersLoading}
+                >
+                  <option value="">
+                    {jointAccountabilityUsersLoading
+                      ? "Loading department users..."
+                      : "Select an employee"}
+                  </option>
+                  {jointAccountabilityUsers.map((employee) => {
+                    const fullName = [employee.FirstName, employee.LastName]
+                      .filter(Boolean)
+                      .join(" ");
+
+                    return (
+                      <option key={employee.UserID} value={fullName}>
+                        {fullName}
+                        {employee.Designation ? ` - ${employee.Designation}` : ""}
+                      </option> 
+                    );
+                  })}
+                </select>
               </div>
             </div>
 
@@ -377,7 +496,12 @@ const AddGoal = () => {
                 onChange={handleChange}
                 className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
               />
-              <label htmlFor="CrossFunctionalGoal" className="text-sm font-medium text-gray-700">Is this a Cross-Functional Goal?</label>
+              <label
+                htmlFor="CrossFunctionalGoal"
+                className="text-sm font-medium text-gray-700"
+              >
+                Is this a Cross-Functional Goal?
+              </label>
             </div>
 
             <hr className="my-6" />
@@ -396,9 +520,14 @@ const AddGoal = () => {
               </div>
 
               {subGoals.map((sub, index) => (
-                <div key={index} className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 relative space-y-3">
+                <div
+                  key={index}
+                  className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 relative space-y-3"
+                >
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-indigo-600 uppercase">Sub-Goal #{index + 1}</span>
+                    <span className="text-xs font-bold text-indigo-600 uppercase">
+                      Sub-Goal #{index + 1}
+                    </span>
                     {subGoals.length > 1 && (
                       <button
                         type="button"
@@ -451,7 +580,7 @@ const AddGoal = () => {
             <div className="flex items-center justify-end space-x-4 pt-4 border-t">
               <button
                 type="button"
-                onClick={() => navigate('/goals')}
+                onClick={() => navigate("/goals")}
                 className="px-5 py-2 border rounded-xl text-gray-700 hover:bg-gray-100 font-medium text-sm transition cursor-pointer"
               >
                 Cancel
@@ -461,18 +590,17 @@ const AddGoal = () => {
                 disabled={loading}
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50 cursor-pointer"
               >
-                {loading ? 'Saving...' : 'Save as Draft'}
+                {loading ? "Saving..." : "Save as Draft"}
               </button>
               <button
                 type="button"
                 disabled={loading}
-                onClick={(e) => handleSubmit(e, 'Submitted')}
+                onClick={(e) => handleSubmit(e, "Submitted")}
                 className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50 cursor-pointer"
               >
                 Submit Goal
               </button>
             </div>
-
           </form>
         </div>
 
@@ -481,8 +609,12 @@ const AddGoal = () => {
             Achievable cross-goal weightage-sum, which needs a DB read and
             isn't replicated here), so this is guidance, not a guarantee. */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:sticky lg:top-8">
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-1">SMART Goal Checklist</h3>
-          <p className="text-xs text-gray-400 mb-3">Updates as you fill in the form.</p>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-1">
+            SMART Goal Checklist
+          </h3>
+          <p className="text-xs text-gray-400 mb-3">
+            Updates as you fill in the form.
+          </p>
 
           <ChecklistRow
             ok={smartChecklist.specific}
@@ -510,7 +642,6 @@ const AddGoal = () => {
             hint="Timeline is a future date, within 2 years"
           />
         </div>
-
       </div>
     </div>
   );

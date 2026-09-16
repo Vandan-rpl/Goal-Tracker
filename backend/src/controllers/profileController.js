@@ -1,10 +1,8 @@
 const profileService = require("../services/profileService");
 
 /**
- * ============================================================
  * Profile Controller
  * Enterprise Goal Tracker Management System
- * ============================================================
  */
 
 /**

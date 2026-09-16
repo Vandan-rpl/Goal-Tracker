@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { 
     getGoals,
+    getJointAccountabilityUsers,
     getAllEmployeeGoals,
     getGoalById,
     createGoal, 
@@ -13,19 +14,12 @@ const {
 
 const { verifyToken } = require('../middleware/authMiddleware');
 
-// ============================================
-// PUBLIC ROUTES (no login required)
-// Must be defined BEFORE router.use(verifyToken)
-// AND before any wildcard '/:id' route.
-// ============================================
-
-// ============================================
-// PROTECTED ROUTES (JWT required)
-// ============================================
 router.use(verifyToken);
 
 //get particular employee goals
 router.get('/', getGoals);
+
+router.get('/joint-accountability-users', getJointAccountabilityUsers);
 
 //get all employee goals for CFO
 router.get('/all-employee-goals', getAllEmployeeGoals);

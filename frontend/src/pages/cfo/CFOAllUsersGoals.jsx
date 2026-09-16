@@ -108,6 +108,7 @@ const CFOAllUsersGoals = () => {
                       <div className="flex gap-2 items-center">
                         {[
                           "hod approved",
+                          "manager approved",
                           "reviewed by hod",
                           "review by business head",
                           "business head approved",

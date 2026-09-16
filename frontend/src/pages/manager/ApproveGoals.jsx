@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import { getTeamMembers, getUserGoalsByManager, updateGoalStatus } from '../../services/teamService';
 
@@ -158,7 +159,12 @@ const ApproveGoals = () => {
                     {/* Approval / Rejection Action Buttons */}
                     <div className="flex space-x-3 pt-3 border-t border-gray-200">
                       <button 
-                        onClick={() => handleStatusChange(goal.GoalID, 'HOD Approved')}
+                        onClick={() => handleStatusChange(
+                          goal.GoalID,
+                          user?.Role === 'Manager' || user?.role === 'Manager'
+                            ? 'Manager Approved'
+                            : 'HOD Approved',
+                        )}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition"
                       >
                         Approve Goal
@@ -169,6 +175,12 @@ const ApproveGoals = () => {
                       >
                         Reject Goal
                       </button>
+                      <Link
+                        to={`/goals/edit/${goal.GoalID}`}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition"
+                      >
+                        Modify Goal
+                      </Link>
                     </div>
                   </div>
                 ))}

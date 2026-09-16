@@ -1,4 +1,4 @@
-/* Allow the statuses used by POST /goals/review. */
+/* Add the role-specific first-stage approval status used by Managers. */
 
 DECLARE @constraintName sysname;
 DECLARE @dropConstraintSql nvarchar(max);
@@ -12,8 +12,8 @@ OPEN constraintCursor;
 FETCH NEXT FROM constraintCursor INTO @constraintName;
 WHILE @@FETCH_STATUS = 0
 BEGIN
-  SET @dropConstraintSql = N'ALTER TABLE dbo.Goals DROP CONSTRAINT ' + QUOTENAME(@constraintName);
-  EXEC sp_executesql @dropConstraintSql;
+    SET @dropConstraintSql = N'ALTER TABLE dbo.Goals DROP CONSTRAINT ' + QUOTENAME(@constraintName);
+    EXEC sp_executesql @dropConstraintSql;
     FETCH NEXT FROM constraintCursor INTO @constraintName;
 END;
 CLOSE constraintCursor;

@@ -165,6 +165,37 @@ const getGoals = async (req, res) => {
   }
 };
 
+const getJointAccountabilityUsers = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .query(`
+        SELECT colleague.UserID, colleague.FirstName, colleague.LastName,
+               colleague.Designation
+        FROM dbo.Users owner
+        INNER JOIN dbo.Users colleague
+          ON colleague.DepartmentID = owner.DepartmentID
+        WHERE owner.UserID = @UserID
+          AND colleague.UserID <> @UserID
+          AND colleague.IsActive = 1
+        ORDER BY colleague.FirstName, colleague.LastName
+      `);
+
+    return res.status(200).json({ success: true, data: result.recordset });
+  } catch (error) {
+    console.error("Get Joint Accountability Users Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load department users.",
+      errors: error.message,
+    });
+  }
+};
+
 const getAllEmployeeGoals = async (req, res) => {
   try {
     const role = (req.user?.Role || req.user?.role || "").toUpperCase();
@@ -196,6 +227,7 @@ const getAllEmployeeGoals = async (req, res) => {
             JOIN dbo.Goals g ON g.UserID = u.UserID
             WHERE g.GoalStatus IN (
               'HOD Approved',
+              'Manager Approved',
               'Reviewed By HOD',
               'Review By Business Head',
               'Business Head Approved',
@@ -509,7 +541,25 @@ const updateGoal = async (req, res) => {
     const existingGoal = checkResult.recordset[0];
     const currentStatus = existingGoal.GoalStatus;
 
-    if (!isEnterpriseGoalManager && Number(existingGoal.UserID) !== Number(userId)) {
+    const ownerHierarchyResult = await new sql.Request(transaction)
+      .input("OwnerUserID", sql.Int, existingGoal.UserID)
+      .query(`
+        SELECT ReportingManagerID, HODID
+        FROM dbo.Users
+        WHERE UserID = @OwnerUserID
+      `);
+    const ownerHierarchy = ownerHierarchyResult.recordset[0];
+    const isTeamGoalManager =
+      (role === "HOD" || role === "MANAGER") &&
+      ownerHierarchy &&
+      (Number(ownerHierarchy.ReportingManagerID) === Number(userId) ||
+        Number(ownerHierarchy.HODID) === Number(userId));
+
+    if (
+      !isEnterpriseGoalManager &&
+      !isTeamGoalManager &&
+      Number(existingGoal.UserID) !== Number(userId)
+    ) {
       await transaction.rollback();
       return res.status(403).json({
         success: false,
@@ -517,7 +567,11 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    if (!isEnterpriseGoalManager && currentStatus === "Submitted") {
+    if (
+      !isEnterpriseGoalManager &&
+      !isTeamGoalManager &&
+      currentStatus === "Submitted"
+    ) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
@@ -525,7 +579,11 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    if (!isEnterpriseGoalManager && currentStatus === "Rejected") {
+    if (
+      !isEnterpriseGoalManager &&
+      !isTeamGoalManager &&
+      currentStatus === "Rejected"
+    ) {
       await transaction.rollback();
       return res
         .status(400)
@@ -534,7 +592,8 @@ const updateGoal = async (req, res) => {
 
     const newStatus = GoalStatus || currentStatus;
     const isDraft = currentStatus === "Draft";
-    const canEditAllFields = isDraft || isEnterpriseGoalManager;
+    const canEditAllFields =
+      isDraft || isEnterpriseGoalManager || isTeamGoalManager;
 
     const finalGoalNumber = canEditAllFields ? GoalNumber : existingGoal.GoalNumber;
     const finalGoalTitle = canEditAllFields ? GoalTitle : existingGoal.GoalTitle;
@@ -880,11 +939,14 @@ const changeGoalStatus = async (req, res) => {
       role === "CFO" || (role === "BUSINESSHEAD" && oldStatus !== "Submitted");
     const isFirstStageApproval =
       !isFinalApproval && role !== "ADMIN" && isAuthorizedApprover;
+    const firstStageApprovalStatus =
+      role === "MANAGER" ? "Manager Approved" : "HOD Approved";
     const validTransition =
       role === "ADMIN" ||
       (isFinalApproval &&
         [
           "HOD Approved",
+          "Manager Approved",
           "Reviewed By HOD",
           "Review By Business Head",
           "Business Head Approved",
@@ -892,7 +954,7 @@ const changeGoalStatus = async (req, res) => {
         ["Approved", "Rejected"].includes(goalStatus)) ||
       (isFirstStageApproval &&
         oldStatus === "Submitted" &&
-        ["HOD Approved", "Rejected"].includes(goalStatus));
+        [firstStageApprovalStatus, "Rejected"].includes(goalStatus));
 
     if (!validTransition) {
       await transaction.rollback();
@@ -915,7 +977,7 @@ const changeGoalStatus = async (req, res) => {
                            UPDATE dbo.Goals 
                            SET GoalStatus = @GoalStatus, 
                                ModifiedDate = GETDATE(),
-                   ApprovedDate = CASE WHEN @GoalStatus IN ('HOD Approved', 'Business Head Approved', 'Approved') THEN GETDATE() ELSE ApprovedDate END,
+                   ApprovedDate = CASE WHEN @GoalStatus IN ('HOD Approved', 'Manager Approved', 'Business Head Approved', 'Approved') THEN GETDATE() ELSE ApprovedDate END,
                    CFOApprovedBy = CASE WHEN @IsCfoApproval = 1 AND @GoalStatus = 'Approved' THEN @CFOApprovedBy ELSE CFOApprovedBy END,
                    CFOApprovedDate = CASE WHEN @IsCfoApproval = 1 AND @GoalStatus = 'Approved' THEN GETDATE() ELSE CFOApprovedDate END
                            WHERE GoalID = @GoalID
@@ -1204,6 +1266,7 @@ const submitGoalReview = async (req, res) => {
 
 module.exports = {
   getGoals,
+  getJointAccountabilityUsers,
   getGoalById,
   createGoal,
   updateGoal,

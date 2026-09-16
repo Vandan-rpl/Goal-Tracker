@@ -14,6 +14,7 @@ const ViewGoal = () => {
 
   // Quarterly update history state
   const [quarterlyUpdates, setQuarterlyUpdates] = useState([]);
+  const [quarterlyUpdatesError, setQuarterlyUpdatesError] = useState("");
   const [expandedQuarter, setExpandedQuarter] = useState(null);
 
   // Review form state
@@ -60,7 +61,7 @@ const ViewGoal = () => {
     ) {
       return "Business Head Approved";
     }
-    return "HOD Approved";
+    return normalizedRole === "manager" ? "Manager Approved" : "HOD Approved";
   };
 
   const approvalStatus =
@@ -97,22 +98,19 @@ const ViewGoal = () => {
     ((canCfoApprove &&
       [
         "HOD Approved",
+        "Manager Approved",
         "Reviewed By HOD",
         "Review By Business Head",
         "Business Head Approved",
       ].includes(goal.GoalStatus)) ||
       (goal.CanApproveOrReject === true &&
-        [
-          "Submitted",
-          "HOD Approved",
-          "Reviewed By HOD",
-          "Review By Business Head",
-        ].includes(goal.GoalStatus)));
+        goal.GoalStatus === "Submitted"));
 
   const canShowCfoActions =
     canCfoApprove &&
     [
       "HOD Approved",
+      "Manager Approved",
       "Reviewed By HOD",
       "Review By Business Head",
       "Business Head Approved",
@@ -120,6 +118,7 @@ const ViewGoal = () => {
 
   const quarterlyUpdateEligibleStatuses = [
     "HOD Approved",
+    "Manager Approved",
     "Business Head Approved",
     "Approved",
     "Reviewed By HOD",
@@ -149,12 +148,20 @@ const ViewGoal = () => {
     }
 
     try {
+      setQuarterlyUpdatesError("");
       const historyRes = await api.get(`/ratings/quarterly-updates/${id}`);
       if (historyRes.data.success) {
         setQuarterlyUpdates(historyRes.data.data || []);
+      } else {
+        setQuarterlyUpdatesError(
+          historyRes.data.message || "Unable to load quarterly progress.",
+        );
       }
     } catch (historyErr) {
       console.error("Error loading quarterly update history", historyErr);
+      setQuarterlyUpdatesError(
+        historyErr.response?.data?.message || "Unable to load quarterly progress.",
+      );
     }
   };
 
@@ -236,6 +243,7 @@ const ViewGoal = () => {
   const isApproved =
     goal.GoalStatus === "Approved" ||
     goal.GoalStatus === "HOD Approved" ||
+    goal.GoalStatus === "Manager Approved" ||
     goal.GoalStatus === "Business Head Approved";
 
   const getStatusBadgeStyle = (status) => {
@@ -436,6 +444,10 @@ const ViewGoal = () => {
                   );
                 })}
               </div>
+            ) : quarterlyUpdatesError ? (
+              <div className="text-xs text-rose-600 bg-rose-50 p-6 rounded-2xl text-center border border-rose-200 font-medium">
+                {quarterlyUpdatesError}
+              </div>
             ) : (
               <div className="text-xs text-slate-400 bg-slate-50 p-6 rounded-2xl text-center border border-dashed border-slate-200 font-medium">
                 No quarterly updates logged yet for this goal.
@@ -620,6 +632,12 @@ const ViewGoal = () => {
                   Review and take action on this goal:
                 </span>
                 <div className="flex space-x-3">
+                  <Link
+                    to={`/goals/edit/${goal.GoalID}`}
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-center rounded-xl font-bold text-sm shadow-xs transition cursor-pointer"
+                  >
+                    Modify Goal
+                  </Link>
                   <button
                     onClick={() => handleGoalAction("Rejected")}
                     disabled={actionLoading}
@@ -646,6 +664,8 @@ const ViewGoal = () => {
                   ? "This goal has been rejected."
                   : goal.GoalStatus === "HOD Approved"
                     ? "This goal has been approved by HOD."
+                    : goal.GoalStatus === "Manager Approved"
+                      ? "This goal has been approved by Manager."
                     : "Goal is currently pending review."}
               </div>
             )}

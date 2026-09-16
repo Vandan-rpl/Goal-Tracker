@@ -39,6 +39,7 @@ const EditGoal = () => {
     currentRole === 'CFO' ||
     currentRole === 'BUSINESSHEAD' ||
     currentRole === 'ADMIN';
+  const canManageTeamGoals = currentRole === 'HOD' || currentRole === 'MANAGER';
 
   useEffect(() => {
     fetchGoal();
@@ -151,9 +152,9 @@ const EditGoal = () => {
   const isRejected = formData.GoalStatus === 'Rejected';
   const isDraft = formData.GoalStatus === 'Draft';
   const isRestrictedEdit =
-    !canManageAllGoals && !isDraft && !isSubmitted && !isRejected;
+    !canManageAllGoals && !canManageTeamGoals && !isDraft && !isSubmitted && !isRejected;
 
-  if ((isSubmitted || isRejected) && !canManageAllGoals) {
+  if ((isSubmitted || isRejected) && !canManageAllGoals && !canManageTeamGoals) {
     return (
       <div className="flex-1 bg-gray-50 min-h-screen p-8 text-center">
         <div className="bg-amber-50 text-amber-800 p-4 rounded-xl max-w-md mx-auto mb-4 font-medium">
@@ -275,7 +276,7 @@ const EditGoal = () => {
                 className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
               >
                 {isDraft && <option value="Draft">Draft</option>}
-                {['Submitted', 'HOD Approved', 'Approved', 'Rejected'].includes(formData.GoalStatus) && (
+                {['Submitted', 'HOD Approved', 'Manager Approved', 'Approved', 'Rejected'].includes(formData.GoalStatus) && (
                   <option value={formData.GoalStatus}>{formData.GoalStatus}</option>
                 )}
                 <option value="Running">Running</option>

@@ -1,29 +1,8 @@
 const notificationService = require("../services/notificationService");
 
 /**
- * ============================================================
- * Notification Controller
- * Enterprise Goal Tracker Management System
- * ============================================================
- *
- * FIX: every method here used to build a `{ userId, employeeId, roleId,
- * companyId }` wrapper object and pass THAT to notificationService/
- * notificationModel, but every one of those functions (see
- * notificationModel.js) takes a plain scalar `userId`, not an object —
- * e.g. `notificationModel.getNotifications(userId)` does
- * `request.input("UserId", sql.Int, userId)`, which would try to bind an
- * entire object as a SQL Int and fail. Also, `employeeId`/`roleId`/
- * `companyId` don't exist anywhere in the actual JWT payload (see
- * authController.js — it only signs { userId, username, role,
- * isPasswordChanged }), so they were always undefined anyway.
- * Fixed by passing `req.user.userId` directly everywhere below.
- */
-
-/**
- * ------------------------------------------------------------
  * Get User Notifications
  * GET /api/v1/notifications
- * ------------------------------------------------------------
  */
 exports.getNotifications = async (req, res) => {
     try {
@@ -52,10 +31,8 @@ exports.getNotifications = async (req, res) => {
 };
 
 /**
- * ------------------------------------------------------------
  * Get Notification Count
  * GET /api/v1/notifications/count
- * ------------------------------------------------------------
  */
 exports.getNotificationCount = async (req, res) => {
 
@@ -86,10 +63,8 @@ exports.getNotificationCount = async (req, res) => {
 };
 
 /**
- * ------------------------------------------------------------
  * Mark Notification As Read
  * PUT /api/v1/notifications/:notificationId/read
- * ------------------------------------------------------------
  */
 exports.markAsRead = async (req, res) => {
 
@@ -124,10 +99,8 @@ exports.markAsRead = async (req, res) => {
 };
 
 /**
- * ------------------------------------------------------------
  * Mark All Notifications As Read
  * PUT /api/v1/notifications/read-all
- * ------------------------------------------------------------
  */
 exports.markAllAsRead = async (req, res) => {
 
@@ -158,10 +131,8 @@ exports.markAllAsRead = async (req, res) => {
 };
 
 /**
- * ------------------------------------------------------------
  * Delete Notification
  * DELETE /api/v1/notifications/:notificationId
- * ------------------------------------------------------------
  */
 exports.deleteNotification = async (req, res) => {
 
@@ -196,10 +167,8 @@ exports.deleteNotification = async (req, res) => {
 };
 
 /**
- * ------------------------------------------------------------
  * Delete All Notifications
  * DELETE /api/v1/notifications
- * ------------------------------------------------------------
  */
 exports.deleteAllNotifications = async (req, res) => {
 

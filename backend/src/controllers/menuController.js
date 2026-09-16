@@ -1,18 +1,5 @@
 const menuService = require("../services/menuService");
 
-/**
- * ============================================================
- * Menu Controller
- * Enterprise Goal Tracker Management System
- * ============================================================
- */
-
-/**
- * ------------------------------------------------------------
- * Get Logged-in User Menu
- * GET /api/menu
- * ------------------------------------------------------------
- */
 exports.getMenu = async (req, res) => {
     try {
 
@@ -44,12 +31,6 @@ exports.getMenu = async (req, res) => {
     }
 };
 
-/**
- * ------------------------------------------------------------
- * Get Sidebar Menu
- * GET /api/menu/sidebar
- * ------------------------------------------------------------
- */
 exports.getSidebarMenu = async (req, res) => {
 
     try {
@@ -83,12 +64,6 @@ exports.getSidebarMenu = async (req, res) => {
 
 };
 
-/**
- * ------------------------------------------------------------
- * Get Top Navigation Menu
- * GET /api/menu/top
- * ------------------------------------------------------------
- */
 exports.getTopMenu = async (req, res) => {
 
     try {
@@ -122,12 +97,6 @@ exports.getTopMenu = async (req, res) => {
 
 };
 
-/**
- * ------------------------------------------------------------
- * Refresh User Menu
- * GET /api/menu/refresh
- * ------------------------------------------------------------
- */
 exports.refreshMenu = async (req, res) => {
 
     try {
@@ -161,12 +130,6 @@ exports.refreshMenu = async (req, res) => {
 
 };
 
-/**
- * ------------------------------------------------------------
- * Get User Permissions
- * GET /api/menu/permissions
- * ------------------------------------------------------------
- */
 exports.getPermissions = async (req, res) => {
 
     try {

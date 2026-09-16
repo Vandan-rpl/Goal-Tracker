@@ -21,24 +21,15 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import NotificationsOutlinedIcon from "@mui/icons-material/NotificationsOutlined";
-import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
-import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 
-import {
-  toggleMobile,
-  toggleSidebar,
-} from "../../redux/slices/sidebarSlice";
+import { toggleMobile, toggleSidebar } from "../../redux/slices/sidebarSlice";
 
 import {
   fetchNotifications,
   fetchNotificationCount,
 } from "../../redux/slices/notificationSlice";
 
-import {
-  formatTime,
-  formatLongDate,
-  getGreeting,
-} from "../../utils/dateTime";
+import { formatTime, formatLongDate, getGreeting } from "../../utils/dateTime";
 
 import ProfileMenu from "../ProfileMenu/ProfileMenu";
 import CircleIcon from "@mui/icons-material/Circle";
@@ -51,13 +42,9 @@ const Header = ({ drawerWidth = 260 }) => {
 
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const { collapsed } = useSelector(
-    (state) => state.sidebar
-  );
+  const { collapsed } = useSelector((state) => state.sidebar);
 
-  const { user } = useSelector(
-    (state) => state.auth
-  );
+  const { user } = useSelector((state) => state.auth);
 
   const currentUser = useMemo(() => {
     if (user) return user;
@@ -76,7 +63,10 @@ const Header = ({ drawerWidth = 260 }) => {
     return (
       currentUser.fullName ||
       currentUser.FullName ||
-      [currentUser.firstName || currentUser.FirstName, currentUser.lastName || currentUser.LastName]
+      [
+        currentUser.firstName || currentUser.FirstName,
+        currentUser.lastName || currentUser.LastName,
+      ]
         .filter(Boolean)
         .join(" ") ||
       currentUser.username ||
@@ -90,20 +80,14 @@ const Header = ({ drawerWidth = 260 }) => {
   // notificationReceived (see notificationSlice.js), which useSocket.js
   // dispatches whenever a 'notification:new' socket event arrives.
   const { notifications, notificationCount } = useSelector(
-    (state) => state.notification
+    (state) => state.notification,
   );
 
-  const [currentTime, setCurrentTime] = useState(
-    formatTime()
-  );
+  const [currentTime, setCurrentTime] = useState(formatTime());
 
-  const [currentDate, setCurrentDate] = useState(
-    formatLongDate()
-  );
+  const [currentDate, setCurrentDate] = useState(formatLongDate());
 
-  const [greeting, setGreeting] = useState(
-    getGreeting()
-  );
+  const [greeting, setGreeting] = useState(getGreeting());
 
   const [notifAnchorEl, setNotifAnchorEl] = useState(null);
   const notifMenuOpen = Boolean(notifAnchorEl);
@@ -156,9 +140,7 @@ const Header = ({ drawerWidth = 260 }) => {
       elevation={0}
       sx={{
         width: {
-          md: `calc(100% - ${
-            collapsed ? 72 : drawerWidth
-          }px)`,
+          md: `calc(100% - ${collapsed ? 72 : drawerWidth}px)`,
         },
         ml: {
           md: `${collapsed ? 72 : drawerWidth}px`,
@@ -166,13 +148,10 @@ const Header = ({ drawerWidth = 260 }) => {
         borderBottom: `1px solid ${theme.palette.divider}`,
         backgroundColor: theme.palette.background.paper,
         zIndex: theme.zIndex.drawer + 1,
-        transition: theme.transitions.create(
-          ["width", "margin"],
-          {
-            easing: theme.transitions.easing.easeInOut,
-            duration: theme.transitions.duration.standard,
-          }
-        ),
+        transition: theme.transitions.create(["width", "margin"], {
+          easing: theme.transitions.easing.easeInOut,
+          duration: theme.transitions.duration.standard,
+        }),
       }}
     >
       <Toolbar>
@@ -183,37 +162,23 @@ const Header = ({ drawerWidth = 260 }) => {
           onClick={handleMenuClick}
           sx={{ mr: 2 }}
         >
-          {collapsed ? (
-            <MenuIcon />
-          ) : (
-            <MenuOpenIcon />
-          )}
+          {collapsed ? <MenuIcon /> : <MenuOpenIcon />}
         </IconButton>
 
         {/* Greeting */}
         <Box sx={{ flexGrow: 1 }}>
-          <Typography
-            variant="h6"
-            fontWeight={600}
-          >
+          <Typography variant="h6" fontWeight={600}>
             {greeting}, {displayName}
           </Typography>
 
-          <Typography
-            variant="body2"
-            color="text.secondary"
-          >
+          <Typography variant="body2" color="text.secondary">
             {currentDate}
             {" • "}
             {currentTime}
           </Typography>
         </Box>
 
-        <Stack
-          direction="row"
-          spacing={1}
-          alignItems="center"
-        >
+        <Stack direction="row" spacing={1} alignItems="center">
           {/* Theme Toggle (Placeholder) */}
           {/* <Tooltip title="Theme">
             <IconButton color="inherit">
@@ -228,11 +193,7 @@ const Header = ({ drawerWidth = 260 }) => {
           {/* Notifications */}
           <Tooltip title="Notifications">
             <IconButton color="inherit" onClick={handleNotifOpen}>
-              <Badge
-                badgeContent={notificationCount}
-                color="error"
-                max={99}
-              >
+              <Badge badgeContent={notificationCount} color="error" max={99}>
                 <NotificationsOutlinedIcon />
               </Badge>
             </IconButton>
@@ -244,98 +205,76 @@ const Header = ({ drawerWidth = 260 }) => {
             onClose={handleNotifClose}
             anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
             transformOrigin={{ vertical: "top", horizontal: "right" }}
-            PaperProps={{
-              sx: {
-                width: 360,
-                maxWidth: "92vw",
-                mt: 1,
-                borderRadius: 2,
-                boxShadow: "0 8px 24px rgba(20,23,31,0.12)",
+            SlotProps={{
+              paper: {
+                className:
+                  "w-[360px] max-w-[92vw] mt-2 rounded-xl border border-slate-300 shadow-2xl overflow-hidden bg-white text-slate-900",
               },
             }}
           >
-            <Box
-              sx={{
-                px: 2,
-                py: 1.5,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <Typography variant="subtitle1" fontWeight={700}>
+            {/* Header */}
+            <Box className="px-4 py-3 flex items-center justify-between bg-slate-50 border-b border-slate-200">
+              <Typography className="text-base font-extrabold text-slate-900">
                 Notifications
               </Typography>
               {notificationCount > 0 && (
-                <Typography variant="caption" fontWeight={700} color="primary.main">
+                <Typography className="px-2.5 py-0.5 text-xs font-extrabold text-blue-900 bg-blue-100 border border-blue-300 rounded-full">
                   {notificationCount} unread
                 </Typography>
               )}
             </Box>
-            <Divider />
 
+            {/* Empty State */}
             {latestFive.length === 0 && (
-              <Box sx={{ px: 2, py: 3, textAlign: "center" }}>
-                <Typography variant="body2" color="text.secondary">
+              <Box className="px-4 py-8 text-center bg-white">
+                <Typography className="text-sm font-semibold text-slate-600">
                   You're all caught up — no notifications yet.
                 </Typography>
               </Box>
             )}
 
+            {/* Notification List Items */}
             {latestFive.map((item, index) => (
               <MenuItem
                 key={item.NotificationId}
                 onClick={handleNotifClose}
-                sx={{
-                  whiteSpace: "normal",
-                  alignItems: "flex-start",
-                  gap: 1,
-                  py: 1.25,
-                  px: 2,
-                  borderBottom:
-                    index < latestFive.length - 1 ? "1px solid" : "none",
-                  borderColor: "divider",
-                  bgcolor: item.IsRead ? "transparent" : "primary.lighter",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
+                className={`px-4 py-3 flex items-start gap-3 transition-colors ${
+                  item.IsRead
+                    ? "bg-white hover:bg-slate-100"
+                    : "bg-blue-50/70 hover:bg-blue-100/80"
+                } ${index < latestFive.length - 1 ? "border-b border-slate-200" : ""}`}
               >
-                {/* Unread indicator dot, replacing the flat opacity toggle
-                    with something that actually reads as "new" at a glance */}
+                {/* Unread Indicator Dot */}
                 <CircleIcon
-                  sx={{
-                    fontSize: 8,
-                    mt: 0.75,
-                    color: item.IsRead ? "transparent" : "primary.main",
-                    flexShrink: 0,
-                  }}
+                  className={`text-[10px] mt-1 flex-shrink-0 ${
+                    item.IsRead ? "text-transparent" : "text-blue-600"
+                  }`}
                 />
-                <Box sx={{ minWidth: 0 }}>
+
+                <Box className="min-w-0 flex-1">
                   <Typography
-                    variant="body2"
-                    fontWeight={item.IsRead ? 500 : 700}
-                    noWrap
+                    className={`text-sm leading-snug truncate ${
+                      item.IsRead
+                        ? "font-semibold text-slate-800"
+                        : "font-extrabold text-slate-950"
+                    }`}
                   >
                     {item.Title}
                   </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{
-                      display: "block",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <Typography className="text-xs font-medium text-slate-600 truncate mt-0.5">
                     {item.Message}
                   </Typography>
                 </Box>
               </MenuItem>
             ))}
 
-            <Divider />
-            <MenuItem onClick={handleViewAll} sx={{ justifyContent: "center", py: 1.25 }}>
-              <Typography variant="body2" color="primary.main" fontWeight={700}>
+            {/* Footer */}
+            <Divider className="border-slate-200" />
+            <MenuItem
+              onClick={handleViewAll}
+              className="justify-center py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+            >
+              <Typography className="text-sm font-extrabold text-blue-700 hover:text-blue-900">
                 View all notifications
               </Typography>
             </MenuItem>
