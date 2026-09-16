@@ -487,7 +487,7 @@ const AddGoal = () => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 pt-2">
+            {/* <div className="flex items-center space-x-2 pt-2">
               <input
                 type="checkbox"
                 name="CrossFunctionalGoal"
@@ -502,7 +502,7 @@ const AddGoal = () => {
               >
                 Is this a Cross-Functional Goal?
               </label>
-            </div>
+            </div> */}
 
             <hr className="my-6" />
 

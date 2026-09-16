@@ -111,7 +111,6 @@ const CFOAllUsersGoals = () => {
                           "manager approved",
                           "reviewed by hod",
                           "review by business head",
-                          "business head approved",
                         ].includes(normalizedStatus(goal.GoalStatus)) && (
                           <div className="flex gap-2">
                             <button

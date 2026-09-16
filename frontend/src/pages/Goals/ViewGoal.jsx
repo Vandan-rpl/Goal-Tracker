@@ -113,7 +113,7 @@ const ViewGoal = () => {
       "Manager Approved",
       "Reviewed By HOD",
       "Review By Business Head",
-      "Business Head Approved",
+      // "Business Head Approved",
     ].includes(goal?.GoalStatus);
 
   const quarterlyUpdateEligibleStatuses = [
