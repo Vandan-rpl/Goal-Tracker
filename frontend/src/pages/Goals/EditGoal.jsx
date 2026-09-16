@@ -499,7 +499,7 @@ const EditGoal = () => {
               <h3 className="text-lg font-bold text-gray-800">Sub-Goals</h3>
               <button
                 type="button"
-                onClick={addSubGoalRow}
+                onClick={addSubGoalRow} 
                 className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition"
               >
                 + Add Sub-Goal
