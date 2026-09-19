@@ -3,71 +3,35 @@ import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import api from "../../services/api";
 
-// Mirrors the server-side smartGoalValidator.js criteria for live,
-// pre-submit feedback. NOT a full re-implementation — the Achievable
-// check here only validates the single-goal 0-100 range client-side; the
-// cross-goal "your total weightage this cycle" check requires a DB read
-// and only runs server-side at actual submit time (see the note rendered
-// next to that checklist row below).
-const MIN_DESCRIPTION_LENGTH = 20;
-
-const computeSmartChecklist = (formData) => {
-  const title = (formData.GoalTitle || "").trim();
-  const description = (formData.GoalDescription || "").trim();
-  const measurability = (formData.Measurability || "").trim();
-  const meet = (formData.MeetPerformance || "").trim();
-  const exceed = (formData.ExceedPerformance || "").trim();
-  const weightageNum = Number(formData.Weightage);
-  const category = (formData.GoalCategory || "").trim();
-
-  const specific =
-    title.length > 0 && description.length >= MIN_DESCRIPTION_LENGTH;
-  const measurable =
-    measurability.length > 0 && (meet.length > 0 || exceed.length > 0);
-  const achievable =
-    formData.Weightage !== "" &&
-    !Number.isNaN(weightageNum) &&
-    weightageNum > 0 &&
-    weightageNum <= 100;
-  const relevant = category.length > 0;
-
-  let timeBound = false;
-  if (formData.Timeline) {
-    const timelineDate = new Date(formData.Timeline);
-    if (!Number.isNaN(timelineDate.getTime())) {
-      const now = new Date();
-      const maxDate = new Date();
-      maxDate.setFullYear(maxDate.getFullYear() + 2);
-      timeBound = timelineDate > now && timelineDate <= maxDate;
-    }
-  }
-
-  return { specific, measurable, achievable, relevant, timeBound };
-};
-
-const ChecklistRow = ({ ok, label, hint }) => (
-  <div className="flex items-start gap-2 py-1.5">
-    <span
-      className={`mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-        ok ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-500"
-      }`}
-    >
-      {ok ? "✓" : "·"}
-    </span>
-    <div>
-      <p
-        className={`text-sm font-semibold ${ok ? "text-emerald-700" : "text-gray-600"}`}
-      >
-        {label}
-      </p>
-      <p className="text-xs text-gray-400">{hint}</p>
-    </div>
-  </div>
-);
-
 const AddGoal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const [jointAccountabilities, setJointAccountabilities] = useState([
+    { UserID: "", ContributionNote: "", Weightage: "" },
+  ]);
+
+  const addJointAccountabilityRow = () =>
+    setJointAccountabilities((previous) => [
+      ...previous,
+      { UserID: "", ContributionNote: "", Weightage: "" },
+    ]);
+
+  const removeJointAccountabilityRow = (index) =>
+    setJointAccountabilities((previous) =>
+      previous.filter((_, i) => i !== index),
+    );
+
+  const handleJointAccountabilityChange = (index, e) => {
+    const { name, value } = e.target;
+    setJointAccountabilities((previous) =>
+      previous.map((accountability, currentIndex) =>
+        currentIndex === index
+          ? { ...accountability, [name]: value }
+          : accountability,
+      ),
+    );
+  };
 
   const [formData, setFormData] = useState({
     GoalNumber: 1,
@@ -144,8 +108,6 @@ const AddGoal = () => {
     loadJointAccountabilityUsers();
   }, []);
 
-  const smartChecklist = computeSmartChecklist(formData);
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -199,6 +161,7 @@ const AddGoal = () => {
         UserID: user?.userId || user?.UserID,
         GoalStatus: status,
         SubGoals: subGoals,
+        JointAccountabilities: jointAccountabilities.filter((ja) => ja.UserID),
       };
 
       const response = await api.post("/goals", payload);
@@ -324,7 +287,6 @@ const AddGoal = () => {
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
                   <option value="High">High</option>
-                  <option value="Critical">Critical</option>
                 </select>
               </div>
               <div>
@@ -442,49 +404,90 @@ const AddGoal = () => {
             </div>
 
             {/* Row 5: Validation Source & Joint Accountability */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Validation Source
-                </label>
-                <input
-                  type="text"
-                  name="ValidationSource"
-                  value={formData.ValidationSource}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+            {/* Joint Accountability Section */}
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-800">
                   Joint Accountability
-                </label>
-                <select
-                  name="JointAccountability"
-                  value={formData.JointAccountability}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  disabled={jointAccountabilityUsersLoading}
+                </h3>
+                <button
+                  type="button"
+                  onClick={addJointAccountabilityRow}
+                  className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition"
                 >
-                  <option value="">
-                    {jointAccountabilityUsersLoading
-                      ? "Loading department users..."
-                      : "Select an employee"}
-                  </option>
-                  {jointAccountabilityUsers.map((employee) => {
-                    const fullName = [employee.FirstName, employee.LastName]
-                      .filter(Boolean)
-                      .join(" ");
-
-                    return (
-                      <option key={employee.UserID} value={fullName}>
-                        {fullName}
-                        {employee.Designation ? ` - ${employee.Designation}` : ""}
-                      </option> 
-                    );
-                  })}
-                </select>
+                  + Add Joint Employee
+                </button>
               </div>
+
+              {jointAccountabilities.map((ja, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 relative space-y-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-indigo-600 uppercase">
+                      Joint Employee #{index + 1}
+                    </span>
+                    {jointAccountabilities.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeJointAccountabilityRow(index)}
+                        className="text-red-500 hover:text-red-700 text-xs font-semibold"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <select
+                      name="UserID"
+                      value={ja.UserID}
+                      onChange={(e) =>
+                        handleJointAccountabilityChange(index, e)
+                      }
+                      disabled={jointAccountabilityUsersLoading}
+                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
+                    >
+                      <option value="">
+                        {jointAccountabilityUsersLoading
+                          ? "Loading employees..."
+                          : "Select employee"}
+                      </option>
+                      {jointAccountabilityUsers.map((employee) => (
+                        <option key={employee.UserID} value={employee.UserID}>
+                          {[employee.FirstName, employee.LastName]
+                            .filter(Boolean)
+                            .join(" ")}
+                          {employee.Designation
+                            ? ` - ${employee.Designation}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      name="ContributionNote"
+                      placeholder="What are they responsible for?"
+                      value={ja.ContributionNote}
+                      onChange={(e) =>
+                        handleJointAccountabilityChange(index, e)
+                      }
+                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="Weightage"
+                      placeholder="Weightage (%) - optional"
+                      value={ja.Weightage}
+                      onChange={(e) =>
+                        handleJointAccountabilityChange(index, e)
+                      }
+                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* <div className="flex items-center space-x-2 pt-2">
@@ -604,44 +607,7 @@ const AddGoal = () => {
           </form>
         </div>
 
-        {/* SMART Goal Checklist — live client-side preview. The backend
-            re-checks everything at actual submit time (including the
-            Achievable cross-goal weightage-sum, which needs a DB read and
-            isn't replicated here), so this is guidance, not a guarantee. */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:sticky lg:top-8">
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-1">
-            SMART Goal Checklist
-          </h3>
-          <p className="text-xs text-gray-400 mb-3">
-            Updates as you fill in the form.
-          </p>
 
-          <ChecklistRow
-            ok={smartChecklist.specific}
-            label="Specific"
-            hint="Title + a real description (20+ characters)"
-          />
-          <ChecklistRow
-            ok={smartChecklist.measurable}
-            label="Measurable"
-            hint="Measurability filled + a Meet or Exceed target"
-          />
-          <ChecklistRow
-            ok={smartChecklist.achievable}
-            label="Achievable"
-            hint="Weightage between 0-100% (total across your goals is checked at submit)"
-          />
-          <ChecklistRow
-            ok={smartChecklist.relevant}
-            label="Relevant"
-            hint="A Goal Category is set"
-          />
-          <ChecklistRow
-            ok={smartChecklist.timeBound}
-            label="Time-bound"
-            hint="Timeline is a future date, within 2 years"
-          />
-        </div>
       </div>
     </div>
   );

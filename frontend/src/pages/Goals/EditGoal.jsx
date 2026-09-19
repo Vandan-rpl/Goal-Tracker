@@ -129,7 +129,7 @@ const EditGoal = () => {
     setSubGoals(updated);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, status = formData.GoalStatus) => {
     e.preventDefault();
     setError("");
     setFieldErrors({});
@@ -138,6 +138,7 @@ const EditGoal = () => {
     try {
       const payload = {
         ...formData,
+        GoalStatus: status,
         SubGoals: subGoals,
       };
 
@@ -238,7 +239,15 @@ const EditGoal = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form
+          onSubmit={(e) =>
+            handleSubmit(
+              e,
+              isDraft ? "Draft" : formData.GoalStatus,
+            )
+          }
+          className="space-y-6"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -307,7 +316,6 @@ const EditGoal = () => {
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
-                <option value="Critical">Critical</option>
               </select>
             </div>
             <div>
@@ -570,8 +578,22 @@ const EditGoal = () => {
               disabled={submitting}
               className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50"
             >
-              {submitting ? "Saving..." : "Save Goal"}
+              {submitting
+                ? "Saving..."
+                : isDraft
+                  ? "Save as Draft"
+                  : "Save Goal"}
             </button>
+            {isDraft && (
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e, "Submitted")}
+                disabled={submitting}
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50"
+              >
+                {submitting ? "Submitting..." : "Submit Goal"}
+              </button>
+            )}
           </div>
         </form>
       </div>

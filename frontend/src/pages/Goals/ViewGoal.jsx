@@ -59,15 +59,15 @@ const ViewGoal = () => {
         normalizedRole,
       )
     ) {
-      return "Business Head Approved";
+      // The API treats a Business Head decision as the final workflow
+      // transition, including when the employee reports directly to them.
+      // "Business Head Approved" is not an accepted target status there.
+      return "Approved";
     }
     return normalizedRole === "manager" ? "Manager Approved" : "HOD Approved";
   };
 
-  const approvalStatus =
-    normalizedRole === "businesshead" && goal?.GoalStatus !== "Submitted"
-      ? "Approved"
-      : getApprovalStatusForRole();
+  const approvalStatus = getApprovalStatusForRole();
   const canCfoApprove = ["cfo", "businesshead", "business head"].includes(
     normalizedRole,
   );
@@ -179,7 +179,9 @@ const ViewGoal = () => {
       }
     } catch (err) {
       console.error("Error updating goal status:", err);
-      alert("Server error while updating status.");
+      alert(
+        err.response?.data?.message || "Server error while updating status.",
+      );
     } finally {
       setActionLoading(false);
     }

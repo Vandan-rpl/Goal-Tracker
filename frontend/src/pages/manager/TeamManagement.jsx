@@ -120,7 +120,7 @@ const TeamManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
                           onClick={() => handleViewGoals(user.UserID, `${user.FirstName} ${user.LastName}`)}
-                          className="text-indigo-600 hover:text-indigo-900 font-semibold bg-indigo-50 px-3 py-1.5 rounded-md transition hover:bg-indigo-100"
+                          className="text-indigo-600 hover:text-indigo-900 font-semibold bg-indigo-50 px-3 py-1.5 rounded-md transition hover:bg-indigo-100 cursor-pointer"
                         >
                           View Goals
                         </button>
@@ -201,7 +201,6 @@ const TeamManagement = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            goal.Priority === 'Critical' ? 'bg-red-100 text-red-800' :
                             goal.Priority === 'High' ? 'bg-orange-100 text-orange-800' :
                             goal.Priority === 'Medium' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
                           }`}>

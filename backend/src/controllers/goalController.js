@@ -1,6 +1,7 @@
 const { poolPromise, sql } = require("../config/db");
 const crypto = require("crypto");
 const goalModel = require("../models/goalModel");
+const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 
@@ -106,11 +107,11 @@ const notifyGoalHierarchy = async (
     const superiorName =
       `${superior.FirstName || ""} ${superior.LastName || ""}`.trim() ||
       "Manager";
-    const recipientEmail = superior.Email.trim(); 
+    const recipientEmail = superior.Email.trim();
 
     await notifyUser(pool, {
       userId: superiorId,
-      title: "Goal Submitted / Updated", 
+      title: "Goal Submitted / Updated",
       message: `Goal submitted by ${employeeName} awaiting your approval.`,
       type: "GOAL_SUBMITTED",
       referenceId: Number(newGoalID),
@@ -170,10 +171,7 @@ const getJointAccountabilityUsers = async (req, res) => {
 
   try {
     const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input("UserID", sql.Int, userId)
-      .query(`
+    const result = await pool.request().input("UserID", sql.Int, userId).query(`
         SELECT colleague.UserID, colleague.FirstName, colleague.LastName,
                colleague.Designation
         FROM dbo.Users owner
@@ -276,7 +274,11 @@ const getGoalById = async (req, res) => {
       );
 
     const requesterUserId = req.user?.UserID || req.user?.userId;
-    const requesterRole = (req.user?.Role || req.user?.role || "").toUpperCase();
+    const requesterRole = (
+      req.user?.Role ||
+      req.user?.role ||
+      ""
+    ).toUpperCase();
     const canApproveOrReject =
       requesterRole === "CFO" ||
       requesterRole === "ADMIN" ||
@@ -541,9 +543,11 @@ const updateGoal = async (req, res) => {
     const existingGoal = checkResult.recordset[0];
     const currentStatus = existingGoal.GoalStatus;
 
-    const ownerHierarchyResult = await new sql.Request(transaction)
-      .input("OwnerUserID", sql.Int, existingGoal.UserID)
-      .query(`
+    const ownerHierarchyResult = await new sql.Request(transaction).input(
+      "OwnerUserID",
+      sql.Int,
+      existingGoal.UserID,
+    ).query(`
         SELECT ReportingManagerID, HODID
         FROM dbo.Users
         WHERE UserID = @OwnerUserID
@@ -595,8 +599,12 @@ const updateGoal = async (req, res) => {
     const canEditAllFields =
       isDraft || isEnterpriseGoalManager || isTeamGoalManager;
 
-    const finalGoalNumber = canEditAllFields ? GoalNumber : existingGoal.GoalNumber;
-    const finalGoalTitle = canEditAllFields ? GoalTitle : existingGoal.GoalTitle;
+    const finalGoalNumber = canEditAllFields
+      ? GoalNumber
+      : existingGoal.GoalNumber;
+    const finalGoalTitle = canEditAllFields
+      ? GoalTitle
+      : existingGoal.GoalTitle;
     const finalGoalDesc = canEditAllFields
       ? GoalDescription
       : existingGoal.GoalDescription;
@@ -612,7 +620,9 @@ const updateGoal = async (req, res) => {
     const finalJointAcc = canEditAllFields
       ? JointAccountability
       : existingGoal.JointAccountability;
-    const finalCategory = canEditAllFields ? GoalCategory : existingGoal.GoalCategory;
+    const finalCategory = canEditAllFields
+      ? GoalCategory
+      : existingGoal.GoalCategory;
     const finalCrossFunc = canEditAllFields
       ? CrossFunctionalGoal
         ? 1
@@ -753,9 +763,37 @@ const updateGoal = async (req, res) => {
 
     await transaction.commit();
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Goal updated successfully." });
+    // A draft becomes visible to approvers only after it is submitted.
+    // Creating a submitted goal already sends this notification; this
+    // covers the equivalent Draft -> Submitted transition during editing.
+    let notifiedEmails = [];
+    if (currentStatus !== "Submitted" && newStatus === "Submitted") {
+      try {
+        notifiedEmails = await notifyGoalHierarchy(
+          existingGoal.UserID,
+          id,
+          finalGoalTitle,
+          newStatus,
+        );
+      } catch (notificationError) {
+        // The goal was successfully submitted, so a notification outage
+        // should not report the request as failed to the employee.
+        console.error(
+          `[NOTIF FAILED] updateGoal submit notification. goalId=${id}:`,
+          notificationError,
+        );
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        newStatus === "Submitted" && currentStatus !== "Submitted"
+          ? notifiedEmails.length > 0
+            ? `Goal submitted and email has been sent to ${notifiedEmails.length} approver(s) in your reporting hierarchy.`
+            : "Goal submitted successfully."
+          : "Goal updated successfully.",
+    });
   } catch (error) {
     if (transaction._aborted === false && transaction._acquiredConnection) {
       try {
@@ -800,15 +838,13 @@ const deleteGoal = async (req, res) => {
       });
     }
 
-    await logGoalHistory(
-      transaction,
-      id,
-      "UPDATE",
-      checkResult.recordset[0].GoalStatus,
-      "Deleted",
-      "Goal deleted",
-      userId,
-    );
+    // Since we're hard-deleting the goal, there's no point logging
+    // "Deleted" history for a row that won't exist anymore.
+    // Instead, just clean up any existing history rows for this goal.
+    const delHistReq = new sql.Request(transaction);
+    await delHistReq
+      .input("GoalID", sql.BigInt, id)
+      .query("DELETE FROM dbo.GoalHistory WHERE GoalID = @GoalID");
 
     const delSubReq = new sql.Request(transaction);
     await delSubReq
@@ -886,6 +922,45 @@ const canApproveOrRejectGoal = async (requesterUserId, goalOwnerUserId) => {
   return directApproverIds.some((id) => Number(id) === Number(requesterUserId));
 };
 
+// NEW: true only when this employee has no Manager/HOD in between
+// and reports directly to this specific Business Head.
+const isDirectBusinessHeadReport = async (goalOwnerUserId, businessHeadUserId) => {
+  const pool = await poolPromise;
+  const result = await pool.request()
+    .input("UserID", sql.Int, goalOwnerUserId)
+    .query(`
+            SELECT ReportingManagerID, HODID, BusinessHeadID
+            FROM dbo.Users
+            WHERE UserID = @UserID
+        `);
+
+  const h = result.recordset[0];
+  if (!h) return false;
+
+  const hasManager =
+    h.ReportingManagerID !== null &&
+    h.ReportingManagerID !== undefined &&
+    h.ReportingManagerID !== "";
+
+  const hasHOD =
+    h.HODID !== null && h.HODID !== undefined && h.HODID !== "";
+
+  return (
+    !hasManager &&
+    !hasHOD &&
+    h.BusinessHeadID !== null &&
+    h.BusinessHeadID !== undefined &&
+    h.BusinessHeadID !== "" &&
+    Number(h.BusinessHeadID) === Number(businessHeadUserId)
+  );
+};
+
+module.exports = {
+  canApproveOrRejectGoal,
+  isDirectBusinessHeadReport,
+  // ...export whatever else this file already exports
+};
+
 // 6. Update Goal Status (Approve / Reject)
 const changeGoalStatus = async (req, res) => {
   const { id } = req.params;
@@ -920,13 +995,22 @@ const changeGoalStatus = async (req, res) => {
     const goalTitle = oldRes.recordset[0].GoalTitle;
 
     const role = (req.user?.Role || req.user?.role || "").toUpperCase();
+
+    // NEW: Business Head is "final" either after Manager/HOD already approved,
+    // OR when this employee reports directly to Business Head (no Manager/HOD stage exists).
+    const isDirectReport =
+      role === "BUSINESSHEAD"
+        ? await isDirectBusinessHeadReport(goalOwnerId, userId)
+        : false;
+
     const isFinalBusinessHeadAction =
-      role === "BUSINESSHEAD" && oldStatus !== "Submitted";
+      role === "BUSINESSHEAD" && (oldStatus !== "Submitted" || isDirectReport);
+
     const isAuthorizedApprover =
-      role === "CFO" ||
       role === "ADMIN" ||
       isFinalBusinessHeadAction ||
       (await canApproveOrRejectGoal(userId, goalOwnerId));
+
     if (!isAuthorizedApprover) {
       await transaction.rollback();
       return res.status(403).json({
@@ -935,16 +1019,17 @@ const changeGoalStatus = async (req, res) => {
       });
     }
 
-    const isFinalApproval =
-      role === "CFO" || (role === "BUSINESSHEAD" && oldStatus !== "Submitted");
+    const isFinalApproval = isFinalBusinessHeadAction;
     const isFirstStageApproval =
       !isFinalApproval && role !== "ADMIN" && isAuthorizedApprover;
     const firstStageApprovalStatus =
       role === "MANAGER" ? "Manager Approved" : "HOD Approved";
+
     const validTransition =
       role === "ADMIN" ||
       (isFinalApproval &&
         [
+          "Submitted",
           "HOD Approved",
           "Manager Approved",
           "Reviewed By HOD",
@@ -960,10 +1045,9 @@ const changeGoalStatus = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message:
-          isFinalApproval
-            ? "Final approval is available only after manager/HOD approval."
-            : "This goal is not awaiting your approval stage.",
+        message: isFinalApproval
+          ? "Final approval is available only after manager/HOD approval."
+          : "This goal is not awaiting your approval stage.",
       });
     }
 
@@ -971,15 +1055,14 @@ const changeGoalStatus = async (req, res) => {
     await updateReq
       .input("GoalID", sql.BigInt, id)
       .input("GoalStatus", sql.VarChar, goalStatus)
-      .input("CFOApprovedBy", sql.Int, isFinalApproval ? userId : null)
-      .input("IsCfoApproval", sql.Bit, isFinalApproval)
-      .query(`
+      .input("BusinessHeadApprovedBy", sql.Int, isFinalApproval ? userId : null)
+      .input("IsBusinessHeadApproval", sql.Bit, isFinalApproval).query(`
                            UPDATE dbo.Goals 
                            SET GoalStatus = @GoalStatus, 
                                ModifiedDate = GETDATE(),
                    ApprovedDate = CASE WHEN @GoalStatus IN ('HOD Approved', 'Manager Approved', 'Business Head Approved', 'Approved') THEN GETDATE() ELSE ApprovedDate END,
-                   CFOApprovedBy = CASE WHEN @IsCfoApproval = 1 AND @GoalStatus = 'Approved' THEN @CFOApprovedBy ELSE CFOApprovedBy END,
-                   CFOApprovedDate = CASE WHEN @IsCfoApproval = 1 AND @GoalStatus = 'Approved' THEN GETDATE() ELSE CFOApprovedDate END
+                   BusinessHeadApprovedBy = CASE WHEN @IsBusinessHeadApproval = 1 AND @GoalStatus = 'Approved' THEN @BusinessHeadApprovedBy ELSE BusinessHeadApprovedBy END,
+                   BusinessHeadApprovedDate = CASE WHEN @IsBusinessHeadApproval = 1 AND @GoalStatus = 'Approved' THEN GETDATE() ELSE BusinessHeadApprovedDate END
                            WHERE GoalID = @GoalID
                        `);
 
@@ -995,9 +1078,6 @@ const changeGoalStatus = async (req, res) => {
 
     await transaction.commit();
 
-    // Notify the employee whose goal this is when it's Approved or Rejected.
-    // Notification failures are handled entirely inside notifyUser and never
-    // affect this response — the status update has already been committed.
     if (
       goalStatus === "Approved" ||
       goalStatus === "Rejected" ||
@@ -1264,6 +1344,54 @@ const submitGoalReview = async (req, res) => {
   }
 };
 
+const getJointGoals = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+
+  try {
+    const data = await jointAccountabilityModel.getJointGoalsForUser(userId);
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Get Joint Goals Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching joint goals.",
+      errors: error.message,
+    });
+  }
+};
+
+const updateJointAccountabilityStatus = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+  const { status } = req.body;
+
+  if (!["Accepted", "Declined"].includes(status)) {
+    return res.status(400).json({ success: false, message: "Invalid status." });
+  }
+
+  try {
+    const updated =
+      await jointAccountabilityModel.updateJointAccountabilityStatus(
+        req.params.id,
+        userId,
+        status,
+      );
+    if (!updated) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Not found or not yours to update." });
+    }
+    return res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error("Update Joint Accountability Status Error:", error);
+    return res.status(500).json({
+      success: false,
+      message:
+        "Internal server error while updating joint accountability status.",
+      errors: error.message,
+    });
+  }
+};
+
 module.exports = {
   getGoals,
   getJointAccountabilityUsers,
@@ -1274,4 +1402,6 @@ module.exports = {
   changeGoalStatus,
   submitGoalReview,
   getAllEmployeeGoals,
+  getJointGoals,
+  updateJointAccountabilityStatus,
 };

@@ -108,33 +108,7 @@ const Reports = () => {
             </div>
           )}
         </div>
-
-        {/* Quarterly Completion Trend */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-1">Quarterly Progress Trend</h2>
-          <p className="text-xs text-gray-400 mb-4">
-            Sourced from quarterly progress updates (Q1–Q4), not a per-goal "quarter" field — this
-            schema has no such column on Goals itself.
-          </p>
-          {quarterTrends.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={quarterTrends}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                <XAxis dataKey="quarter" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="avgProgress" name="Avg. Progress %" stroke="#4F46E5" strokeWidth={2} />
-                <Line type="monotone" dataKey="completedGoals" name="Completed Goals" stroke="#059669" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-sm text-gray-500 text-center py-12 border border-dashed border-gray-200 rounded-xl">
-              No quarterly updates logged yet.
-            </div>
-          )}
-        </div>
-
+        
       </div>
     </div>
   );
