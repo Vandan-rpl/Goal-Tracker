@@ -3,18 +3,37 @@ const { notifyUser } = require("../services/notifyService");
 
 const getTeamMembers = async (req, res) => {
   try {
-    const managerId = req.user?.UserID || req.user?.userId;
-    const role = (req.user?.Role || req.user?.role || "").toUpperCase();
+    const loggedInId = req.user?.UserID || req.user?.userId;
+    const loggedInRole = (req.user?.Role || req.user?.role || "").toUpperCase();
+
+    // If a :userId param is passed, we're expanding a specific row in the
+    // tree (e.g. Business Head clicked on a Manager) — fetch that person's
+    // direct reports instead of the logged-in user's own.
+    // Otherwise, default to the logged-in user's own direct reports (top level).
+    const managerId = req.params.userId
+      ? Number(req.params.userId)
+      : loggedInId;
+
+    // Only apply the special "Business Head root" query when we're looking
+    // at the actual logged-in Business Head's own top-level view. Once
+    // expanding further down the tree (e.g. that Manager's own reports),
+    // it's a normal Manager/HOD lookup regardless of the logged-in user's role.
+    const isBusinessHeadRootView =
+      loggedInRole === "BUSINESSHEAD" && managerId === loggedInId;
 
     const pool = await poolPromise;
     const request = pool.request();
     request.input("ManagerID", sql.Int, managerId);
 
     let query = "";
-    if (role === "BUSINESSHEAD") {
+    if (isBusinessHeadRootView) {
       query = `
                 SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
-                (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals
+                (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM dbo.Users sub
+                    WHERE sub.ReportingManagerID = u.UserID OR sub.HODID = u.UserID
+                ) THEN 1 ELSE 0 END AS HasDirectReports
                 FROM dbo.Users u
                 WHERE u.BusinessHeadID = @ManagerID
                   AND u.UserID <> @ManagerID
@@ -27,7 +46,11 @@ const getTeamMembers = async (req, res) => {
     } else {
       query = `
                 SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
-                (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals
+                (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM dbo.Users sub
+                    WHERE sub.ReportingManagerID = u.UserID OR sub.HODID = u.UserID
+                ) THEN 1 ELSE 0 END AS HasDirectReports
                 FROM dbo.Users u
                 WHERE (u.ReportingManagerID = @ManagerID OR u.HODID = @ManagerID) AND u.UserID <> @ManagerID
             `;

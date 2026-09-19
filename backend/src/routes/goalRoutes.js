@@ -9,7 +9,8 @@ const {
     updateGoal,
     deleteGoal,
     changeGoalStatus,
-    submitGoalReview
+    submitGoalReview,
+    getGoalHistory
 } = require('../controllers/goalController');
 
 const { verifyToken } = require('../middleware/authMiddleware');
@@ -24,7 +25,10 @@ router.get('/joint-accountability-users', getJointAccountabilityUsers);
 //get all employee goals for CFO
 router.get('/all-employee-goals', getAllEmployeeGoals);
 
-// Public: view a single goal via email link
+//Get goal history for a particular goal
+router.get("/:id/history", getGoalHistory);
+
+// Authenticated and hierarchy-authorized single-goal view.
 router.get('/:id', getGoalById);
 
 router.post('/', createGoal);

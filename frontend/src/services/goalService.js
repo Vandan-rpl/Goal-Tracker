@@ -1,4 +1,5 @@
 import axios from 'axios';
+import api from './api';
 
 const API_URL = 'http://localhost:5000/api/goals';
 
@@ -8,4 +9,9 @@ export const getGoals = async (token) => {
         headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
+};
+
+export const getGoalHistory = async (goalId) => {
+  const response = await api.get(`/goals/${goalId}/history`);
+  return response.data;
 };

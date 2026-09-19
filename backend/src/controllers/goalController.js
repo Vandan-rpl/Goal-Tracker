@@ -5,6 +5,36 @@ const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 
+const normalizeForDiff = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  if (value instanceof Date) return value.toISOString().split("T")[0];
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "string") return value.trim();
+  return value;
+};
+
+const valuesEqual = (a, b) => {
+  const na = normalizeForDiff(a);
+  const nb = normalizeForDiff(b);
+  if (typeof na === "number" || typeof nb === "number") {
+    return Number(na) === Number(nb);
+  }
+  return String(na) === String(nb);
+};
+
+const buildGoalDiff = (oldRow, newValuesMap) => {
+  const oldValues = {};
+  const newValues = {};
+  for (const [field, newVal] of Object.entries(newValuesMap)) {
+    const oldVal = oldRow[field];
+    if (!valuesEqual(oldVal, newVal)) {
+      oldValues[field] = normalizeForDiff(oldVal);
+      newValues[field] = normalizeForDiff(newVal);
+    }
+  }
+  return { oldValues, newValues };
+};
+
 // Helper function to log goal history using the values allowed by GoalHistory.Action.
 const logGoalHistory = async (
   transaction,
@@ -261,6 +291,47 @@ const getGoalById = async (req, res) => {
         .json({ success: false, message: "Goal not found." });
     }
 
+    const goal = goalResult.recordset[0];
+    const requesterUserId = req.user?.UserID || req.user?.userId;
+    const requesterResult = await pool
+      .request()
+      .input("UserID", sql.Int, requesterUserId)
+      .query("SELECT Role FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1");
+    if (requesterResult.recordset.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is not authorized to view goals.",
+      });
+    }
+    const requesterRole = String(requesterResult.recordset[0].Role || "")
+      .trim()
+      .toUpperCase();
+
+    // A goal URL is not an authorization mechanism.  Restrict its details
+    // to the owner, people explicitly assigned in the owner's reporting
+    // hierarchy, and company-wide CFO/Admin users.
+    const ownerHierarchy = await getUserContact(pool, goal.UserID);
+    const assignedApproverIds = ownerHierarchy
+      ? [
+          ownerHierarchy.ReportingManagerID,
+          ownerHierarchy.HODID,
+          ownerHierarchy.BusinessHeadID,
+        ]
+          .filter((approverId) => approverId !== null && approverId !== undefined)
+          .map(Number)
+      : [];
+    const canViewGoal =
+      Number(requesterUserId) === Number(goal.UserID) ||
+      ["CFO", "ADMIN"].includes(requesterRole) ||
+      assignedApproverIds.includes(Number(requesterUserId));
+
+    if (!canViewGoal) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to view this goal.",
+      });
+    }
+
     const subGoalsResult = await pool
       .request()
       .input("GoalID", sql.BigInt, id)
@@ -273,24 +344,18 @@ const getGoalById = async (req, res) => {
         "SELECT h.*, u.FirstName, u.LastName FROM dbo.GoalHistory h LEFT JOIN dbo.Users u ON h.PerformedBy = u.UserID WHERE h.GoalID = @GoalID ORDER BY h.PerformedDate DESC",
       );
 
-    const requesterUserId = req.user?.UserID || req.user?.userId;
-    const requesterRole = (
-      req.user?.Role ||
-      req.user?.role ||
-      ""
-    ).toUpperCase();
     const canApproveOrReject =
       requesterRole === "CFO" ||
       requesterRole === "ADMIN" ||
       (await canApproveOrRejectGoal(
         requesterUserId,
-        goalResult.recordset[0].UserID,
+        goal.UserID,
       ));
 
     return res.status(200).json({
       success: true,
       data: {
-        ...goalResult.recordset[0],
+        ...goal,
         SubGoals: subGoalsResult.recordset,
         History: historyResult.recordset,
         CanApproveOrReject: canApproveOrReject,
@@ -707,24 +772,32 @@ const updateGoal = async (req, res) => {
 
     await updateRequest.query(updateQuery);
 
-    if (currentStatus !== newStatus) {
+        const { oldValues, newValues } = buildGoalDiff(existingGoal, {
+      GoalNumber: finalGoalNumber,
+      GoalTitle: finalGoalTitle,
+      GoalDescription: finalGoalDesc,
+      Measurability,
+      JointAccountability: finalJointAcc,
+      Weightage,
+      Priority,
+      Timeline,
+      MeetPerformance: finalMeetPerf,
+      ExceedPerformance: finalExceedPerf,
+      ValidationSource: finalValidation,
+      CrossFunctionalGoal: finalCrossFunc,
+      GoalCategory: finalCategory,
+      GoalStatus: newStatus,
+    });
+
+    const changedFields = Object.keys(oldValues);
+    if (changedFields.length > 0) {
       await logGoalHistory(
         transaction,
         id,
         "UPDATE",
-        currentStatus,
-        newStatus,
-        `Status changed from ${currentStatus} to ${newStatus}`,
-        userId,
-      );
-    } else {
-      await logGoalHistory(
-        transaction,
-        id,
-        "UPDATE",
-        currentStatus,
-        newStatus,
-        "Goal details updated",
+        JSON.stringify(oldValues),
+        JSON.stringify(newValues),
+        `Updated: ${changedFields.join(", ")}`,
         userId,
       );
     }
@@ -805,6 +878,97 @@ const updateGoal = async (req, res) => {
       success: false,
       message: "Internal server error while updating goal.",
       errors: error.message,
+    });
+  }
+};
+
+//Fetch goal history
+const getGoalHistory = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const pool = await poolPromise;
+
+    // History contains the same sensitive goal information as the detail
+    // page, so it must use the same owner/hierarchy/CFO/Admin access rule.
+    const goalResult = await pool
+      .request()
+      .input("GoalID", sql.BigInt, id)
+      .query("SELECT UserID FROM dbo.Goals WHERE GoalID = @GoalID");
+    if (goalResult.recordset.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Goal not found." });
+    }
+
+    const goalOwnerId = goalResult.recordset[0].UserID;
+    const requesterUserId = req.user?.UserID || req.user?.userId;
+    const requesterResult = await pool
+      .request()
+      .input("UserID", sql.Int, requesterUserId)
+      .query("SELECT Role FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1");
+    const requesterRole = String(requesterResult.recordset[0]?.Role || "")
+      .trim()
+      .toUpperCase();
+    const ownerHierarchy = await getUserContact(pool, goalOwnerId);
+    const assignedApproverIds = ownerHierarchy
+      ? [
+          ownerHierarchy.ReportingManagerID,
+          ownerHierarchy.HODID,
+          ownerHierarchy.BusinessHeadID,
+        ]
+          .filter((approverId) => approverId !== null && approverId !== undefined)
+          .map(Number)
+      : [];
+    const canViewHistory =
+      Number(requesterUserId) === Number(goalOwnerId) ||
+      ["CFO", "ADMIN"].includes(requesterRole) ||
+      assignedApproverIds.includes(Number(requesterUserId));
+
+    if (!canViewHistory) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to view this goal history.",
+      });
+    }
+
+    const result = await pool.request().input("GoalID", sql.BigInt, id).query(`
+      SELECT gh.GoalHistoryID, gh.Action, gh.OldValue, gh.NewValue, gh.Remarks,
+             gh.PerformedBy, gh.PerformedDate, u.FirstName, u.LastName
+      FROM dbo.GoalHistory gh
+      LEFT JOIN dbo.Users u ON u.UserID = gh.PerformedBy
+      WHERE gh.GoalID = @GoalID
+      ORDER BY gh.PerformedDate DESC
+    `);
+
+    const history = result.recordset.map((row) => {
+      let oldValues = {}, newValues = {};
+      try { oldValues = row.OldValue ? JSON.parse(row.OldValue) : {}; } catch { oldValues = {}; }
+      try { newValues = row.NewValue ? JSON.parse(row.NewValue) : {}; } catch { newValues = {}; }
+
+      const fields = Array.from(new Set([...Object.keys(oldValues), ...Object.keys(newValues)]));
+      return {
+        historyId: row.GoalHistoryID,
+        action: row.Action,
+        remarks: row.Remarks,
+        performedBy:
+          [row.FirstName, row.LastName].filter(Boolean).join(" ") ||
+          row.PerformedBy,
+        performedDate: row.PerformedDate,
+        changes: fields.map((field) => ({
+          field,
+          oldValue: oldValues[field] ?? null,
+          newValue: newValues[field] ?? null,
+        })),
+      };
+    });
+
+    return res.status(200).json({ success: true, history });
+  } catch (error) {
+    console.error("Get Goal History Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching goal history.",
     });
   }
 };
@@ -1404,4 +1568,5 @@ module.exports = {
   getAllEmployeeGoals,
   getJointGoals,
   updateJointAccountabilityStatus,
+  getGoalHistory
 };
