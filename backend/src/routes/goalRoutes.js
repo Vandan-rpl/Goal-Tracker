@@ -10,7 +10,8 @@ const {
     deleteGoal,
     changeGoalStatus,
     submitGoalReview,
-    getGoalHistory
+    getGoalHistory,
+    updateSubGoalStatus
 } = require('../controllers/goalController');
 
 const { verifyToken } = require('../middleware/authMiddleware');
@@ -41,5 +42,11 @@ router.put('/status/:id', changeGoalStatus);
 
 router.put('/:id', updateGoal);
 router.delete('/:id', deleteGoal);
+
+router.put(
+  "/:goalId/subgoals/:subGoalId/status",
+  verifyToken,
+  updateSubGoalStatus,
+);
 
 module.exports = router;

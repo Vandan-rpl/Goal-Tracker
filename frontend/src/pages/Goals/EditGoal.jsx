@@ -175,6 +175,7 @@ const EditGoal = () => {
   const isSubmitted = formData.GoalStatus === "Submitted";
   const isRejected = formData.GoalStatus === "Rejected";
   const isDraft = formData.GoalStatus === "Draft";
+  const canSubmitForApproval = isDraft || isRejected;
   const isRestrictedEdit =
     !canManageAllGoals &&
     !canManageTeamGoals &&
@@ -221,7 +222,9 @@ const EditGoal = () => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Edit Goal</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Modify goal targets, metrics, and status.
+              {isRejected
+                ? "Revise the rejected goal, then submit it again for approval."
+                : "Modify goal targets, metrics, and status."}
             </p>
           </div>
           <button
@@ -584,14 +587,18 @@ const EditGoal = () => {
                   ? "Save as Draft"
                   : "Save Goal"}
             </button>
-            {isDraft && (
+            {canSubmitForApproval && (
               <button
                 type="button"
                 onClick={(e) => handleSubmit(e, "Submitted")}
                 disabled={submitting}
                 className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50"
               >
-                {submitting ? "Submitting..." : "Submit Goal"}
+                {submitting
+                  ? "Submitting..."
+                  : isRejected
+                    ? "Resubmit for Approval"
+                    : "Submit Goal"}
               </button>
             )}
           </div>

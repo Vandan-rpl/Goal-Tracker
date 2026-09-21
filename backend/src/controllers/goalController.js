@@ -4,6 +4,7 @@ const goalModel = require("../models/goalModel");
 const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
+const { calculateGoalProgress } = require("../utils/goalProgress");
 
 const normalizeForDiff = (value) => {
   if (value === undefined || value === null || value === "") return null;
@@ -648,21 +649,30 @@ const updateGoal = async (req, res) => {
       });
     }
 
+    // A rejected goal is returned to its owner for revision. The owner may
+    // keep it rejected while saving changes, or submit it back into the
+    // approval workflow; other status changes remain manager-only.
     if (
       !isEnterpriseGoalManager &&
       !isTeamGoalManager &&
-      currentStatus === "Rejected"
+      currentStatus === "Rejected" &&
+      GoalStatus &&
+      !["Rejected", "Submitted"].includes(GoalStatus)
     ) {
       await transaction.rollback();
-      return res
-        .status(400)
-        .json({ success: false, message: "Rejected goals cannot be edited." });
+      return res.status(400).json({
+        success: false,
+        message: "Rejected goals can only be saved or resubmitted for approval.",
+      });
     }
 
     const newStatus = GoalStatus || currentStatus;
     const isDraft = currentStatus === "Draft";
     const canEditAllFields =
-      isDraft || isEnterpriseGoalManager || isTeamGoalManager;
+      isDraft ||
+      currentStatus === "Rejected" ||
+      isEnterpriseGoalManager ||
+      isTeamGoalManager;
 
     const finalGoalNumber = canEditAllFields
       ? GoalNumber
@@ -758,6 +768,7 @@ const updateGoal = async (req, res) => {
     updateRequest.input("CrossFunctionalGoal", sql.Bit, finalCrossFunc);
     updateRequest.input("GoalCategory", sql.NVarChar, finalCategory || null);
     updateRequest.input("GoalStatus", sql.VarChar, newStatus);
+    updateRequest.input("CurrentStatus", sql.VarChar, currentStatus);
 
     let updateQuery = `
             UPDATE dbo.Goals SET 
@@ -766,7 +777,13 @@ const updateGoal = async (req, res) => {
                 Priority = @Priority, Timeline = @Timeline, MeetPerformance = @MeetPerformance,
                 ExceedPerformance = @ExceedPerformance, ValidationSource = @ValidationSource,
                 CrossFunctionalGoal = @CrossFunctionalGoal, GoalCategory = @GoalCategory, 
-                GoalStatus = @GoalStatus, ModifiedDate = GETDATE()
+                GoalStatus = @GoalStatus,
+                SubmittedDate = CASE
+                  WHEN @GoalStatus = 'Submitted' AND @CurrentStatus <> 'Submitted'
+                    THEN GETDATE()
+                  ELSE SubmittedDate
+                END,
+                ModifiedDate = GETDATE()
             WHERE GoalID = @GoalID
         `;
 
@@ -1556,6 +1573,104 @@ const updateJointAccountabilityStatus = async (req, res) => {
   }
 };
 
+const updateSubGoalStatus = async (req, res) => {
+  const { goalId, subGoalId } = req.params;
+  const { Status } = req.body;
+  const userId = req.user?.UserID || req.user?.userId;
+  const role = (req.user?.Role || req.user?.role || "").toUpperCase();
+
+  const validStatuses = ["Pending", "In Progress", "Completed", "Cancelled"];
+  if (!validStatuses.includes(Status)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid status value." });
+  }
+
+  const transaction = new sql.Transaction(await poolPromise);
+
+  try {
+    await transaction.begin();
+
+    const goalReq = new sql.Request(transaction);
+    const goalRes = await goalReq
+      .input("GoalID", sql.BigInt, goalId)
+      .query("SELECT UserID, GoalTitle, Weightage FROM dbo.Goals WHERE GoalID = @GoalID");
+
+    if (goalRes.recordset.length === 0) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: "Goal not found." });
+    }
+    const goal = goalRes.recordset[0];
+
+    // Only the goal's own owner logs sub-goal progress; Admin can too for corrections.
+    const isAuthorized = role === "ADMIN" || Number(goal.UserID) === Number(userId);
+    if (!isAuthorized) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this sub-goal.",
+      });
+    }
+
+    const subGoalReq = new sql.Request(transaction);
+    const subGoalRes = await subGoalReq
+      .input("SubGoalID", sql.BigInt, subGoalId)
+      .input("GoalID", sql.BigInt, goalId)
+      .query("SELECT * FROM dbo.GoalSubGoals WHERE SubGoalID = @SubGoalID AND GoalID = @GoalID");
+
+    if (subGoalRes.recordset.length === 0) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: "Sub-goal not found." });
+    }
+    const subGoal = subGoalRes.recordset[0];
+    const oldStatus = subGoal.Status;
+
+    const updateReq = new sql.Request(transaction);
+    await updateReq
+      .input("SubGoalID", sql.BigInt, subGoalId)
+      .input("Status", sql.VarChar, Status)
+      .query(`
+        UPDATE dbo.GoalSubGoals
+        SET Status = @Status
+        WHERE SubGoalID = @SubGoalID
+      `);
+
+    await logGoalHistory(
+      transaction,
+      goalId,
+      "UPDATE",
+      oldStatus,
+      Status,
+      `Sub-goal "${subGoal.SubGoalTitle}" status updated to ${Status}`,
+      userId,
+    );
+
+    await transaction.commit();
+
+    // Return updated progress so the frontend can refresh immediately without a second fetch
+    const allSubGoals = await goalModel.getSubGoalsByGoalId(goalId);
+    const progress = calculateGoalProgress(goal, allSubGoals);
+
+    return res.status(200).json({
+      success: true,
+      message: "Sub-goal status updated successfully.",
+      data: { progress },
+    });
+  } catch (error) {
+    if (transaction._aborted === false && transaction._acquiredConnection) {
+      try {
+        await transaction.rollback();
+      } catch (rbErr) {}
+    }
+    console.error("Update Sub-Goal Status Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating sub-goal status.",
+      errors: error.message,
+    });
+  }
+};
+
 module.exports = {
   getGoals,
   getJointAccountabilityUsers,
@@ -1568,5 +1683,6 @@ module.exports = {
   getAllEmployeeGoals,
   getJointGoals,
   updateJointAccountabilityStatus,
-  getGoalHistory
+  getGoalHistory,
+  updateSubGoalStatus
 };

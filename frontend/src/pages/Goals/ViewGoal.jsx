@@ -624,12 +624,15 @@ const ViewGoal = () => {
 
         {/* Bottom Actions */}
         <div className="pt-6 border-t border-slate-200 flex items-center justify-between">
-          {goal.GoalStatus === "Draft" ? (
+          {goal.GoalStatus === "Draft" ||
+          (goal.GoalStatus === "Rejected" && isGoalOwner) ? (
             <Link
               to={`/goals/edit/${goal.GoalID}`}
               className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm shadow-md transition-all ml-auto active:scale-[0.98] cursor-pointer"
             >
-              Edit Goal
+              {goal.GoalStatus === "Rejected"
+                ? "Revise & Resubmit"
+                : "Edit Goal"}
             </Link>
           ) : canShowCfoActions ? (
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between w-full gap-4">
