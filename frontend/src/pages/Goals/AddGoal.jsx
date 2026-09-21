@@ -186,309 +186,376 @@ const AddGoal = () => {
     }
   };
 
-  return (
-    <div className="flex-1 bg-gray-50 min-h-screen overflow-y-auto p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-10">
-          <div className="flex justify-between items-center pb-6 border-b mb-6">
+return (
+    <div className="flex-1 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 min-h-screen overflow-y-auto p-4 sm:p-8">
+      <div className="max-w-[1600px] mx-auto">
+        <div className="bg-white/90 backdrop-blur rounded-3xl shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-6 sm:p-10 lg:p-12">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-6 border-b border-slate-100 mb-8">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full mb-2">
+                New Goal
+              </span>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
                 Create New Goal
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-slate-500 mt-1">
                 Fill in the metrics, performance criteria, and sub-goals.
               </p>
             </div>
             <button
               type="button"
               onClick={() => navigate("/goals")}
-              className="text-sm text-gray-600 hover:text-gray-900 font-medium cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium cursor-pointer transition-colors self-start sm:self-auto"
             >
-              &larr; Back to Goals
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+              </svg>
+              Back to Goals
             </button>
           </div>
 
           {error && (
-            <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium">
-              {error}
+            <div className="mb-6 flex items-start gap-3 bg-red-50 border border-red-100 text-red-700 p-4 rounded-2xl text-sm font-medium">
+              <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+              <span>{error}</span>
             </div>
           )}
 
           <form
             onSubmit={(e) => handleSubmit(e, "Draft")}
-            className="space-y-6"
+            className="space-y-8"
           >
-            {/* Row 1: Goal Number & Title */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Goal No *
-                </label>
-                <input
-                  type="number"
-                  name="GoalNumber"
-                  required
-                  value={formData.GoalNumber}
-                  readOnly
-                  className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
+            {/* Section: Basics */}
+            <section className="space-y-4">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Basics
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Goal No <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="GoalNumber"
+                    required
+                    value={formData.GoalNumber}
+                    readOnly
+                    className="w-full px-3.5 py-2.5 border border-slate-200 bg-slate-50 text-slate-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition"
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Goal Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="GoalTitle"
+                    required
+                    placeholder="e.g. Production Target -- Moly 180 MT, V - 80 MT"
+                    value={formData.GoalTitle}
+                    onChange={handleChange}
+                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder:text-slate-400 ${
+                      fieldErrors.GoalTitle
+                        ? "border-red-300 bg-red-50/40"
+                        : "border-slate-200"
+                    }`}
+                  />
+                  {fieldErrors.GoalTitle && (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.GoalTitle}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Goal Title *
-                </label>
-                <input
-                  type="text"
-                  name="GoalTitle"
-                  required
-                  placeholder="e.g. Production Target -- Moly 180 MT, V - 80 MT"
-                  value={formData.GoalTitle}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalTitle ? "border-red-400" : ""}`}
-                />
-                {fieldErrors.GoalTitle && (
-                  <p className="text-red-600 text-xs mt-1">
-                    {fieldErrors.GoalTitle}
-                  </p>
-                )}
-              </div>
-            </div>
 
-            {/* Row 2: Category, Priority, Weightage, Timeline */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Category
-                </label>
-                <input
-                  type="text"
-                  name="GoalCategory"
-                  placeholder="e.g. Operational"
-                  value={formData.GoalCategory}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalCategory ? "border-red-400" : ""}`}
-                />
-                {fieldErrors.GoalCategory && (
-                  <p className="text-red-600 text-xs mt-1">
-                    {fieldErrors.GoalCategory}
-                  </p>
-                )}
+              {/* Row 2: Category, Priority, Weightage, Timeline */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    name="GoalCategory"
+                    placeholder="e.g. Operational"
+                    value={formData.GoalCategory}
+                    onChange={handleChange}
+                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder:text-slate-400 ${
+                      fieldErrors.GoalCategory
+                        ? "border-red-300 bg-red-50/40"
+                        : "border-slate-200"
+                    }`}
+                  />
+                  {fieldErrors.GoalCategory && (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.GoalCategory}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Priority <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="Priority"
+                    value={formData.Priority}
+                    onChange={handleChange}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition bg-white"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Weightage (%) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="Weightage"
+                    required
+                    placeholder="5 - 30%"
+                    value={formData.Weightage}
+                    onChange={handleChange}
+                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder:text-slate-400 ${
+                      fieldErrors.Weightage
+                        ? "border-red-300 bg-red-50/40"
+                        : "border-slate-200"
+                    }`}
+                  />
+                  {fieldErrors.Weightage && (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.Weightage}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Timeline <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="Timeline"
+                    required
+                    value={formData.Timeline}
+                    onChange={handleChange}
+                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition ${
+                      fieldErrors.Timeline
+                        ? "border-red-300 bg-red-50/40"
+                        : "border-slate-200"
+                    }`}
+                  />
+                  {fieldErrors.Timeline && (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.Timeline}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Priority *
-                </label>
-                <select
-                  name="Priority"
-                  value={formData.Priority}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Weightage (%) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="Weightage"
-                  required
-                  placeholder="5 - 30%"
-                  value={formData.Weightage}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Weightage ? "border-red-400" : ""}`}
-                />
-                {fieldErrors.Weightage && (
-                  <p className="text-red-600 text-xs mt-1">
-                    {fieldErrors.Weightage}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Timeline *
-                </label>
-                <input
-                  type="date"
-                  name="Timeline"
-                  required
-                  value={formData.Timeline}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Timeline ? "border-red-400" : ""}`}
-                />
-                {fieldErrors.Timeline && (
-                  <p className="text-red-600 text-xs mt-1">
-                    {fieldErrors.Timeline}
-                  </p>
-                )}
-              </div>
-            </div>
+            </section>
 
-            {/* Row 3: Descriptions & Measurability */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Goal Description
-                </label>
-                <textarea
-                  name="GoalDescription"
-                  rows="3"
-                  value={formData.GoalDescription}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.GoalDescription ? "border-red-400" : ""}`}
-                />
-                {fieldErrors.GoalDescription && (
-                  <p className="text-red-600 text-xs mt-1">
-                    {fieldErrors.GoalDescription}
-                  </p>
-                )}
+            {/* Section: Descriptions & Measurability */}
+            <section className="space-y-4">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Description & Measurability
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Goal Description
+                  </label>
+                  <textarea
+                    name="GoalDescription"
+                    rows="3"
+                    value={formData.GoalDescription}
+                    onChange={handleChange}
+                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition resize-none ${
+                      fieldErrors.GoalDescription
+                        ? "border-red-300 bg-red-50/40"
+                        : "border-slate-200"
+                    }`}
+                  />
+                  {fieldErrors.GoalDescription && (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.GoalDescription}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Measurability
+                  </label>
+                  <textarea
+                    name="Measurability"
+                    rows="3"
+                    placeholder="Source of validation (e.g. As per production reports)"
+                    value={formData.Measurability}
+                    onChange={handleChange}
+                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition resize-none placeholder:text-slate-400 ${
+                      fieldErrors.Measurability
+                        ? "border-red-300 bg-red-50/40"
+                        : "border-slate-200"
+                    }`}
+                  />
+                  {fieldErrors.Measurability && (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.Measurability}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Measurability
-                </label>
-                <textarea
-                  name="Measurability"
-                  rows="3"
-                  placeholder="Source of validation (e.g. As per production reports)"
-                  value={formData.Measurability}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.Measurability ? "border-red-400" : ""}`}
-                />
-                {fieldErrors.Measurability && (
-                  <p className="text-red-600 text-xs mt-1">
-                    {fieldErrors.Measurability}
-                  </p>
-                )}
-              </div>
-            </div>
+            </section>
 
-            {/* Row 4: Performance Criteria (Meet vs Exceed) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Meet Performance Target
-                </label>
-                <textarea
-                  name="MeetPerformance"
-                  rows="2"
-                  placeholder="e.g. Moly - 180 MT, V - 80 MT"
-                  value={formData.MeetPerformance}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${fieldErrors.MeetPerformance ? "border-red-400" : ""}`}
-                />
-                {fieldErrors.MeetPerformance && (
-                  <p className="text-red-600 text-xs mt-1">
-                    {fieldErrors.MeetPerformance}
-                  </p>
-                )}
+            {/* Section: Performance Criteria */}
+            <section className="space-y-4">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Performance Criteria
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-emerald-700 mb-1.5">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                    Meet Performance Target
+                  </label>
+                  <textarea
+                    name="MeetPerformance"
+                    rows="2"
+                    placeholder="e.g. Moly - 180 MT, V - 80 MT"
+                    value={formData.MeetPerformance}
+                    onChange={handleChange}
+                    className={`w-full px-3.5 py-2.5 border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition resize-none placeholder:text-slate-400 ${
+                      fieldErrors.MeetPerformance
+                        ? "border-red-300 bg-red-50/40"
+                        : "border-emerald-200"
+                    }`}
+                  />
+                  {fieldErrors.MeetPerformance && (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.MeetPerformance}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-indigo-700 mb-1.5">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                    </svg>
+                    Exceed Performance Target
+                  </label>
+                  <textarea
+                    name="ExceedPerformance"
+                    rows="2"
+                    placeholder="e.g. Moly - >180 MT, V - >80 MT"
+                    value={formData.ExceedPerformance}
+                    onChange={handleChange}
+                    className="w-full px-3.5 py-2.5 border border-indigo-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition resize-none placeholder:text-slate-400"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Exceed Performance Target
-                </label>
-                <textarea
-                  name="ExceedPerformance"
-                  rows="2"
-                  placeholder="e.g. Moly - >180 MT, V - >80 MT"
-                  value={formData.ExceedPerformance}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
+            </section>
 
-            {/* Row 5: Validation Source & Joint Accountability */}
             {/* Joint Accountability Section */}
-            <div>
+            <section>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-800">
-                  Joint Accountability
-                </h3>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    Joint Accountability
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Add colleagues sharing responsibility for this goal
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={addJointAccountabilityRow}
-                  className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-sm font-semibold transition cursor-pointer"
                 >
-                  + Add Joint Employee
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Add Joint Employee
                 </button>
               </div>
 
-              {jointAccountabilities.map((ja, index) => (
-                <div
-                  key={index}
-                  className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 relative space-y-3"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-indigo-600 uppercase">
-                      Joint Employee #{index + 1}
-                    </span>
-                    {jointAccountabilities.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeJointAccountabilityRow(index)}
-                        className="text-red-500 hover:text-red-700 text-xs font-semibold"
+              <div className="space-y-3">
+                {jointAccountabilities.map((ja, index) => (
+                  <div
+                    key={index}
+                    className="bg-slate-50/70 border border-slate-200 rounded-2xl p-4 relative space-y-3"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">
+                        Joint Employee #{index + 1}
+                      </span>
+                      {jointAccountabilities.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeJointAccountabilityRow(index)}
+                          className="text-red-500 hover:text-red-700 text-xs font-semibold cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <select
+                        name="UserID"
+                        value={ja.UserID}
+                        onChange={(e) =>
+                          handleJointAccountabilityChange(index, e)
+                        }
+                        disabled={jointAccountabilityUsersLoading}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                       >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <select
-                      name="UserID"
-                      value={ja.UserID}
-                      onChange={(e) =>
-                        handleJointAccountabilityChange(index, e)
-                      }
-                      disabled={jointAccountabilityUsersLoading}
-                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
-                    >
-                      <option value="">
-                        {jointAccountabilityUsersLoading
-                          ? "Loading employees..."
-                          : "Select employee"}
-                      </option>
-                      {jointAccountabilityUsers.map((employee) => (
-                        <option key={employee.UserID} value={employee.UserID}>
-                          {[employee.FirstName, employee.LastName]
-                            .filter(Boolean)
-                            .join(" ")}
-                          {employee.Designation
-                            ? ` - ${employee.Designation}`
-                            : ""}
+                        <option value="">
+                          {jointAccountabilityUsersLoading
+                            ? "Loading employees..."
+                            : "Select employee"}
                         </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      name="ContributionNote"
-                      placeholder="What are they responsible for?"
-                      value={ja.ContributionNote}
-                      onChange={(e) =>
-                        handleJointAccountabilityChange(index, e)
-                      }
-                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="Weightage"
-                      placeholder="Weightage (%) - optional"
-                      value={ja.Weightage}
-                      onChange={(e) =>
-                        handleJointAccountabilityChange(index, e)
-                      }
-                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
-                    />
+                        {jointAccountabilityUsers.map((employee) => (
+                          <option key={employee.UserID} value={employee.UserID}>
+                            {[employee.FirstName, employee.LastName]
+                              .filter(Boolean)
+                              .join(" ")}
+                            {employee.Designation
+                              ? ` - ${employee.Designation}`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        name="ContributionNote"
+                        placeholder="What are they responsible for?"
+                        value={ja.ContributionNote}
+                        onChange={(e) =>
+                          handleJointAccountabilityChange(index, e)
+                        }
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="Weightage"
+                        placeholder="Weightage (%) - optional"
+                        value={ja.Weightage}
+                        onChange={(e) =>
+                          handleJointAccountabilityChange(index, e)
+                        }
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </section>
 
             {/* <div className="flex items-center space-x-2 pt-2">
               <input
@@ -507,42 +574,50 @@ const AddGoal = () => {
               </label>
             </div> */}
 
-            <hr className="my-6" />
-
             {/* Sub-Goals Section */}
-            <div>
+            <section className="border-t border-slate-100 pt-6">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-800">Sub-Goals</h3>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    Sub-Goals
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Break this goal into measurable, weighted sub-goals
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={addSubGoalRow}
-                  className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-sm font-semibold transition cursor-pointer"
                 >
-                  + Add Sub-Goal
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Add Sub-Goal
                 </button>
               </div>
 
-              {subGoals.map((sub, index) => (
-                <div
-                  key={index}
-                  className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 relative space-y-3"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-indigo-600 uppercase">
-                      Sub-Goal #{index + 1}
-                    </span>
-                    {subGoals.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeSubGoalRow(index)}
-                        className="text-red-500 hover:text-red-700 text-xs font-semibold"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
+              <div className="space-y-3">
+                {subGoals.map((sub, index) => (
+                  <div
+                    key={index}
+                    className="bg-slate-50/70 border border-slate-200 rounded-2xl p-4 relative space-y-3"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">
+                        Sub-Goal #{index + 1}
+                      </span>
+                      {subGoals.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeSubGoalRow(index)}
+                          className="text-red-500 hover:text-red-700 text-xs font-semibold cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <input
                         type="text"
                         name="SubGoalTitle"
@@ -550,20 +625,16 @@ const AddGoal = () => {
                         required
                         value={sub.SubGoalTitle}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
                       />
-                    </div>
-                    <div>
                       <input
                         type="text"
                         name="Target"
                         placeholder="Target Description"
                         value={sub.Target}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
                       />
-                    </div>
-                    <div>
                       <input
                         type="number"
                         step="0.01"
@@ -571,27 +642,27 @@ const AddGoal = () => {
                         placeholder="Weightage (%)"
                         value={sub.Weightage}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
                       />
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </section>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end space-x-4 pt-4 border-t">
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-6 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => navigate("/goals")}
-                className="px-5 py-2 border rounded-xl text-gray-700 hover:bg-gray-100 font-medium text-sm transition cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 font-medium text-sm transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-2.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-xl font-semibold text-sm shadow-sm transition disabled:opacity-50 cursor-pointer"
               >
                 {loading ? "Saving..." : "Save as Draft"}
               </button>
@@ -599,15 +670,13 @@ const AddGoal = () => {
                 type="button"
                 disabled={loading}
                 onClick={(e) => handleSubmit(e, "Submitted")}
-                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-semibold text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 cursor-pointer"
               >
                 Submit Goal
               </button>
             </div>
           </form>
         </div>
-
-
       </div>
     </div>
   );

@@ -11,7 +11,8 @@ const {
     changeGoalStatus,
     submitGoalReview,
     getGoalHistory,
-    updateSubGoalStatus
+    updateSubGoalStatus,
+    getTeamGoals
 } = require('../controllers/goalController');
 
 const { verifyToken } = require('../middleware/authMiddleware');
@@ -25,6 +26,9 @@ router.get('/joint-accountability-users', getJointAccountabilityUsers);
 
 //get all employee goals for CFO
 router.get('/all-employee-goals', getAllEmployeeGoals);
+
+//Get team goals
+router.get("/team", verifyToken, getTeamGoals);
 
 //Get goal history for a particular goal
 router.get("/:id/history", getGoalHistory);

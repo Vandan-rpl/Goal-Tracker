@@ -2,6 +2,31 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../services/api";
 
+// TODO: consider moving this to a shared utils/fiscalQuarter.js on the
+// frontend (mirroring the backend's utils/fiscalQuarter.js) if more than
+// one component ends up needing it.
+function isWithinCarryForwardWindow(quarterEndDate) {
+  if (!quarterEndDate) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const qEnd = new Date(quarterEndDate);
+  qEnd.setHours(0, 0, 0, 0);
+
+  const windowStart = new Date(qEnd);
+  windowStart.setDate(windowStart.getDate() - 10);
+
+  // Next quarter start = day after this quarter ends
+  const nextQuarterStart = new Date(qEnd);
+  nextQuarterStart.setDate(nextQuarterStart.getDate() + 1);
+
+  const windowEnd = new Date(nextQuarterStart);
+  windowEnd.setDate(windowEnd.getDate() + 15);
+
+  return today >= windowStart && today <= windowEnd;
+}
+
 const EditGoal = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -23,6 +48,11 @@ const EditGoal = () => {
     GoalStatus: "Draft",
   });
 
+  // QuarterEndDate isn't an editable form field — it's only needed to
+  // compute whether we're inside the carry-forward window, so it's kept
+  // separate from formData rather than sent back in the update payload.
+  const [quarterEndDate, setQuarterEndDate] = useState(null);
+
   const [subGoals, setSubGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -30,15 +60,6 @@ const EditGoal = () => {
   // Field-level SMART validation errors from the backend — same 400 shape
   // as AddGoal.jsx: { success:false, message, errors: { Field: "message" } }
   const [fieldErrors, setFieldErrors] = useState({});
-  // const [subGoals, setSubGoals] = useState([
-  //     {
-  //       SubGoalNo: 1,
-  //       SubGoalTitle: "",
-  //       SubGoalDescription: "",
-  //       Weightage: "",
-  //       Target: "",
-  //     },
-  //   ]);
 
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const currentRole = String(
@@ -76,6 +97,7 @@ const EditGoal = () => {
           GoalCategory: goal.GoalCategory || "",
           GoalStatus: goal.GoalStatus || "Draft",
         });
+        setQuarterEndDate(goal.QuarterEndDate || null);
 
         if (goal.SubGoals && goal.SubGoals.length > 0) {
           setSubGoals(
@@ -176,20 +198,43 @@ const EditGoal = () => {
   const isRejected = formData.GoalStatus === "Rejected";
   const isDraft = formData.GoalStatus === "Draft";
   const canSubmitForApproval = isDraft || isRejected;
-  const isRestrictedEdit =
-    !canManageAllGoals &&
-    !canManageTeamGoals &&
-    !isDraft &&
-    !isSubmitted &&
-    !isRejected;
+  const terminalStatus = ["Completed", "Cancelled"].includes(
+    formData.GoalStatus,
+  );
 
-  if (isSubmitted && !canManageAllGoals && !canManageTeamGoals) {
+  // True for any status the owner can't freely edit — i.e. anything except
+  // Draft or Rejected — for a regular employee (not a manager/approver
+  // role). This matches the backend's canEditAllFields / ownerLocked logic:
+  // previously this only caught the literal "Submitted" status, which let
+  // Timeline/Weightage/Priority/GoalStatus slip through unrestricted on
+  // every other locked status (HOD Approved, Manager Approved, Approved,
+  // Running, Postpone, etc).
+  const isOwnerLocked =
+    !canManageAllGoals && !canManageTeamGoals && !isDraft && !isRejected;
+
+  const inCarryForwardWindow =
+    isOwnerLocked &&
+    !terminalStatus &&
+    isWithinCarryForwardWindow(quarterEndDate);
+
+  // Fully locked = owner-locked and NOT inside the carry-forward window.
+  // Terminal statuses (Completed/Cancelled) are always fully locked for
+  // the owner — carry-forward never applies to them.
+  const isFullyLocked = isOwnerLocked && !inCarryForwardWindow;
+
+  // All fields except Timeline are locked whenever the owner is locked at
+  // all — even during the carry-forward window, only Timeline opens up.
+  const isRestrictedEdit = isOwnerLocked;
+
+  if (isFullyLocked) {
     return (
       <div className="flex-1 bg-gray-50 min-h-screen p-8 text-center">
         <div className="bg-amber-50 text-amber-800 p-4 rounded-xl max-w-md mx-auto mb-4 font-medium">
-          {isSubmitted
-            ? "This goal is currently Submitted and cannot be edited by the user."
-            : "This goal has been Rejected and cannot be edited."}
+          {terminalStatus
+            ? `This goal is ${formData.GoalStatus} and cannot be edited.`
+            : isSubmitted
+              ? "This goal is currently Submitted and cannot be edited by the user."
+              : "This goal is awaiting approval and cannot be edited right now."}
         </div>
         <button
           onClick={() => navigate("/goals")}
@@ -201,7 +246,6 @@ const EditGoal = () => {
     );
   }
 
-  //Need to check
   const addSubGoalRow = () => {
     setSubGoals((prev) => [
       ...prev,
@@ -222,9 +266,11 @@ const EditGoal = () => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Edit Goal</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {isRejected
-                ? "Revise the rejected goal, then submit it again for approval."
-                : "Modify goal targets, metrics, and status."}
+              {inCarryForwardWindow
+                ? "This goal's quarter is closing. Push the Timeline out to carry it into the next quarter — this resubmits it for approval."
+                : isRejected
+                  ? "Revise the rejected goal, then submit it again for approval."
+                  : "Modify goal targets, metrics, and status."}
             </p>
           </div>
           <button
@@ -235,6 +281,14 @@ const EditGoal = () => {
             &larr; Back to Goals
           </button>
         </div>
+
+        {inCarryForwardWindow && (
+          <div className="mb-6 bg-indigo-50 text-indigo-800 p-4 rounded-xl text-sm font-medium">
+            This goal is locked, but the carry-forward window is open. Only
+            the Timeline field can be changed — saving will resubmit this
+            goal for approval with the new date.
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium">
@@ -312,9 +366,10 @@ const EditGoal = () => {
               </label>
               <select
                 name="Priority"
+                disabled={isRestrictedEdit}
                 value={formData.Priority}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -330,9 +385,10 @@ const EditGoal = () => {
                 step="0.01"
                 name="Weightage"
                 required
+                disabled={isRestrictedEdit}
                 value={formData.Weightage}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white ${fieldErrors.Weightage ? "border-red-400" : ""}`}
+                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.Weightage ? "border-red-400" : ""}`}
               />
               {fieldErrors.Weightage && (
                 <p className="text-red-600 text-xs mt-1">
@@ -348,9 +404,12 @@ const EditGoal = () => {
                 type="date"
                 name="Timeline"
                 required
+                // The one field that stays open during the carry-forward
+                // window even though everything else is locked.
+                disabled={isRestrictedEdit && !inCarryForwardWindow}
                 value={formData.Timeline}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white ${fieldErrors.Timeline ? "border-red-400" : ""}`}
+                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.Timeline ? "border-red-400" : ""} ${inCarryForwardWindow ? "border-indigo-400 ring-1 ring-indigo-200" : ""}`}
               />
               {fieldErrors.Timeline && (
                 <p className="text-red-600 text-xs mt-1">
@@ -364,9 +423,10 @@ const EditGoal = () => {
               </label>
               <select
                 name="GoalStatus"
+                disabled={isRestrictedEdit}
                 value={formData.GoalStatus}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
               >
                 {isDraft && <option value="Draft">Draft</option>}
                 {[
@@ -415,9 +475,10 @@ const EditGoal = () => {
                 name="Measurability"
                 rows="3"
                 required
+                disabled={isRestrictedEdit}
                 value={formData.Measurability}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white ${fieldErrors.Measurability ? "border-red-400" : ""}`}
+                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.Measurability ? "border-red-400" : ""}`}
               />
               {fieldErrors.Measurability && (
                 <p className="text-red-600 text-xs mt-1">
@@ -490,19 +551,6 @@ const EditGoal = () => {
             </div>
           </div>
 
-          {/* <div className="flex items-center space-x-2 pt-2">
-            <input 
-              type="checkbox" 
-              name="CrossFunctionalGoal" 
-              id="CrossFunctionalGoal"
-              disabled={isRestrictedEdit}
-              checked={formData.CrossFunctionalGoal} 
-              onChange={handleChange}
-              className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 disabled:opacity-50" 
-            />
-            <label htmlFor="CrossFunctionalGoal" className="text-sm font-medium text-gray-700">Is this a Cross-Functional Goal?</label>
-          </div> */}
-
           <hr className="my-6" />
 
           <div>
@@ -510,8 +558,9 @@ const EditGoal = () => {
               <h3 className="text-lg font-bold text-gray-800">Sub-Goals</h3>
               <button
                 type="button"
-                onClick={addSubGoalRow} 
-                className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition"
+                onClick={addSubGoalRow}
+                disabled={isRestrictedEdit}
+                className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 + Add Sub-Goal
               </button>
@@ -585,7 +634,9 @@ const EditGoal = () => {
                 ? "Saving..."
                 : isDraft
                   ? "Save as Draft"
-                  : "Save Goal"}
+                  : inCarryForwardWindow
+                    ? "Save New Timeline & Resubmit"
+                    : "Save Goal"}
             </button>
             {canSubmitForApproval && (
               <button

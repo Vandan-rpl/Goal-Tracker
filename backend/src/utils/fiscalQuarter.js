@@ -34,4 +34,25 @@ function getNextFiscalQuarter(fromQuarterEndDate) {
   return getFiscalQuarter(nextStart);
 }
 
-module.exports = { getFiscalQuarter, getNextFiscalQuarter, getQuarterStartDate };
+function isWithinCarryForwardWindow(quarterEndDate) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const qEnd = new Date(quarterEndDate);
+  qEnd.setHours(0, 0, 0, 0);
+
+  const windowStart = new Date(qEnd);
+  windowStart.setDate(windowStart.getDate() - 10);
+
+  // Next quarter start = day after this quarter ends
+  const nextQuarterStart = new Date(qEnd);
+  nextQuarterStart.setDate(nextQuarterStart.getDate() + 1);
+
+  const windowEnd = new Date(nextQuarterStart);
+  windowEnd.setDate(windowEnd.getDate() + 15);
+
+  return today >= windowStart && today <= windowEnd;
+}
+
+
+module.exports = { getFiscalQuarter, getNextFiscalQuarter, getQuarterStartDate,isWithinCarryForwardWindow };

@@ -5,6 +5,10 @@ const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const { calculateGoalProgress } = require("../utils/goalProgress");
+const {
+  getFiscalQuarter,
+  isWithinCarryForwardWindow,
+} = require("../utils/fiscalQuarter");
 
 const normalizeForDiff = (value) => {
   if (value === undefined || value === null || value === "") return null;
@@ -167,6 +171,7 @@ const notifyGoalHierarchy = async (
 // 1. Get All Goals
 const getGoals = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
+  const { quarter, status } = req.query;
 
   try {
     const pool = await poolPromise;
@@ -175,18 +180,26 @@ const getGoals = async (req, res) => {
             FROM dbo.Goals g
             JOIN dbo.Users u ON g.UserID = u.UserID
             WHERE g.UserID = @UserID
-            ORDER BY g.CreatedDate DESC
-        `;
+    `;
 
     const request = pool.request();
     request.input("UserID", sql.Int, userId);
 
+    if (quarter) {
+      query += ` AND g.Quarter = @Quarter`;
+      request.input("Quarter", sql.VarChar, quarter);
+    }
+
+    if (status) {
+      query += ` AND g.GoalStatus = @Status`;
+      request.input("Status", sql.VarChar, status);
+    }
+
+    query += ` ORDER BY g.CreatedDate DESC`;
+
     const result = await request.query(query);
 
-    return res.status(200).json({
-      success: true,
-      data: result.recordset,
-    });
+    return res.status(200).json({ success: true, data: result.recordset });
   } catch (error) {
     console.error("Get Goals Error:", error);
     return res.status(500).json({
@@ -274,6 +287,73 @@ const getAllEmployeeGoals = async (req, res) => {
   }
 };
 
+const getTeamGoals = async (req, res) => {
+  try {
+    const requesterId = req.user?.UserID || req.user?.userId;
+    const role = String(req.user?.Role || req.user?.role || "")
+      .trim()
+      .toUpperCase();
+    const { quarter, status } = req.query;
+
+    const allowedRoles = ["MANAGER", "HOD", "BUSINESSHEAD", "CFO", "ADMIN"];
+    if (!allowedRoles.includes(role)) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Not authorized." });
+    }
+
+    const pool = await poolPromise;
+    const request = pool.request();
+    request.input("RequesterID", sql.Int, requesterId);
+
+    let scopeCondition;
+    if (role === "CFO" || role === "ADMIN") {
+      scopeCondition = "1 = 1"; // company-wide visibility
+    } else if (role === "BUSINESSHEAD") {
+      scopeCondition = "u.BusinessHeadID = @RequesterID";
+    } else if (role === "HOD") {
+      scopeCondition = "u.HODID = @RequesterID";
+    } else {
+      // MANAGER
+      scopeCondition = "u.ReportingManagerID = @RequesterID";
+    }
+
+    let query = `
+            SELECT g.*, u.FirstName, u.LastName, u.Designation, u.Role AS EmployeeRole
+            FROM dbo.Goals g
+            JOIN dbo.Users u ON g.UserID = u.UserID
+            WHERE ${scopeCondition}
+              AND u.UserID <> @RequesterID
+    `;
+
+    if (quarter) {
+      query += ` AND g.Quarter = @Quarter`;
+      request.input("Quarter", sql.VarChar, quarter);
+    }
+
+    if (status) {
+      query += ` AND g.GoalStatus = @Status`;
+      request.input("Status", sql.VarChar, status);
+    }
+
+    query += ` ORDER BY u.FirstName, u.LastName, g.CreatedDate DESC`;
+
+    const result = await request.query(query);
+
+    return res.status(200).json({
+      success: true,
+      data: result.recordset,
+    });
+  } catch (error) {
+    console.error("Get Team Goals Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching team goals.",
+      errors: error.message,
+    });
+  }
+};
+
 // 2. Get Single Goal with Sub-Goals & History
 const getGoalById = async (req, res) => {
   const { id } = req.params;
@@ -297,7 +377,9 @@ const getGoalById = async (req, res) => {
     const requesterResult = await pool
       .request()
       .input("UserID", sql.Int, requesterUserId)
-      .query("SELECT Role FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1");
+      .query(
+        "SELECT Role FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1",
+      );
     if (requesterResult.recordset.length === 0) {
       return res.status(403).json({
         success: false,
@@ -318,7 +400,9 @@ const getGoalById = async (req, res) => {
           ownerHierarchy.HODID,
           ownerHierarchy.BusinessHeadID,
         ]
-          .filter((approverId) => approverId !== null && approverId !== undefined)
+          .filter(
+            (approverId) => approverId !== null && approverId !== undefined,
+          )
           .map(Number)
       : [];
     const canViewGoal =
@@ -348,10 +432,7 @@ const getGoalById = async (req, res) => {
     const canApproveOrReject =
       requesterRole === "CFO" ||
       requesterRole === "ADMIN" ||
-      (await canApproveOrRejectGoal(
-        requesterUserId,
-        goal.UserID,
-      ));
+      (await canApproveOrRejectGoal(requesterUserId, goal.UserID));
 
     return res.status(200).json({
       success: true,
@@ -565,6 +646,10 @@ const createGoal = async (req, res) => {
 };
 
 // 4. Update Goal
+// NOTE: make sure this import exists at the top of the real controller file,
+// pointing at wherever fiscalQuarter.js actually lives relative to this file:
+// const { getFiscalQuarter, isWithinCarryForwardWindow } = require("../utils/fiscalQuarter");
+
 const updateGoal = async (req, res) => {
   const { id } = req.params;
   const {
@@ -637,16 +722,72 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    if (
-      !isEnterpriseGoalManager &&
-      !isTeamGoalManager &&
-      currentStatus === "Submitted"
-    ) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "Submitted goals cannot be modified.",
-      });
+    // isDraft/canEditAllFields must be declared BEFORE ownerLocked uses them
+    const isDraft = currentStatus === "Draft";
+    const canEditAllFields =
+      isDraft ||
+      currentStatus === "Rejected" ||
+      isEnterpriseGoalManager ||
+      isTeamGoalManager;
+
+    const ownerLocked =
+      !isEnterpriseGoalManager && !isTeamGoalManager && !canEditAllFields;
+    // ownerLocked is true for the owner on ANY non-Draft/non-Rejected status —
+    // Submitted, Manager Approved, HOD Approved, Approved, etc.
+
+    let isCarryForward = false;
+
+    if (ownerLocked) {
+      const terminal = ["Completed", "Cancelled"].includes(currentStatus);
+      const inWindow =
+        !terminal && isWithinCarryForwardWindow(existingGoal.QuarterEndDate);
+
+      if (!inWindow) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "This goal cannot be modified in its current status.",
+        });
+      }
+
+      // In the carry-forward window: only Timeline may change.
+      const guardedFields = {
+        GoalNumber,
+        GoalTitle,
+        GoalDescription,
+        Measurability,
+        JointAccountability,
+        Weightage,
+        Priority,
+        MeetPerformance,
+        ExceedPerformance,
+        ValidationSource,
+        CrossFunctionalGoal,
+        GoalCategory,
+      };
+      const onlyTimelineChanged = Object.entries(guardedFields).every(
+        ([field, value]) =>
+          value === undefined || value === existingGoal[field],
+      );
+
+      if (!onlyTimelineChanged) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message:
+            "Only the Timeline can be updated during the carry-forward window.",
+        });
+      }
+
+      if (!Timeline) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "Timeline is required to carry this goal forward.",
+        });
+      }
+
+      isCarryForward = true;
     }
 
     // A rejected goal is returned to its owner for revision. The owner may
@@ -662,17 +803,22 @@ const updateGoal = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: "Rejected goals can only be saved or resubmitted for approval.",
+        message:
+          "Rejected goals can only be saved or resubmitted for approval.",
       });
     }
 
-    const newStatus = GoalStatus || currentStatus;
-    const isDraft = currentStatus === "Draft";
-    const canEditAllFields =
-      isDraft ||
-      currentStatus === "Rejected" ||
-      isEnterpriseGoalManager ||
-      isTeamGoalManager;
+    const newStatus = isCarryForward
+      ? "Submitted"
+      : GoalStatus || currentStatus;
+
+    const { label: newQuarter, quarterEndDate: newQuarterEndDate } =
+      isCarryForward
+        ? getFiscalQuarter(new Date(Timeline))
+        : {
+            label: existingGoal.Quarter,
+            quarterEndDate: existingGoal.QuarterEndDate,
+          };
 
     const finalGoalNumber = canEditAllFields
       ? GoalNumber
@@ -769,27 +915,36 @@ const updateGoal = async (req, res) => {
     updateRequest.input("GoalCategory", sql.NVarChar, finalCategory || null);
     updateRequest.input("GoalStatus", sql.VarChar, newStatus);
     updateRequest.input("CurrentStatus", sql.VarChar, currentStatus);
+    updateRequest.input("Quarter", sql.VarChar, newQuarter);
+    updateRequest.input("QuarterEndDate", sql.Date, newQuarterEndDate);
+    updateRequest.input("IsCarryForward", sql.Bit, isCarryForward ? 1 : 0);
 
     let updateQuery = `
-            UPDATE dbo.Goals SET 
-                GoalNumber = @GoalNumber, GoalTitle = @GoalTitle, GoalDescription = @GoalDescription,
-                Measurability = @Measurability, JointAccountability = @JointAccountability, Weightage = @Weightage,
-                Priority = @Priority, Timeline = @Timeline, MeetPerformance = @MeetPerformance,
-                ExceedPerformance = @ExceedPerformance, ValidationSource = @ValidationSource,
-                CrossFunctionalGoal = @CrossFunctionalGoal, GoalCategory = @GoalCategory, 
-                GoalStatus = @GoalStatus,
-                SubmittedDate = CASE
-                  WHEN @GoalStatus = 'Submitted' AND @CurrentStatus <> 'Submitted'
-                    THEN GETDATE()
-                  ELSE SubmittedDate
-                END,
-                ModifiedDate = GETDATE()
-            WHERE GoalID = @GoalID
-        `;
+    UPDATE dbo.Goals SET 
+        GoalNumber = @GoalNumber, GoalTitle = @GoalTitle, GoalDescription = @GoalDescription,
+        Measurability = @Measurability, JointAccountability = @JointAccountability, Weightage = @Weightage,
+        Priority = @Priority, Timeline = @Timeline, MeetPerformance = @MeetPerformance,
+        ExceedPerformance = @ExceedPerformance, ValidationSource = @ValidationSource,
+        CrossFunctionalGoal = @CrossFunctionalGoal, GoalCategory = @GoalCategory, 
+        GoalStatus = @GoalStatus,
+        Quarter = @Quarter,
+        QuarterEndDate = @QuarterEndDate,
+        ApprovedDate = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE ApprovedDate END,
+        BusinessHeadApprovedBy = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE BusinessHeadApprovedBy END,
+        BusinessHeadApprovedDate = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE BusinessHeadApprovedDate END,
+        CarryForwardCount = CASE WHEN @IsCarryForward = 1 THEN ISNULL(CarryForwardCount, 0) + 1 ELSE CarryForwardCount END,
+        SubmittedDate = CASE
+          WHEN @GoalStatus = 'Submitted' AND @CurrentStatus <> 'Submitted'
+            THEN GETDATE()
+          ELSE SubmittedDate
+        END,
+        ModifiedDate = GETDATE()
+    WHERE GoalID = @GoalID
+`;
 
     await updateRequest.query(updateQuery);
 
-        const { oldValues, newValues } = buildGoalDiff(existingGoal, {
+    const { oldValues, newValues } = buildGoalDiff(existingGoal, {
       GoalNumber: finalGoalNumber,
       GoalTitle: finalGoalTitle,
       GoalDescription: finalGoalDesc,
@@ -850,6 +1005,20 @@ const updateGoal = async (req, res) => {
                 `);
       }
     }
+    // Note: when isCarryForward is true, canEditAllFields is false, so this
+    // block is skipped entirely — sub-goals are left exactly as they are,
+    // which is the intended behavior (they carry over as-is, completed ones
+    // stay Completed).
+
+    if (isCarryForward) {
+      await new sql.Request(transaction)
+        .input("GoalID", sql.BigInt, id)
+        .input("FromQuarter", sql.VarChar, existingGoal.Quarter)
+        .input("ToQuarter", sql.VarChar, newQuarter).query(`
+          INSERT INTO dbo.GoalCarryForwardHistory (GoalID, FromQuarter, ToQuarter, CarriedForwardDate)
+          VALUES (@GoalID, @FromQuarter, @ToQuarter, GETDATE())
+        `);
+    }
 
     await transaction.commit();
 
@@ -882,7 +1051,9 @@ const updateGoal = async (req, res) => {
           ? notifiedEmails.length > 0
             ? `Goal submitted and email has been sent to ${notifiedEmails.length} approver(s) in your reporting hierarchy.`
             : "Goal submitted successfully."
-          : "Goal updated successfully.",
+          : isCarryForward
+            ? "Goal carried forward and resubmitted for approval."
+            : "Goal updated successfully.",
     });
   } catch (error) {
     if (transaction._aborted === false && transaction._acquiredConnection) {
@@ -923,7 +1094,9 @@ const getGoalHistory = async (req, res) => {
     const requesterResult = await pool
       .request()
       .input("UserID", sql.Int, requesterUserId)
-      .query("SELECT Role FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1");
+      .query(
+        "SELECT Role FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1",
+      );
     const requesterRole = String(requesterResult.recordset[0]?.Role || "")
       .trim()
       .toUpperCase();
@@ -934,7 +1107,9 @@ const getGoalHistory = async (req, res) => {
           ownerHierarchy.HODID,
           ownerHierarchy.BusinessHeadID,
         ]
-          .filter((approverId) => approverId !== null && approverId !== undefined)
+          .filter(
+            (approverId) => approverId !== null && approverId !== undefined,
+          )
           .map(Number)
       : [];
     const canViewHistory =
@@ -959,11 +1134,22 @@ const getGoalHistory = async (req, res) => {
     `);
 
     const history = result.recordset.map((row) => {
-      let oldValues = {}, newValues = {};
-      try { oldValues = row.OldValue ? JSON.parse(row.OldValue) : {}; } catch { oldValues = {}; }
-      try { newValues = row.NewValue ? JSON.parse(row.NewValue) : {}; } catch { newValues = {}; }
+      let oldValues = {},
+        newValues = {};
+      try {
+        oldValues = row.OldValue ? JSON.parse(row.OldValue) : {};
+      } catch {
+        oldValues = {};
+      }
+      try {
+        newValues = row.NewValue ? JSON.parse(row.NewValue) : {};
+      } catch {
+        newValues = {};
+      }
 
-      const fields = Array.from(new Set([...Object.keys(oldValues), ...Object.keys(newValues)]));
+      const fields = Array.from(
+        new Set([...Object.keys(oldValues), ...Object.keys(newValues)]),
+      );
       return {
         historyId: row.GoalHistoryID,
         action: row.Action,
@@ -1105,10 +1291,12 @@ const canApproveOrRejectGoal = async (requesterUserId, goalOwnerUserId) => {
 
 // NEW: true only when this employee has no Manager/HOD in between
 // and reports directly to this specific Business Head.
-const isDirectBusinessHeadReport = async (goalOwnerUserId, businessHeadUserId) => {
+const isDirectBusinessHeadReport = async (
+  goalOwnerUserId,
+  businessHeadUserId,
+) => {
   const pool = await poolPromise;
-  const result = await pool.request()
-    .input("UserID", sql.Int, goalOwnerUserId)
+  const result = await pool.request().input("UserID", sql.Int, goalOwnerUserId)
     .query(`
             SELECT ReportingManagerID, HODID, BusinessHeadID
             FROM dbo.Users
@@ -1123,8 +1311,7 @@ const isDirectBusinessHeadReport = async (goalOwnerUserId, businessHeadUserId) =
     h.ReportingManagerID !== undefined &&
     h.ReportingManagerID !== "";
 
-  const hasHOD =
-    h.HODID !== null && h.HODID !== undefined && h.HODID !== "";
+  const hasHOD = h.HODID !== null && h.HODID !== undefined && h.HODID !== "";
 
   return (
     !hasManager &&
@@ -1594,16 +1781,21 @@ const updateSubGoalStatus = async (req, res) => {
     const goalReq = new sql.Request(transaction);
     const goalRes = await goalReq
       .input("GoalID", sql.BigInt, goalId)
-      .query("SELECT UserID, GoalTitle, Weightage FROM dbo.Goals WHERE GoalID = @GoalID");
+      .query(
+        "SELECT UserID, GoalTitle, Weightage FROM dbo.Goals WHERE GoalID = @GoalID",
+      );
 
     if (goalRes.recordset.length === 0) {
       await transaction.rollback();
-      return res.status(404).json({ success: false, message: "Goal not found." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Goal not found." });
     }
     const goal = goalRes.recordset[0];
 
     // Only the goal's own owner logs sub-goal progress; Admin can too for corrections.
-    const isAuthorized = role === "ADMIN" || Number(goal.UserID) === Number(userId);
+    const isAuthorized =
+      role === "ADMIN" || Number(goal.UserID) === Number(userId);
     if (!isAuthorized) {
       await transaction.rollback();
       return res.status(403).json({
@@ -1616,11 +1808,15 @@ const updateSubGoalStatus = async (req, res) => {
     const subGoalRes = await subGoalReq
       .input("SubGoalID", sql.BigInt, subGoalId)
       .input("GoalID", sql.BigInt, goalId)
-      .query("SELECT * FROM dbo.GoalSubGoals WHERE SubGoalID = @SubGoalID AND GoalID = @GoalID");
+      .query(
+        "SELECT * FROM dbo.GoalSubGoals WHERE SubGoalID = @SubGoalID AND GoalID = @GoalID",
+      );
 
     if (subGoalRes.recordset.length === 0) {
       await transaction.rollback();
-      return res.status(404).json({ success: false, message: "Sub-goal not found." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Sub-goal not found." });
     }
     const subGoal = subGoalRes.recordset[0];
     const oldStatus = subGoal.Status;
@@ -1628,8 +1824,7 @@ const updateSubGoalStatus = async (req, res) => {
     const updateReq = new sql.Request(transaction);
     await updateReq
       .input("SubGoalID", sql.BigInt, subGoalId)
-      .input("Status", sql.VarChar, Status)
-      .query(`
+      .input("Status", sql.VarChar, Status).query(`
         UPDATE dbo.GoalSubGoals
         SET Status = @Status
         WHERE SubGoalID = @SubGoalID
@@ -1684,5 +1879,6 @@ module.exports = {
   getJointGoals,
   updateJointAccountabilityStatus,
   getGoalHistory,
-  updateSubGoalStatus
+  updateSubGoalStatus,
+  getTeamGoals,
 };
