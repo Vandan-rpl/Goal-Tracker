@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
 
@@ -11,20 +11,40 @@ const statusBadgeClass = (status) => {
 
 const normalizedStatus = (status) => String(status || "").trim().toLowerCase();
 
+// This screen only ever returns goals in these statuses (hardcoded
+// server-side in getAllEmployeeGoals), so the filter is scoped to match.
+const PENDING_STATUS_OPTIONS = [
+  "HOD Approved",
+  "Manager Approved",
+  "Reviewed By HOD",
+  "Review By Business Head",
+  "Business Head Approved",
+  "Approved",
+];
+
+// TODO: confirm against `SELECT DISTINCT Quarter FROM dbo.Goals`
+const QUARTER_OPTIONS = [
+  "Q1-2026", "Q2-2026", "Q3-2026", "Q4-2026",
+  "Q1-2027", "Q2-2027", "Q3-2027", "Q4-2027",
+];
+
 const CFOAllUsersGoals = () => {
   const [allGoals, setAllGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actingOn, setActingOn] = useState(null);
+  const [quarter, setQuarter] = useState("");
+  const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    fetchAllGoals();
-  }, []);
-
-  const fetchAllGoals = async () => {
+  const fetchAllGoals = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/goals/all-employee-goals");
+      setError("");
+      const params = {};
+      if (quarter) params.quarter = quarter;
+      if (status) params.status = status;
+
+      const res = await api.get("/goals/all-employee-goals", { params });
       setAllGoals(res.data.data || []);
     } catch (err) {
       console.error("Failed to fetch enterprise goals", err);
@@ -32,7 +52,11 @@ const CFOAllUsersGoals = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [quarter, status]);
+
+  useEffect(() => {
+    fetchAllGoals();
+  }, [fetchAllGoals]);
 
   const handleStatusUpdate = async (goalId, goalStatus) => {
     try {
@@ -56,6 +80,52 @@ const CFOAllUsersGoals = () => {
         Enterprise-Wide Goals Overview (CFO Access)
       </h2>
 
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 bg-white shadow rounded-lg p-4 mb-6">
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+            Quarter
+          </label>
+          <select
+            value={quarter}
+            onChange={(e) => setQuarter(e.target.value)}
+            className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All Quarters</option>
+            {QUARTER_OPTIONS.map((q) => (
+              <option key={q} value={q}>{q}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+            Status
+          </label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All Pending Statuses</option>
+            {PENDING_STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        {(quarter || status) && (
+          <div className="flex items-end">
+            <button
+              onClick={() => { setQuarter(""); setStatus(""); }}
+              className="text-sm font-medium text-gray-500 hover:text-gray-700 px-3 py-2"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <p className="text-gray-500">Loading goals...</p>
       ) : error ? (
@@ -65,21 +135,11 @@ const CFOAllUsersGoals = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  User
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Goal Title
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Action
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Goal Title</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -93,16 +153,12 @@ const CFOAllUsersGoals = () => {
                       {goal.GoalTitle}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(goal.GoalStatus)}`}
-                      >
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(goal.GoalStatus)}`}>
                         {goal.GoalStatus}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {goal.CreatedDate
-                        ? new Date(goal.CreatedDate).toLocaleDateString()
-                        : "-"}
+                      {goal.CreatedDate ? new Date(goal.CreatedDate).toLocaleDateString() : "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2 items-center">
@@ -115,35 +171,24 @@ const CFOAllUsersGoals = () => {
                           <div className="flex gap-2">
                             <button
                               disabled={actingOn === goal.GoalID}
-                              onClick={() =>
-                                handleStatusUpdate(goal.GoalID, "Approved")
-                              }
+                              onClick={() => handleStatusUpdate(goal.GoalID, "Approved")}
                               className="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                             >
                               Approve
                             </button>
-
                             <button
                               disabled={actingOn === goal.GoalID}
-                              onClick={() =>
-                                handleStatusUpdate(goal.GoalID, "Rejected")
-                              }
+                              onClick={() => handleStatusUpdate(goal.GoalID, "Rejected")}
                               className="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                             >
                               Reject
                             </button>
                           </div>
                         )}
-                        <Link
-                          to={`/goals/view/${goal.GoalID}`}
-                          className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
-                        >
+                        <Link to={`/goals/view/${goal.GoalID}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer">
                           View details
                         </Link>
-                        <Link
-                          to={`/goals/edit/${goal.GoalID}`}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                        >
+                        <Link to={`/goals/edit/${goal.GoalID}`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
                           Edit
                         </Link>
                       </div>
@@ -152,11 +197,8 @@ const CFOAllUsersGoals = () => {
                 ))
               ) : (
                 <tr>
-                  <td
-                    colSpan="5"
-                    className="px-6 py-4 text-center text-sm text-gray-500"
-                  >
-                    No organization data found.
+                  <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                    No goals match the selected filters.
                   </td>
                 </tr>
               )}

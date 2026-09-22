@@ -249,14 +249,15 @@ const getAllEmployeeGoals = async (req, res) => {
     }
 
     const managerId = req.user?.UserID || req.user?.userId;
+    const { quarter, status } = req.query;
     const pool = await poolPromise;
     const request = pool.request();
     request.input("ManagerID", sql.Int, managerId);
     request.input("RequesterRole", sql.VarChar, role);
 
-    const result = await request.query(`
+    let query = `
             SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
-                   g.GoalID, g.GoalTitle, g.GoalStatus, g.CreatedDate, g.ModifiedDate, g.ApprovedDate,
+                   g.GoalID, g.GoalTitle, g.GoalStatus, g.CreatedDate, g.ModifiedDate, g.ApprovedDate, g.Quarter,
                      CASE WHEN @RequesterRole IN ('CFO', 'ADMIN') OR (
                        u.BusinessHeadID = @ManagerID
                        AND (
@@ -275,8 +276,21 @@ const getAllEmployeeGoals = async (req, res) => {
               'Business Head Approved',
               'Approved'
             )
-            ORDER BY g.CreatedDate DESC
-        `);
+    `;
+
+    if (quarter) {
+      query += ` AND g.Quarter = @Quarter`;
+      request.input("Quarter", sql.VarChar, quarter);
+    }
+
+    if (status) {
+      query += ` AND g.GoalStatus = @Status`;
+      request.input("Status", sql.VarChar, status);
+    }
+
+    query += ` ORDER BY g.CreatedDate DESC`;
+
+    const result = await request.query(query);
 
     return res.status(200).json({ success: true, data: result.recordset });
   } catch (error) {
