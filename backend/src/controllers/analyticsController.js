@@ -1,6 +1,17 @@
 const { poolPromise, sql } = require('../config/db');
 const { getScopedUserIds, buildUserIdFilter } = require('../utils/goalScope');
 
+const getAnalyticsUserIds = async (pool, userId, role) => {
+    const scopedUserIds = await getScopedUserIds(pool, userId, role);
+    const normalizedRole = (role || '').trim().toUpperCase();
+
+    if (scopedUserIds === null || !['MANAGER', 'HOD'].includes(normalizedRole)) {
+        return scopedUserIds;
+    }
+
+    return scopedUserIds.filter((scopedUserId) => Number(scopedUserId) !== Number(userId));
+};
+
 /**
  * ============================================================
  * SCHEMA FIXES — see the full list in the chat response for context.
@@ -31,11 +42,11 @@ const { getScopedUserIds, buildUserIdFilter } = require('../utils/goalScope');
 // Get high-level summary statistics for the user dashboard
 const getDashboardStats = async (req, res) => {
     const userId = req.user?.UserID || req.user?.userId;
-    const role = req.user?.role;
+    const role = req.user?.role || req.user?.Role;
 
     try {
         const pool = await poolPromise;
-        const scopedUserIds = await getScopedUserIds(pool, userId, role);
+        const scopedUserIds = await getAnalyticsUserIds(pool, userId, role);
 
         const statsRequest = pool.request();
         const statsFilter = buildUserIdFilter(statsRequest, scopedUserIds, 'UserID');
@@ -93,8 +104,14 @@ const getDashboardStats = async (req, res) => {
 
 // Get department-wise goal distribution for charts
 const getDepartmentStats = async (req, res) => {
+    const userId = req.user?.UserID || req.user?.userId;
+    const role = req.user?.role || req.user?.Role;
+
     try {
         const pool = await poolPromise;
+        const scopedUserIds = await getAnalyticsUserIds(pool, userId, role);
+        const request = pool.request();
+        const filter = buildUserIdFilter(request, scopedUserIds, 'u.UserID');
 
         // Goals has no DepartmentId column — the real relationship is
         // Users.DepartmentID, so we go through Users to get from a goal to
@@ -105,13 +122,14 @@ const getDepartmentStats = async (req, res) => {
                 COUNT(g.GoalID) AS totalGoals,
                 SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS completedGoals
             FROM dbo.Departments d
-            LEFT JOIN dbo.Users u ON u.DepartmentID = d.DepartmentID
+            LEFT JOIN dbo.Users u ON u.DepartmentID = d.DepartmentID AND ${filter}
             LEFT JOIN dbo.Goals g ON g.UserID = u.UserID
+            WHERE ${filter}
             GROUP BY d.DepartmentID, d.DepartmentName
             ORDER BY d.DepartmentName
         `;
 
-        const result = await pool.request().query(query);
+        const result = await request.query(query);
 
         return res.status(200).json({
             success: true,
@@ -129,14 +147,67 @@ const getDepartmentStats = async (req, res) => {
     }
 };
 
-// Get quarter completion trend metrics
-const getQuarterCompletionTrend = async (req, res) => {
+const getTeamStats = async (req, res) => {
     const userId = req.user?.UserID || req.user?.userId;
-    const role = req.user?.role;
+    const role = req.user?.role || req.user?.Role;
+    const normalizedRole = String(role || '').trim().toUpperCase();
+
+    if (!['MANAGER', 'HOD'].includes(normalizedRole)) {
+        return res.status(403).json({
+            success: false,
+            message: 'Team analytics are available to managers and HODs only.'
+        });
+    }
 
     try {
         const pool = await poolPromise;
-        const scopedUserIds = await getScopedUserIds(pool, userId, role);
+        const scopedUserIds = await getAnalyticsUserIds(pool, userId, role);
+        const request = pool.request();
+        const filter = buildUserIdFilter(request, scopedUserIds, 'u.UserID');
+
+        const query = `
+            SELECT
+                u.UserID,
+                LTRIM(RTRIM(CONCAT(u.FirstName, ' ', u.LastName))) AS employeeName,
+                COUNT(g.GoalID) AS totalGoals,
+                SUM(CASE WHEN g.GoalStatus IN (
+                    'Submitted', 'HOD Approved', 'Manager Approved',
+                    'Reviewed By HOD', 'Business Head Approved', 'Review By Business Head'
+                ) THEN 1 ELSE 0 END) AS pendingGoals,
+                SUM(CASE WHEN g.GoalStatus IN ('Running', 'Approved', 'Postpone') THEN 1 ELSE 0 END) AS activeGoals,
+                SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS completedGoals,
+                SUM(CASE WHEN g.GoalStatus IN ('Draft', 'Rejected', 'Cancelled') THEN 1 ELSE 0 END) AS otherGoals
+            FROM dbo.Users u
+            LEFT JOIN dbo.Goals g ON g.UserID = u.UserID
+            WHERE ${filter} AND u.IsActive = 1
+            GROUP BY u.UserID, u.FirstName, u.LastName
+            ORDER BY u.FirstName, u.LastName
+        `;
+
+        const result = await request.query(query);
+        return res.status(200).json({
+            success: true,
+            message: 'Team goal analytics fetched successfully.',
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Team Stats Error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error while fetching team analytics.',
+            errors: error.message
+        });
+    }
+};
+
+// Get quarter completion trend metrics
+const getQuarterCompletionTrend = async (req, res) => {
+    const userId = req.user?.UserID || req.user?.userId;
+    const role = req.user?.role || req.user?.Role;
+
+    try {
+        const pool = await poolPromise;
+        const scopedUserIds = await getAnalyticsUserIds(pool, userId, role);
 
         const request = pool.request();
         const filter = buildUserIdFilter(request, scopedUserIds, 'g.UserID');
@@ -178,5 +249,6 @@ const getQuarterCompletionTrend = async (req, res) => {
 module.exports = {
     getDashboardStats,
     getDepartmentStats,
+    getTeamStats,
     getQuarterCompletionTrend
 };

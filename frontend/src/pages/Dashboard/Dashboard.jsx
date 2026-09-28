@@ -16,10 +16,6 @@ import { getEmployeeGoals } from "../../services/dashboardService";
 
 // ---------------------------------------------------------------------------
 // STATUS STYLING — mapped to the real GoalStatus enum values.
-// Sub-goal-driven progress isn't available from getGoals yet, so progress is
-// derived purely from GoalStatus for now: Completed = 100%, everything else
-// = 0%. Swap this out once GoalSubGoal rows (with Weightage + Status) are
-// included in the API response.
 // ---------------------------------------------------------------------------
 const STATUS_STYLES = {
   "Draft": { bg: "bg-gray-100", text: "text-gray-600", ring: "ring-gray-200", bar: "bg-gray-400", icon: Clock },
@@ -44,8 +40,19 @@ const PRIORITY_STYLES = {
   Low: "bg-gray-100 text-gray-600",
 };
 
+function normalizeGoalStatus(status) {
+  return String(status || "Draft").trim().toLowerCase();
+}
+
 function progressFromStatus(status) {
-  return status === "Completed" ? 100 : 0;
+  return normalizeGoalStatus(status) === "completed" ? 100 : 0;
+}
+
+function progressFromGoal(goal) {
+  const completion = Number(goal.SubGoalCompletionPercentage);
+  return Number.isFinite(completion)
+    ? Math.max(0, Math.min(100, completion))
+    : progressFromStatus(goal.GoalStatus);
 }
 
 function daysUntil(dateStr) {
@@ -63,11 +70,15 @@ function formatDate(dateStr) {
 // ---------------------------------------------------------------------------
 function GoalCard({ goal }) {
   const [open, setOpen] = useState(false);
-  const style = STATUS_STYLES[goal.GoalStatus] || DEFAULT_STATUS_STYLE;
+  const isCompleted = normalizeGoalStatus(goal.GoalStatus) === "completed";
+  const style = isCompleted
+    ? STATUS_STYLES.Completed
+    : STATUS_STYLES[goal.GoalStatus] || DEFAULT_STATUS_STYLE;
   const StatusIcon = style.icon;
-  const progress = progressFromStatus(goal.GoalStatus);
+  const progress = progressFromGoal(goal);
   const days = daysUntil(goal.Timeline);
-  const overdue = days !== null && days < 0 && goal.GoalStatus !== "Completed" && goal.GoalStatus !== "Cancelled";
+  const normalizedStatus = normalizeGoalStatus(goal.GoalStatus);
+  const overdue = days !== null && days < 0 && !["completed", "cancelled"].includes(normalizedStatus);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -102,7 +113,7 @@ function GoalCard({ goal }) {
             </span>
             {days !== null && (
               <span className={overdue ? "text-red-600 font-medium" : ""}>
-                {overdue ? `${Math.abs(days)}d overdue` : goal.GoalStatus === "Completed" ? "Done" : `${days}d left`}
+                {overdue ? `${Math.abs(days)}d overdue` : isCompleted ? "Done" : `${days}d left`}
               </span>
             )}
             {goal.Weightage != null && <span>Weight {goal.Weightage}%</span>}
@@ -165,11 +176,6 @@ function GoalCard({ goal }) {
             </p>
           )}
 
-          {/* Sub-goals: not returned by GET /api/v1/goals yet — see dashboardService.js note. */}
-          <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">
-            Sub-goals aren't loaded yet — this goal's progress is currently based on its status only,
-            not a sub-goal rollup.
-          </div>
         </div>
       )}
     </div>
@@ -210,9 +216,23 @@ export default function GoalDashboard() {
     fetchGoals();
   }, [fetchGoals]);
 
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") fetchGoals();
+    };
+
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [fetchGoals]);
+
   const overallProgress = useMemo(() => {
     const totalWeight = goals.reduce((s, g) => s + (g.Weightage || 0), 0);
-    const achieved = goals.reduce((s, g) => s + (g.Weightage || 0) * (progressFromStatus(g.GoalStatus) / 100), 0);
+    const achieved = goals.reduce((s, g) => s + (g.Weightage || 0) * (progressFromGoal(g) / 100), 0);
     return totalWeight ? Math.round((achieved / totalWeight) * 100) : 0;
   }, [goals]);
 
@@ -292,7 +312,7 @@ export default function GoalDashboard() {
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-800">Weighted progress</p>
-              <p className="text-xs text-gray-400">Across {goals.length} goals, by weightage · status-based for now</p>
+              <p className="text-xs text-gray-400">Across {goals.length} goals, by completed sub-goal weightage</p>
             </div>
           </div>
 

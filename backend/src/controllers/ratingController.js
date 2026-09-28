@@ -35,6 +35,7 @@ const submitQuarterlyUpdate = async (req, res) => {
     achievements,
     challenges,
     evidenceUrl,
+    subGoalUpdates,
   } = req.body;
   const userId = req.user?.UserID || req.user?.userId;
 
@@ -42,6 +43,23 @@ const submitQuarterlyUpdate = async (req, res) => {
     return res.status(400).json({
       success: false,
       message: "goalId, quarter, and progressPercentage are required.",
+    });
+  }
+
+  const validSubGoalStatuses = ["Pending", "In Progress", "Completed", "Cancelled"];
+  if (
+    subGoalUpdates !== undefined &&
+    (!Array.isArray(subGoalUpdates) ||
+      subGoalUpdates.some(
+        (update) =>
+          !update?.subGoalId || !validSubGoalStatuses.includes(update.status),
+      ) ||
+      new Set(subGoalUpdates.map((update) => String(update.subGoalId))).size !==
+        subGoalUpdates.length)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Each sub-goal update must have a unique ID and valid status.",
     });
   }
 
@@ -73,14 +91,74 @@ const submitQuarterlyUpdate = async (req, res) => {
     // original column names in place below since I can't confirm the real
     // table definition from the code alone — see the flag in my response
     // before trusting this query against the live database.
-    await pool
-      .request()
-      .input("GoalId", sql.BigInt, goalId)
-      .input("Quarter", sql.VarChar, quarter)
-      .input("ProgressPercentage", sql.Decimal(5, 2), progressPercentage)
-      .input("Achievements", sql.NVarChar(sql.MAX), achievements || "")
-      .input("Challenges", sql.NVarChar(sql.MAX), challenges || "")
-      .input("EvidenceFile", sql.NVarChar(500), evidenceUrl || "").query(`
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      for (const update of subGoalUpdates || []) {
+        const subGoalResult = await new sql.Request(transaction)
+          .input("GoalID", sql.BigInt, goalId)
+          .input("SubGoalID", sql.BigInt, update.subGoalId)
+          .query(`
+            SELECT SubGoalTitle, Status
+            FROM dbo.GoalSubGoals
+            WHERE GoalID = @GoalID AND SubGoalID = @SubGoalID
+          `);
+
+        const subGoal = subGoalResult.recordset[0];
+        if (!subGoal) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: "A sub-goal does not belong to this goal.",
+          });
+        }
+
+        if (subGoal.Status === "Completed" && update.status !== "Completed") {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: "Completed sub-goals cannot be reopened.",
+          });
+        }
+
+        if (subGoal.Status === update.status) continue;
+
+        await new sql.Request(transaction)
+          .input("SubGoalID", sql.BigInt, update.subGoalId)
+          .input("Status", sql.VarChar, update.status)
+          .query(`
+            UPDATE dbo.GoalSubGoals
+            SET Status = @Status
+            WHERE SubGoalID = @SubGoalID
+          `);
+
+        await new sql.Request(transaction)
+          .input("GoalID", sql.BigInt, goalId)
+          .input("Action", sql.VarChar, "Updated")
+          .input("OldValue", sql.NVarChar(sql.MAX), subGoal.Status)
+          .input("NewValue", sql.NVarChar(sql.MAX), update.status)
+          .input(
+            "Remarks",
+            sql.NVarChar(sql.MAX),
+            `Sub-goal "${subGoal.SubGoalTitle}" status updated to ${update.status}`,
+          )
+          .input("PerformedBy", sql.Int, userId)
+          .query(`
+            INSERT INTO dbo.GoalHistory
+              (GoalID, Action, OldValue, NewValue, Remarks, PerformedBy, PerformedDate)
+            VALUES
+              (@GoalID, @Action, @OldValue, @NewValue, @Remarks, @PerformedBy, GETDATE())
+          `);
+      }
+
+      await new sql.Request(transaction)
+        .input("GoalId", sql.BigInt, goalId)
+        .input("Quarter", sql.VarChar, quarter)
+        .input("ProgressPercentage", sql.Decimal(5, 2), progressPercentage)
+        .input("Achievements", sql.NVarChar(sql.MAX), achievements || "")
+        .input("Challenges", sql.NVarChar(sql.MAX), challenges || "")
+        .input("EvidenceFile", sql.NVarChar(500), evidenceUrl || "").query(`
                 MERGE INTO dbo.QuarterlyUpdates AS target
                 USING (SELECT @GoalId AS GoalId, @Quarter AS Quarter) AS source
                 ON (target.GoalID = source.GoalId AND target.Quarter = source.Quarter)
@@ -95,6 +173,13 @@ const submitQuarterlyUpdate = async (req, res) => {
                     INSERT (GoalID, Quarter, ProgressPercentage, Achievements, Challenges, EvidenceFile, Status)
                     VALUES (@GoalId, @Quarter, @ProgressPercentage, @Achievements, @Challenges, @EvidenceFile, 'Submitted');
             `);
+      await transaction.commit();
+    } catch (transactionError) {
+      if (transaction._aborted === false && transaction._acquiredConnection) {
+        await transaction.rollback();
+      }
+      throw transactionError;
+    }
 
     // REMOVED: the original code also ran
     //   UPDATE Goals SET Progress = @ProgressPercentage, UpdatedAt = GETDATE() WHERE GoalId = @GoalId

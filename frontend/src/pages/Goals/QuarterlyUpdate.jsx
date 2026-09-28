@@ -3,9 +3,17 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../../services/api';
 
-// Quarters this form supports — matches the `Quarter` values the backend's
-// MERGE INTO QuarterlyUpdates keys off of (see ratingController.js).
-const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+const getGoalQuarter = (goal) => {
+  const assignedQuarter = String(goal?.Quarter || '').match(/^Q[1-4]/i)?.[0];
+  if (assignedQuarter) return assignedQuarter.toUpperCase();
+
+  const createdDate = goal?.CreatedDate ? new Date(goal.CreatedDate) : new Date();
+  const month = createdDate.getMonth();
+  if (month >= 3 && month <= 5) return 'Q1';
+  if (month >= 6 && month <= 8) return 'Q2';
+  if (month >= 9 && month <= 11) return 'Q3';
+  return 'Q4';
+};
 
 const QuarterlyUpdate = () => {
   const { id } = useParams(); // GoalID
@@ -17,10 +25,10 @@ const QuarterlyUpdate = () => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [subGoalStatuses, setSubGoalStatuses] = useState({});
 
   const [formData, setFormData] = useState({
-    quarter: 'Q1',
-    progressPercentage: '',
+    quarter: '',
     achievements: '',
     challenges: '',
     evidenceUrl: '',
@@ -51,8 +59,18 @@ const QuarterlyUpdate = () => {
       setError('');
 
       const goalRes = await api.get(`/goals/${id}`);
+      let goalQuarter = '';
       if (goalRes.data.success) {
-        setGoal(goalRes.data.data);
+        const goalData = goalRes.data.data;
+        goalQuarter = getGoalQuarter(goalData);
+        setGoal(goalData);
+        setFormData((previous) => ({ ...previous, quarter: goalQuarter }));
+        setSubGoalStatuses(
+          (goalData.SubGoals || []).reduce((statuses, subGoal) => {
+            statuses[subGoal.SubGoalID] = subGoal.Status;
+            return statuses;
+          }, {}),
+        );
       }
 
       // Quarterly history — new endpoint added alongside this page
@@ -61,7 +79,19 @@ const QuarterlyUpdate = () => {
       try {
         const historyRes = await api.get(`/ratings/quarterly-updates/${id}`);
         if (historyRes.data.success) {
-          setHistory(historyRes.data.data || []);
+          const historyData = historyRes.data.data || [];
+          setHistory(historyData);
+          const existingUpdate = historyData.find(
+            (item) => item.Quarter === goalQuarter,
+          );
+          if (existingUpdate) {
+            setFormData((previous) => ({
+              ...previous,
+              achievements: existingUpdate.Achievements || '',
+              challenges: existingUpdate.Challenges || '',
+              evidenceUrl: existingUpdate.EvidenceUrl || '',
+            }));
+          }
         }
       } catch (historyErr) {
         // Non-fatal — the update form still works even if history fails to load.
@@ -80,20 +110,11 @@ const QuarterlyUpdate = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // When the user switches the quarter dropdown, prefill the form with
-  // whatever was already submitted for that quarter (the backend MERGEs
-  // on GoalId + Quarter, so resubmitting the same quarter overwrites it).
-  const handleQuarterChange = (e) => {
-    const quarter = e.target.value;
-    const existing = history.find((item) => item.Quarter === quarter);
-
-    setFormData({
-      quarter,
-      progressPercentage: existing ? String(existing.ProgressPercentage ?? '') : '',
-      achievements: existing?.Achievements || '',
-      challenges: existing?.Challenges || '',
-      evidenceUrl: existing?.EvidenceUrl || '',
-    });
+  const handleSubGoalStatusChange = (subGoalId, status) => {
+    setSubGoalStatuses((previous) => ({
+      ...previous,
+      [subGoalId]: status,
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -101,11 +122,24 @@ const QuarterlyUpdate = () => {
     setError('');
     setSuccessMessage('');
 
-    const progress = Number(formData.progressPercentage);
-    if (formData.progressPercentage === '' || Number.isNaN(progress) || progress < 0 || progress > 100) {
-      setError('Progress % must be a number between 0 and 100.');
+    const subGoals = goal.SubGoals || [];
+    if (subGoals.length === 0) {
+      setError('Add at least one sub-goal before logging quarterly progress.');
       return;
     }
+
+    const subGoalUpdates = subGoals.map((subGoal) => ({
+      subGoalId: subGoal.SubGoalID,
+      status: subGoalStatuses[subGoal.SubGoalID] || subGoal.Status,
+    }));
+    const progress = subGoals.reduce(
+      (total, subGoal) =>
+        total +
+        (subGoalStatuses[subGoal.SubGoalID] === 'Completed'
+          ? Number(subGoal.Weightage || 0)
+          : 0),
+      0,
+    );
 
     setSubmitting(true);
 
@@ -114,6 +148,7 @@ const QuarterlyUpdate = () => {
         goalId: id,
         quarter: formData.quarter,
         progressPercentage: progress,
+        subGoalUpdates,
         achievements: formData.achievements,
         challenges: formData.challenges,
         evidenceUrl: formData.evidenceUrl,
@@ -219,38 +254,42 @@ const QuarterlyUpdate = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Quarter *</label>
-              <select
-                name="quarter"
-                required
-                value={formData.quarter}
-                onChange={handleQuarterChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
-              >
-                {QUARTERS.map((q) => (
-                  <option key={q} value={q}>
-                    {q}
-                    {history.some((item) => item.Quarter === q) ? ' (already submitted — editing)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Progress % (0-100) *</label>
-              <input
-                type="number"
-                name="progressPercentage"
-                min="0"
-                max="100"
-                step="0.01"
-                required
-                placeholder="e.g. 65"
-                value={formData.progressPercentage}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quarter</label>
+              <div className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-700">
+                {formData.quarter}
+                {history.some((item) => item.Quarter === formData.quarter) && ' (editing existing update)'}
+              </div>
             </div>
           </div>
+
+          <fieldset className="space-y-3">
+            <legend className="block text-sm font-medium text-gray-700 mb-2">Sub-goal progress *</legend>
+            {goal.SubGoals?.filter((subGoal) => subGoal.SubGoalTitle?.trim()).map((subGoal, index) => (
+              <div key={subGoal.SubGoalID} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-gray-200 rounded-xl p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{subGoal.SubGoalTitle}</p>
+                  <p className="text-xs text-gray-500 mt-1">Sub-goal #{subGoal.SubGoalNo || index + 1} | Weight {subGoal.Weightage}%</p>
+                </div>
+                {subGoal.Status === 'Completed' ? (
+                  <span className="w-full sm:w-44 px-3 py-2 border border-emerald-200 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-semibold">
+                    Completed
+                  </span>
+                ) : (
+                  <select
+                    aria-label={`Progress status for ${subGoal.SubGoalTitle}`}
+                    value={subGoalStatuses[subGoal.SubGoalID] || subGoal.Status}
+                    onChange={(event) => handleSubGoalStatusChange(subGoal.SubGoalID, event.target.value)}
+                    className="w-full sm:w-44 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    {['Pending', 'In Progress', 'Completed', 'Cancelled'].map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            ))}
+            <p className="text-xs text-gray-500">Quarterly progress is calculated from the weight of completed sub-goals.</p>
+          </fieldset>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Achievements</label>

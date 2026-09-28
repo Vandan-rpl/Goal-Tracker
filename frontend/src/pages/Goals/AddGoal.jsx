@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import api from "../../services/api";
 
+const getSubGoalWeightageTotal = (subGoals) =>
+  subGoals
+    .filter((subGoal) => subGoal.SubGoalTitle.trim())
+    .reduce((total, subGoal) => total + Math.round(Number(subGoal.Weightage || 0) * 100), 0) / 100;
+
 const AddGoal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -153,6 +158,29 @@ const AddGoal = () => {
     e.preventDefault();
     setError("");
     setFieldErrors({});
+
+    const hasTitledSubGoal = subGoals.some((sub) => sub.SubGoalTitle.trim());
+    if (!hasTitledSubGoal) {
+      setError("Add at least one sub-goal with a title before saving this goal.");
+      setFieldErrors({ SubGoals: "At least one titled sub-goal is required." });
+      return;
+    }
+
+    const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
+    const invalidWeightage = titledSubGoals.some((sub) => {
+      const weightage = Number(sub.Weightage);
+      return sub.Weightage === "" || !Number.isFinite(weightage) || weightage <= 0 || weightage > 100;
+    });
+    const subGoalWeightageTotal = getSubGoalWeightageTotal(titledSubGoals);
+    if (invalidWeightage || subGoalWeightageTotal !== 100) {
+      const message = invalidWeightage
+        ? "Each titled sub-goal must have a weightage greater than 0 and no more than 100%."
+        : `Sub-goal weightages must total 100%. Current total: ${subGoalWeightageTotal}%.`;
+      setError(message);
+      setFieldErrors({ SubGoals: message });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -579,10 +607,10 @@ return (
               <div className="flex justify-between items-center mb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-800">
-                    Sub-Goals
+                    Sub-Goals <span className="text-red-500">*</span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Break this goal into measurable, weighted sub-goals
+                    Add sub-goals with weightages totaling 100% to track this goal's progress
                   </p>
                 </div>
                 <button
@@ -637,6 +665,8 @@ return (
                       />
                       <input
                         type="number"
+                        min="0.01"
+                        max="100"
                         step="0.01"
                         name="Weightage"
                         placeholder="Weightage (%)"
@@ -648,6 +678,14 @@ return (
                   </div>
                 ))}
               </div>
+              <p className={`text-sm font-semibold mt-3 ${getSubGoalWeightageTotal(subGoals) === 100 ? "text-emerald-700" : "text-slate-600"}`}>
+                Total sub-goal weightage: {getSubGoalWeightageTotal(subGoals).toFixed(2)}% / 100%
+              </p>
+              {fieldErrors.SubGoals && (
+                <p className="text-red-600 text-xs mt-2 font-medium" role="alert">
+                  {fieldErrors.SubGoals}
+                </p>
+              )}
             </section>
 
             {/* Action Buttons */}

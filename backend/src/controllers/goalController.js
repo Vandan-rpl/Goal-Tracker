@@ -176,9 +176,18 @@ const getGoals = async (req, res) => {
   try {
     const pool = await poolPromise;
     let query = `
-            SELECT g.*, u.Username, u.FirstName, u.LastName 
+            SELECT g.*, u.Username, u.FirstName, u.LastName,
+                 progress.SubGoalCompletionPercentage
             FROM dbo.Goals g
             JOIN dbo.Users u ON g.UserID = u.UserID
+            OUTER APPLY (
+              SELECT ISNULL(
+                SUM(CASE WHEN sg.Status = 'Completed' THEN sg.Weightage ELSE 0 END),
+                0
+              ) AS SubGoalCompletionPercentage
+              FROM dbo.GoalSubGoals sg
+              WHERE sg.GoalID = g.GoalID
+            ) progress
             WHERE g.UserID = @UserID
     `;
 
@@ -467,6 +476,48 @@ const getGoalById = async (req, res) => {
   }
 };
 
+const getSubGoalWeightageError = (subGoals) => {
+  const titledSubGoals = (Array.isArray(subGoals) ? subGoals : []).filter(
+    (subGoal) => String(subGoal?.SubGoalTitle ?? "").trim(),
+  );
+
+  if (titledSubGoals.length === 0) {
+    return "At least one titled sub-goal is required.";
+  }
+
+  let totalWeightageHundredths = 0;
+  for (const subGoal of titledSubGoals) {
+    const weightage = Number(subGoal.Weightage);
+    if (
+      subGoal.Weightage === undefined ||
+      subGoal.Weightage === null ||
+      subGoal.Weightage === "" ||
+      !Number.isFinite(weightage) ||
+      weightage <= 0 ||
+      weightage > 100 ||
+      Math.abs(weightage * 100 - Math.round(weightage * 100)) > 1e-8
+    ) {
+      return "Each titled sub-goal must have a weightage from 0.01% to 100%, with no more than two decimal places.";
+    }
+    totalWeightageHundredths += Math.round(weightage * 100);
+  }
+
+  return totalWeightageHundredths === 10000
+    ? null
+    : `Sub-goal weightages must total 100%. Current total: ${(totalWeightageHundredths / 100).toFixed(2)}%.`;
+};
+
+const isBeforeOrOnQuarterEnd = (quarterEndDate) => {
+  if (!quarterEndDate) return false;
+  const quarterEnd =
+    quarterEndDate instanceof Date
+      ? quarterEndDate.toISOString().slice(0, 10)
+      : String(quarterEndDate).slice(0, 10);
+  const today = new Date();
+  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return todayDate <= quarterEnd;
+};
+
 // 3. Add Goal
 const createGoal = async (req, res) => {
   const {
@@ -493,6 +544,26 @@ const createGoal = async (req, res) => {
     return res
       .status(400)
       .json({ success: false, message: "Mandatory goal fields are missing." });
+  }
+
+  const validSubGoals = (Array.isArray(SubGoals) ? SubGoals : []).filter(
+    (sub) => String(sub?.SubGoalTitle ?? "").trim(),
+  );
+  if (validSubGoals.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "At least one sub-goal is required to create a goal.",
+      errors: { SubGoals: "Add at least one sub-goal with a title." },
+    });
+  }
+
+  const subGoalWeightageError = getSubGoalWeightageError(validSubGoals);
+  if (subGoalWeightageError) {
+    return res.status(400).json({
+      success: false,
+      message: subGoalWeightageError,
+      errors: { SubGoals: subGoalWeightageError },
+    });
   }
 
   const pool = await poolPromise;
@@ -598,31 +669,25 @@ const createGoal = async (req, res) => {
       userId,
     );
 
-    const validSubGoals = (SubGoals || []).filter((sub) =>
-      sub?.SubGoalTitle?.trim(),
-    );
+    for (let i = 0; i < validSubGoals.length; i++) {
+      const sub = validSubGoals[i];
+      const subRequest = new sql.Request(transaction);
+      subRequest.input("GoalID", sql.BigInt, newGoalID);
+      subRequest.input("SubGoalNo", sql.Int, i + 1);
+      subRequest.input("SubGoalTitle", sql.NVarChar, sub.SubGoalTitle.trim());
+      subRequest.input(
+        "SubGoalDescription",
+        sql.NVarChar,
+        sub.SubGoalDescription || null,
+      );
+      subRequest.input("Weightage", sql.Decimal(5, 2), sub.Weightage || 0);
+      subRequest.input("Target", sql.NVarChar, sub.Target || null);
+      subRequest.input("Status", sql.VarChar, "Pending");
 
-    if (validSubGoals.length > 0) {
-      for (let i = 0; i < validSubGoals.length; i++) {
-        const sub = validSubGoals[i];
-        const subRequest = new sql.Request(transaction);
-        subRequest.input("GoalID", sql.BigInt, newGoalID);
-        subRequest.input("SubGoalNo", sql.Int, i + 1);
-        subRequest.input("SubGoalTitle", sql.NVarChar, sub.SubGoalTitle);
-        subRequest.input(
-          "SubGoalDescription",
-          sql.NVarChar,
-          sub.SubGoalDescription || null,
-        );
-        subRequest.input("Weightage", sql.Decimal(5, 2), sub.Weightage || 0);
-        subRequest.input("Target", sql.NVarChar, sub.Target || null);
-        subRequest.input("Status", sql.VarChar, "Pending");
-
-        await subRequest.query(`
-                    INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
-                    VALUES (@GoalID, @SubGoalNo, @SubGoalTitle, @SubGoalDescription, @Weightage, @Target, @Status, GETDATE())
-                `);
-      }
+      await subRequest.query(`
+          INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
+          VALUES (@GoalID, @SubGoalNo, @SubGoalTitle, @SubGoalDescription, @Weightage, @Target, @Status, GETDATE())
+      `);
     }
 
     await transaction.commit();
@@ -738,11 +803,37 @@ const updateGoal = async (req, res) => {
 
     // isDraft/canEditAllFields must be declared BEFORE ownerLocked uses them
     const isDraft = currentStatus === "Draft";
+    const approvedStatuses = [
+      "Approved",
+      "HOD Approved",
+      "Manager Approved",
+      "Business Head Approved",
+      "Reviewed By HOD",
+      "Review By Business Head",
+    ];
+    const isGoalOwner = Number(existingGoal.UserID) === Number(userId);
+    const ownerCanEditApprovedGoal =
+      isGoalOwner &&
+      approvedStatuses.includes(currentStatus) &&
+      isBeforeOrOnQuarterEnd(existingGoal.QuarterEndDate);
     const canEditAllFields =
       isDraft ||
       currentStatus === "Rejected" ||
       isEnterpriseGoalManager ||
-      isTeamGoalManager;
+      isTeamGoalManager ||
+      ownerCanEditApprovedGoal;
+
+    if (canEditAllFields && Array.isArray(SubGoals) && SubGoals.length > 0) {
+      const subGoalWeightageError = getSubGoalWeightageError(SubGoals);
+      if (subGoalWeightageError) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: subGoalWeightageError,
+          errors: { SubGoals: subGoalWeightageError },
+        });
+      }
+    }
 
     const ownerLocked =
       !isEnterpriseGoalManager && !isTeamGoalManager && !canEditAllFields;
@@ -993,6 +1084,17 @@ const updateGoal = async (req, res) => {
     );
 
     if (canEditAllFields && (SubGoals || []).length > 0) {
+      const existingSubGoalsResult = await new sql.Request(transaction)
+        .input("GoalID", sql.BigInt, id)
+        .query(
+          "SELECT SubGoalID, Status FROM dbo.GoalSubGoals WHERE GoalID = @GoalID",
+        );
+      const existingSubGoalStatuses = new Map(
+        existingSubGoalsResult.recordset.map((subGoal) => [
+          String(subGoal.SubGoalID),
+          subGoal.Status,
+        ]),
+      );
       const deleteSubRequest = new sql.Request(transaction);
       await deleteSubRequest
         .input("GoalID", sql.BigInt, id)
@@ -1011,7 +1113,11 @@ const updateGoal = async (req, res) => {
         );
         subRequest.input("Weightage", sql.Decimal(5, 2), sub.Weightage || 0);
         subRequest.input("Target", sql.NVarChar, sub.Target || null);
-        subRequest.input("Status", sql.VarChar, "Pending");
+        subRequest.input(
+          "Status",
+          sql.VarChar,
+          existingSubGoalStatuses.get(String(sub.SubGoalID)) || "Pending",
+        );
 
         await subRequest.query(`
                     INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
@@ -1834,6 +1940,14 @@ const updateSubGoalStatus = async (req, res) => {
     }
     const subGoal = subGoalRes.recordset[0];
     const oldStatus = subGoal.Status;
+
+    if (oldStatus === "Completed" && Status !== "Completed") {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Completed sub-goals cannot be reopened.",
+      });
+    }
 
     const updateReq = new sql.Request(transaction);
     await updateReq

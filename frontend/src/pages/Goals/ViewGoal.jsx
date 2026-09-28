@@ -12,6 +12,7 @@ const ViewGoal = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [subGoalUpdatingId, setSubGoalUpdatingId] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
   // Quarterly update history state
@@ -189,6 +190,35 @@ const ViewGoal = () => {
     }
   };
 
+  const handleSubGoalStatusChange = async (subGoal, status) => {
+    try {
+      setSubGoalUpdatingId(subGoal.SubGoalID);
+      const response = await api.put(
+        `/goals/${id}/subgoals/${subGoal.SubGoalID}/status`,
+        { Status: status },
+      );
+
+      if (response.data.success) {
+        setGoal((previous) => ({
+          ...previous,
+          SubGoals: previous.SubGoals.map((item) =>
+            item.SubGoalID === subGoal.SubGoalID
+              ? { ...item, Status: status }
+              : item,
+          ),
+        }));
+      } else {
+        alert(response.data.message || "Failed to update sub-goal progress.");
+      }
+    } catch (err) {
+      alert(
+        err.response?.data?.message || "Server error while updating sub-goal progress.",
+      );
+    } finally {
+      setSubGoalUpdatingId(null);
+    }
+  };
+
   const handleSubmitReview = async () => {
     try {
       setReviewSubmitting(true);
@@ -257,6 +287,13 @@ const ViewGoal = () => {
     return "bg-amber-50 text-amber-700 border-amber-200/60";
   };
 
+  const goalCompletionPercentage = Number(
+    (goal.SubGoals || [])
+      .filter((subGoal) => subGoal.Status === "Completed")
+      .reduce((total, subGoal) => total + Number(subGoal.Weightage || 0), 0)
+      .toFixed(2),
+  );
+
   return (
   <div className="flex-1 bg-slate-50 min-h-screen overflow-y-auto py-10 px-4 sm:px-6 lg:px-8 text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
     <div className="max-w-5xl mx-auto space-y-8">
@@ -321,6 +358,30 @@ const ViewGoal = () => {
           <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
             {goal.GoalTitle}
           </h1>
+        </div>
+
+        <div className="space-y-2" aria-label="Overall goal completion">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Overall Completion
+            </span>
+            <span className="text-sm font-bold text-emerald-700">
+              {goalCompletionPercentage}%
+            </span>
+          </div>
+          <div
+            className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={goalCompletionPercentage}
+            aria-label="Overall goal completion percentage"
+          >
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+              style={{ width: `${Math.min(100, goalCompletionPercentage)}%` }}
+            />
+          </div>
         </div>
 
         {/* Key Metrics Grid */}
@@ -428,6 +489,9 @@ const ViewGoal = () => {
             <div className="space-y-3">
               {quarterlyUpdates.map((update) => {
                 const isOpen = expandedQuarter === update.Quarter;
+                const updateYear = update.CreatedAt
+                  ? new Date(update.CreatedAt).getFullYear()
+                  : null;
                 return (
                   <div key={update.Quarter} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-xs">
                     <button
@@ -437,7 +501,7 @@ const ViewGoal = () => {
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-md uppercase">
-                          {update.Quarter}
+                          {update.Quarter}{updateYear ? ` · ${updateYear}` : ""}
                         </span>
                         <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full">
                           {update.ProgressPercentage}% Progress
@@ -513,17 +577,37 @@ const ViewGoal = () => {
                         <p className="text-xs text-slate-500">Target: {sub.Target}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-semibold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs">
                         Weight: {sub.Weightage}%
                       </span>
-                      <span className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${
-                        sub.Status === "Completed"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-sky-50 text-sky-700 border-sky-200"
-                      }`}>
-                        {sub.Status}
-                      </span>
+                      {isGoalOwner && sub.Status !== "Completed" ? (
+                        <select
+                          aria-label={`Progress status for ${sub.SubGoalTitle}`}
+                          value={sub.Status}
+                          disabled={subGoalUpdatingId === sub.SubGoalID}
+                          onChange={(event) =>
+                            handleSubGoalStatusChange(sub, event.target.value)
+                          }
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-60"
+                        >
+                          {["Pending", "In Progress", "Completed", "Cancelled"].map(
+                            (status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      ) : (
+                        <span className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${
+                          sub.Status === "Completed"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-sky-50 text-sky-700 border-sky-200"
+                        }`}>
+                          {sub.Status}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

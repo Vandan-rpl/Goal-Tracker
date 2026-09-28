@@ -13,7 +13,7 @@ const { sql } = require('../config/db');
  *   - `null` as a sentinel meaning "no filter — see everything" (Admin).
  *
  * Role names match Users.Role values exactly (see constants/roles.js):
- * 'Employee', 'HOD', 'BusinessHead', 'Admin'.
+ * 'Employee', 'Manager', 'HOD', 'BusinessHead', 'CFO', 'Admin'.
  */
 // GoalScope.js
 const getScopedUserIds = async (pool, userId, role, { forApproval = false } = {}) => {
@@ -23,12 +23,22 @@ const getScopedUserIds = async (pool, userId, role, { forApproval = false } = {}
         return [userId];
     }
 
+    if (normalizedRole === 'MANAGER') {
+        const result = await pool.request()
+            .input('UserID', sql.Int, userId)
+            .query(`
+                SELECT UserID FROM dbo.Users
+                WHERE ReportingManagerID = @UserID OR UserID = @UserID
+            `);
+        return result.recordset.map((r) => r.UserID);
+    }
+
     if (normalizedRole === 'HOD') {
         const result = await pool.request()
             .input('UserID', sql.Int, userId)
             .query(`
                 SELECT UserID FROM dbo.Users
-                WHERE ReportingManagerID = @UserID OR HODID = @UserID OR UserID = @UserID
+                WHERE HODID = @UserID OR UserID = @UserID
             `);
         return result.recordset.map((r) => r.UserID);
     }

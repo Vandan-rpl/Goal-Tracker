@@ -3,9 +3,9 @@ import api from "./api"; // src/services/api.js — baseURL already includes /ap
 // ---------------------------------------------------------------------------
 // Goal Dashboard API calls — mapped to routes in goalRoutes.js
 // getGoals controller returns: { success, data: [...] } — a FLAT array of
-// dbo.Goals rows (joined with Users for name/username), ORDER BY CreatedDate
-// DESC. It does NOT include GoalSubGoal rows. Every function below unwraps
-// res.data.data to hand components a plain array/object, not the envelope.
+// dbo.Goals rows with a computed SubGoalCompletionPercentage, joined with
+// Users for name/username, ORDER BY CreatedDate DESC. Every function below
+// unwraps res.data.data to hand components a plain array/object, not the envelope.
 // ---------------------------------------------------------------------------
 
 const BASE = "/goals";
@@ -13,7 +13,7 @@ const BASE = "/goals";
 /**
  * Fetch the logged-in employee's own goals.
  * Route: GET /api/v1/goals -> getGoals (reads UserID from JWT)
- * NOTE: response rows have NO sub-goals attached — see GoalSubGoal note below.
+ * Completion is the total weightage of completed sub-goals.
  */
 export async function getEmployeeGoals() {
   const res = await api.get(BASE);
@@ -90,11 +90,4 @@ export async function getAllEmployeeGoals() {
 }
 
 // ---------------------------------------------------------------------------
-// PENDING — no route confirmed/built yet:
-// - Fetching a goal's GoalSubGoal rows (getGoals doesn't join them; unclear
-//   if getGoalById does either).
-// - Updating a single sub-goal's Status ('Pending' | 'In Progress' |
-//   'Completed' | 'Cancelled'), which is what should drive a goal's rolled-up
-//   progress %. Needs e.g. PUT /api/v1/goals/sub-goals/:subGoalId/status
-//   once you've checked whether it exists.
 // ---------------------------------------------------------------------------

@@ -2,6 +2,11 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../services/api";
 
+const getSubGoalWeightageTotal = (subGoals) =>
+  subGoals
+    .filter((subGoal) => subGoal.SubGoalTitle.trim())
+    .reduce((total, subGoal) => total + Math.round(Number(subGoal.Weightage || 0) * 100), 0) / 100;
+
 // TODO: consider moving this to a shared utils/fiscalQuarter.js on the
 // frontend (mirroring the backend's utils/fiscalQuarter.js) if more than
 // one component ends up needing it.
@@ -25,6 +30,14 @@ function isWithinCarryForwardWindow(quarterEndDate) {
   windowEnd.setDate(windowEnd.getDate() + 15);
 
   return today >= windowStart && today <= windowEnd;
+}
+
+function isBeforeOrOnQuarterEnd(quarterEndDate) {
+  if (!quarterEndDate) return false;
+  const quarterEnd = String(quarterEndDate).slice(0, 10);
+  const today = new Date();
+  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return todayDate <= quarterEnd;
 }
 
 const EditGoal = () => {
@@ -102,6 +115,7 @@ const EditGoal = () => {
         if (goal.SubGoals && goal.SubGoals.length > 0) {
           setSubGoals(
             goal.SubGoals.map((sub) => ({
+              SubGoalID: sub.SubGoalID,
               SubGoalNo: sub.SubGoalNo,
               SubGoalTitle: sub.SubGoalTitle || "",
               SubGoalDescription: sub.SubGoalDescription || "",
@@ -155,6 +169,22 @@ const EditGoal = () => {
     e.preventDefault();
     setError("");
     setFieldErrors({});
+
+    const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
+    const invalidSubGoalWeightage = titledSubGoals.some((sub) => {
+      const weightage = Number(sub.Weightage);
+      return sub.Weightage === "" || !Number.isFinite(weightage) || weightage <= 0 || weightage > 100;
+    });
+    const subGoalWeightageTotal = getSubGoalWeightageTotal(titledSubGoals);
+    if (titledSubGoals.length > 0 && (invalidSubGoalWeightage || subGoalWeightageTotal !== 100)) {
+      const message = invalidSubGoalWeightage
+        ? "Each titled sub-goal must have a weightage greater than 0 and no more than 100%."
+        : `Sub-goal weightages must total 100%. Current total: ${subGoalWeightageTotal}%.`;
+      setError(message);
+      setFieldErrors({ SubGoals: message });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -201,6 +231,20 @@ const EditGoal = () => {
   const terminalStatus = ["Completed", "Cancelled"].includes(
     formData.GoalStatus,
   );
+  const approvedStatuses = [
+    "Approved",
+    "HOD Approved",
+    "Manager Approved",
+    "Business Head Approved",
+    "Reviewed By HOD",
+    "Review By Business Head",
+  ];
+  const canOwnerEditApprovedGoal =
+    !canManageAllGoals &&
+    !canManageTeamGoals &&
+    !terminalStatus &&
+    approvedStatuses.includes(formData.GoalStatus) &&
+    isBeforeOrOnQuarterEnd(quarterEndDate);
 
   // True for any status the owner can't freely edit — i.e. anything except
   // Draft or Rejected — for a regular employee (not a manager/approver
@@ -210,7 +254,11 @@ const EditGoal = () => {
   // every other locked status (HOD Approved, Manager Approved, Approved,
   // Running, Postpone, etc).
   const isOwnerLocked =
-    !canManageAllGoals && !canManageTeamGoals && !isDraft && !isRejected;
+    !canManageAllGoals &&
+    !canManageTeamGoals &&
+    !isDraft &&
+    !isRejected &&
+    !canOwnerEditApprovedGoal;
 
   const inCarryForwardWindow =
     isOwnerLocked &&
@@ -234,7 +282,9 @@ const EditGoal = () => {
             ? `This goal is ${formData.GoalStatus} and cannot be edited.`
             : isSubmitted
               ? "This goal is currently Submitted and cannot be edited by the user."
-              : "This goal is awaiting approval and cannot be edited right now."}
+              : approvedStatuses.includes(formData.GoalStatus)
+                ? "This approved goal can only be edited before its quarter ends."
+                : "This goal is awaiting approval and cannot be edited right now."}
         </div>
         <button
           onClick={() => navigate("/goals")}
@@ -555,7 +605,12 @@ const EditGoal = () => {
 
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Sub-Goals</h3>
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Sub-Goals</h3>
+                <p className={`text-sm font-semibold mt-1 ${getSubGoalWeightageTotal(subGoals) === 100 ? "text-emerald-700" : "text-gray-500"}`}>
+                  Total weightage: {getSubGoalWeightageTotal(subGoals).toFixed(2)}% / 100%
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={addSubGoalRow}
@@ -603,6 +658,8 @@ const EditGoal = () => {
                   <div>
                     <input
                       type="number"
+                      min="0.01"
+                      max="100"
                       step="0.01"
                       name="Weightage"
                       placeholder="Weightage (%)"
@@ -615,6 +672,11 @@ const EditGoal = () => {
                 </div>
               </div>
             ))}
+            {fieldErrors.SubGoals && (
+              <p className="text-red-600 text-xs mt-2 font-medium" role="alert">
+                {fieldErrors.SubGoals}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center justify-end space-x-4 pt-4 border-t">
