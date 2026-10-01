@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { getUniqueDepartments } from '../../utils/departmentOptions';
 
 const AddEmployees = () => {
   const roleRanks = {
@@ -42,7 +43,7 @@ const AddEmployees = () => {
       const res = await api.get('/admin/dropdown-data');
       if (res.data.success) {
         setEmployees(res.data.data.employees || []);
-        setDepartments(res.data.data.departments || []);
+        setDepartments(getUniqueDepartments(res.data.data.departments || []));
       }
     } catch (err) {
       console.error('Error fetching dropdown data:', err);

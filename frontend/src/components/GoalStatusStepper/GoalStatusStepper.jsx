@@ -1,116 +1,129 @@
 import React from 'react';
 
-/**
- * ============================================================
- * GoalStatusStepper
- * ============================================================
- * Visual progress indicator for the goal workflow:
- *   Create → HOD Approval → Activated → Quarterly Update →
- *   HOD Review → Continuation → Final Evaluation → Reports
- *
- * This is purely presentational — it renders a step based on the
- * `status` string already coming back from the API. It does not fetch
- * or change any data, so dropping it into a page doesn't touch that
- * page's existing API calls or business logic.
- *
- * IMPORTANT ASSUMPTION (please verify against your real data):
- * The actual `GoalStatus` values that exist in the codebase today are:
- *   Draft, Submitted, HOD Approved, Reviewed By HOD,
- *   Business Head Approved, Approved, Rejected
- * There is no GoalStatus value in the current backend for "Activated",
- * "Continuation", or "Final Evaluation" — those three steps of your
- * 8-step spec don't appear to have a corresponding status string yet
- * (Quarterly Update / Final Evaluation look like separate pages/flows
- * rather than distinct GoalStatus values). The mapping below is my best
- * good-faith guess at slotting the real statuses into your 8 named
- * steps; please double check STATUS_TO_STEP against how your backend
- * actually distinguishes "Activated" vs "Continuation" before relying on
- * this for anything besides a visual approximation. Any status that
- * doesn't match a known one below safely falls back to step 0 (Create)
- * rather than crashing.
- * ============================================================
- */
-
 export const WORKFLOW_STEPS = [
-  'Create',
-  'HOD Approval',
-  'Activated',
-  'Quarterly Update',
-  'HOD Review',
-  'Continuation',
-  'Final Evaluation',
-  'Reports',
+  'Created',
+  'Submitted',
+  'Approval',
+  'Active',
+  'Completed',
 ];
 
-// Best-effort mapping from real GoalStatus strings to a step index.
-// Adjust freely — this is the one place that needs to change if your
-// backend's status vocabulary differs from this guess.
 const STATUS_TO_STEP = {
-  Draft: 0,
-  Submitted: 1,
-  'HOD Approved': 2,
-  Approved: 2,
-  'Business Head Approved': 2,
-  'Reviewed By HOD': 4,
-  Rejected: 1, // rejected during the approval step; rendered in red, not green
+  draft: 0,
+  submitted: 1,
+  'hod approved': 2,
+  'manager approved': 2,
+  'reviewed by hod': 2,
+  'business head approved': 2,
+  'review by business head': 2,
+  approved: 3,
+  running: 3,
+  postpone: 3,
+  cancelled: 3,
+  completed: 4,
+  rejected: 2,
 };
 
-const REJECTED_STATUSES = ['Rejected'];
+const EXCEPTIONAL_STATUSES = {
+  rejected: { label: 'Rejected', color: 'red' },
+  cancelled: { label: 'Cancelled', color: 'red' },
+  postpone: { label: 'Postponed', color: 'amber' },
+};
 
 export default function GoalStatusStepper({ status, className = '' }) {
-  const isRejected = REJECTED_STATUSES.includes(status);
-  const activeStep = STATUS_TO_STEP[status] ?? 0;
+  const normalizedStatus = String(status || 'Draft').trim().toLowerCase();
+  const activeStep = STATUS_TO_STEP[normalizedStatus] ?? 0;
+  const isCompleted = normalizedStatus === 'completed';
+  const exceptionalStatus = EXCEPTIONAL_STATUSES[normalizedStatus];
+  const statusColor = exceptionalStatus?.color;
+  const statusText = exceptionalStatus?.label || status || 'Draft';
 
   return (
-    <div className={`w-full overflow-x-auto ${className}`}>
-      <div className="flex items-center min-w-max">
+    <section
+      className={`w-full ${className}`}
+      aria-label={`Goal workflow: ${statusText}`}
+    >
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          Goal workflow
+        </span>
+        <span
+          className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+            statusColor === 'red'
+              ? 'border-rose-200 bg-rose-50 text-rose-700'
+              : statusColor === 'amber'
+                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : isCompleted
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+          }`}
+        >
+          {statusText}
+        </span>
+      </div>
+
+      <ol className="grid grid-cols-5 items-start" aria-label="Workflow stages">
         {WORKFLOW_STEPS.map((label, index) => {
-          const isCompleted = index < activeStep && !isRejected;
-          const isCurrent = index === activeStep;
-          const isCurrentRejected = isCurrent && isRejected;
+          const stepIsCurrent = index === activeStep && !isCompleted;
+          const stepIsException = stepIsCurrent && Boolean(exceptionalStatus);
+          const stepIsCompleted =
+            index < activeStep || (isCompleted && index === activeStep);
 
-          let circleClasses = 'bg-gray-100 text-gray-400 border-gray-200';
-          if (isCompleted) {
-            circleClasses = 'bg-emerald-500 text-white border-emerald-500';
-          } else if (isCurrentRejected) {
-            circleClasses = 'bg-red-500 text-white border-red-500';
-          } else if (isCurrent) {
-            circleClasses = 'bg-indigo-600 text-white border-indigo-600';
-          }
+          const markerColor = stepIsException
+            ? statusColor === 'amber'
+              ? 'border-amber-500 bg-amber-500 text-white'
+              : 'border-rose-500 bg-rose-500 text-white'
+            : stepIsCompleted
+              ? 'border-emerald-600 bg-emerald-600 text-white'
+              : stepIsCurrent
+                ? 'border-indigo-600 bg-indigo-600 text-white'
+                : 'border-slate-200 bg-white text-slate-400';
 
-          const labelClasses = isCurrent
-            ? isCurrentRejected
-              ? 'text-red-700 font-semibold'
-              : 'text-indigo-700 font-semibold'
-            : isCompleted
-              ? 'text-emerald-700 font-medium'
-              : 'text-gray-400';
+          const labelColor = stepIsException
+            ? statusColor === 'amber'
+              ? 'text-amber-800'
+              : 'text-rose-700'
+            : stepIsCompleted
+              ? 'text-emerald-700'
+              : stepIsCurrent
+                ? 'text-indigo-700'
+                : 'text-slate-400';
 
           return (
-            <React.Fragment key={label}>
-              <div className="flex flex-col items-center gap-1.5 px-1" style={{ minWidth: 84 }}>
-                <div
-                  className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-colors ${circleClasses}`}
-                  title={label}
-                >
-                  {isCompleted ? '✓' : isCurrentRejected ? '✕' : index + 1}
-                </div>
-                <span className={`text-[11px] text-center leading-tight ${labelClasses}`}>
-                  {label}
-                </span>
-              </div>
+            <li
+              key={label}
+              className="relative flex min-w-0 flex-col items-center gap-2 text-center"
+              aria-current={stepIsCurrent ? 'step' : undefined}
+            >
               {index < WORKFLOW_STEPS.length - 1 && (
-                <div
-                  className={`h-0.5 flex-1 mt-[-18px] ${
-                    index < activeStep && !isRejected ? 'bg-emerald-500' : 'bg-gray-200'
+                <span
+                  className={`absolute left-1/2 top-4 z-0 h-0.5 w-full ${
+                    index < activeStep || isCompleted
+                      ? 'bg-emerald-500'
+                      : 'bg-slate-200'
                   }`}
-                  style={{ minWidth: 20 }}
+                  aria-hidden="true"
                 />
               )}
-            </React.Fragment>
+              <span
+                className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors ${markerColor}`}
+                aria-hidden="true"
+              >
+                {stepIsException
+                  ? statusColor === 'amber'
+                    ? '!'
+                    : '×'
+                  : stepIsCompleted
+                    ? '✓'
+                    : index + 1}
+              </span>
+              <span className={`text-[11px] font-medium leading-tight ${labelColor}`}>
+                {label}
+              </span>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ol>
+    </section>
   );
 }

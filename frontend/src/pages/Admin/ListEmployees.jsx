@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { getUniqueDepartments } from '../../utils/departmentOptions';
 
 const ListEmployees = () => {
   const [employees, setEmployees] = useState([]);
@@ -43,7 +44,12 @@ const ListEmployees = () => {
     try {
       const res = await api.get('/admin/dropdown-data');
       if (res.data.success) {
-        setDepartments(res.data.data.departments || []);
+        setDepartments(
+          getUniqueDepartments(
+            res.data.data.departments || [],
+            employee.DepartmentID,
+          ),
+        );
         setAllEmployees((res.data.data.employees || []).filter((item) => item.UserID !== employee.UserID));
       }
     } catch (err) {
