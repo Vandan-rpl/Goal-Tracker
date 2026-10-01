@@ -1,3 +1,5 @@
+IF OBJECT_ID(N'dbo.GoalJointAccountability', N'U') IS NULL
+BEGIN
 CREATE TABLE dbo.GoalJointAccountability (
     JointAccountabilityID INT IDENTITY(1,1) PRIMARY KEY,
     GoalID INT NOT NULL,
@@ -11,7 +13,16 @@ CREATE TABLE dbo.GoalJointAccountability (
     CONSTRAINT FK_JointAccountability_User FOREIGN KEY (UserID) REFERENCES dbo.Users(UserID),
     CONSTRAINT CK_JointAccountability_Status CHECK (Status IN ('Pending', 'Accepted', 'Declined'))
 );
+END;
 
 -- Prevent adding the same person twice to the same goal
-CREATE UNIQUE INDEX UQ_JointAccountability_Goal_User
-    ON dbo.GoalJointAccountability (GoalID, UserID);
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UQ_JointAccountability_Goal_User'
+      AND object_id = OBJECT_ID(N'dbo.GoalJointAccountability')
+)
+BEGIN
+    CREATE UNIQUE INDEX UQ_JointAccountability_Goal_User
+        ON dbo.GoalJointAccountability (GoalID, UserID);
+END;

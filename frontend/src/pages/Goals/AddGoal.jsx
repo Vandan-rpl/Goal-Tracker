@@ -184,12 +184,36 @@ const AddGoal = () => {
     setLoading(true);
 
     try {
+      const selectedJointAccountabilities = [
+        ...new Map(
+          jointAccountabilities
+            .filter((accountability) => accountability.UserID)
+            .map((accountability) => [
+              String(accountability.UserID),
+              accountability,
+            ]),
+        ).values(),
+      ];
+      const jointAccountabilityNames = selectedJointAccountabilities
+        .map((accountability) => {
+          const employee = jointAccountabilityUsers.find(
+            (candidate) =>
+              String(candidate.UserID) === String(accountability.UserID),
+          );
+          return employee
+            ? [employee.FirstName, employee.LastName].filter(Boolean).join(" ")
+            : null;
+        })
+        .filter(Boolean)
+        .join(", ");
+
       const payload = {
         ...formData,
+        JointAccountability: jointAccountabilityNames || null,
         UserID: user?.userId || user?.UserID,
         GoalStatus: status,
         SubGoals: subGoals,
-        JointAccountabilities: jointAccountabilities.filter((ja) => ja.UserID),
+        JointAccountabilities: selectedJointAccountabilities,
       };
 
       const response = await api.post("/goals", payload);

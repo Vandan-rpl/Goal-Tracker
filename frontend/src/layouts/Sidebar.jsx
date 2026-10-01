@@ -72,6 +72,20 @@ const Sidebar = () => {
           Goal Management
         </Link>
 
+        <Link
+          to="/goals/joint"
+          className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
+            isActive("/goals/joint")
+              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
+              : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+          }`}
+        >
+          <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-10a4 4 0 11-8 0 4 4 0 018 0zm2 10h2v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+          </svg>
+          My Joint Goals
+        </Link>
+
         {/* Management Section */}
         {isManagerOrHOD && (
           <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-1">

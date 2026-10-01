@@ -5,6 +5,7 @@ import EmptyState from '../../components/EmptyState/EmptyState';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import { Button } from '@mui/material';
 import api from '../../services/api';
+import { getFiscalQuarterOptions } from '../../utils/fiscalQuarter';
 
 const STATUS_OPTIONS = [
   'Draft', 'Submitted', 'HOD Approved', 'Reviewed By HOD',
@@ -12,12 +13,7 @@ const STATUS_OPTIONS = [
   'Completed', 'Cancelled', 'Running', 'Approved', 'Postpone',
 ];
 
-// TODO: confirm this matches the real stored format
-// (SELECT DISTINCT Quarter FROM dbo.Goals) before relying on this list.
-const QUARTER_OPTIONS = [
-  'Q1-2026', 'Q2-2026', 'Q3-2026', 'Q4-2026',
-  'Q1-2027', 'Q2-2027', 'Q3-2027', 'Q4-2027',
-];
+const QUARTER_OPTIONS = getFiscalQuarterOptions();
 
 const ListGoal = () => {
   const [goals, setGoals] = useState([]);
@@ -91,8 +87,8 @@ const ListGoal = () => {
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">All Quarters</option>
-              {QUARTER_OPTIONS.map((q) => (
-                <option key={q} value={q}>{q}</option>
+              {QUARTER_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </div>
@@ -181,11 +177,11 @@ const ListGoal = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                         <Link to={`/goals/view/${goal.GoalID}`} className="text-indigo-600 hover:text-indigo-900 font-semibold">View</Link>
 
-                        {goal.GoalStatus !== 'Submitted' && (
+                        {goal.IsGoalOwner && goal.GoalStatus !== 'Submitted' && (
                           <Link to={`/goals/edit/${goal.GoalID}`} className="text-blue-600 hover:text-blue-900 font-semibold">Edit</Link>
                         )}
 
-                        {goal.GoalStatus === 'Draft' && (
+                        {goal.IsGoalOwner && goal.GoalStatus === 'Draft' && (
                           <button onClick={() => handleDelete(goal.GoalID)} className="text-red-600 hover:text-red-900 font-semibold">Delete</button>
                         )}
                       </td>

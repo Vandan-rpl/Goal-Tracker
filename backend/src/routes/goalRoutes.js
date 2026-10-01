@@ -3,6 +3,7 @@ const router = express.Router();
 const { 
     getGoals,
     getJointAccountabilityUsers,
+    getJointGoals,
     getAllEmployeeGoals,
     getGoalById,
     createGoal, 
@@ -12,7 +13,9 @@ const {
     submitGoalReview,
     getGoalHistory,
     updateSubGoalStatus,
-    getTeamGoals
+    getTeamGoals,
+    updateJointAccountabilityStatus,
+    updateJointContributionNote,
 } = require('../controllers/goalController');
 
 const { verifyToken } = require('../middleware/authMiddleware');
@@ -23,6 +26,9 @@ router.use(verifyToken);
 router.get('/', getGoals);
 
 router.get('/joint-accountability-users', getJointAccountabilityUsers);
+router.get('/joint-accountability', getJointGoals);
+router.patch('/joint-accountability/:id/status', updateJointAccountabilityStatus);
+router.put('/joint-accountability/:goalId/contribution-note', updateJointContributionNote);
 
 //get all employee goals for CFO
 router.get('/all-employee-goals', getAllEmployeeGoals);

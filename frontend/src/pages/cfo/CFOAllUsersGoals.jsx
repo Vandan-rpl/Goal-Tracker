@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { getFiscalQuarterOptions } from "../../utils/fiscalQuarter";
 
 const statusBadgeClass = (status) => {
   if (status?.includes("Approved")) return "bg-green-100 text-green-700";
@@ -22,11 +23,7 @@ const PENDING_STATUS_OPTIONS = [
   "Approved",
 ];
 
-// TODO: confirm against `SELECT DISTINCT Quarter FROM dbo.Goals`
-const QUARTER_OPTIONS = [
-  "Q1-2026", "Q2-2026", "Q3-2026", "Q4-2026",
-  "Q1-2027", "Q2-2027", "Q3-2027", "Q4-2027",
-];
+const QUARTER_OPTIONS = getFiscalQuarterOptions();
 
 const CFOAllUsersGoals = () => {
   const [allGoals, setAllGoals] = useState([]);
@@ -92,8 +89,8 @@ const CFOAllUsersGoals = () => {
             className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">All Quarters</option>
-            {QUARTER_OPTIONS.map((q) => (
-              <option key={q} value={q}>{q}</option>
+            {QUARTER_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </div>

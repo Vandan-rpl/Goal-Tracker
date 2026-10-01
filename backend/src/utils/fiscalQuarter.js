@@ -24,8 +24,7 @@ function getFiscalQuarter(date = new Date()) {
     quarterEndDate = new Date(year, 2, 31);
   }
 
-  const fyLabel = `FY${String(fyStartYear).slice(-2)}-${String(fyStartYear + 1).slice(-2)}`;
-  return { label: `Q${quarter}-${fyLabel}`, quarterEndDate };
+  return { label: `Q${quarter}-${fyStartYear + 1}`, quarterEndDate };
 }
 
 function getNextFiscalQuarter(fromQuarterEndDate) {

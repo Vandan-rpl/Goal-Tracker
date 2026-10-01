@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from './pages/Dashboard/Dashboard';
 import ListGoal from './pages/Goals/ListGoal';
+import JointGoals from './pages/Goals/JointGoals';
 import AddGoal from './pages/Goals/AddGoal';
 import EditGoal from './pages/Goals/EditGoal';
 import ViewGoal from './pages/Goals/ViewGoal';
@@ -48,6 +49,7 @@ function App() {
             <Route element={<DashboardLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/goals" element={<ListGoal />} />
+              <Route path="/goals/joint" element={<JointGoals />} />
               <Route path="/goals/add" element={<AddGoal />} />
               <Route path="/goals/edit/:id" element={<EditGoal />} />
               <Route path="/goals/view/:id" element={<ViewGoal />} />

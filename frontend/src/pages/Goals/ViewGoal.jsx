@@ -12,6 +12,8 @@ const ViewGoal = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [jointActionLoading, setJointActionLoading] = useState(false);
+  const [contributionSaving, setContributionSaving] = useState(false);
   const [subGoalUpdatingId, setSubGoalUpdatingId] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -76,11 +78,6 @@ const ViewGoal = () => {
   );
 
   const reviewableStatuses = ["HOD Approved", "Reviewed By HOD"];
-  const canSubmitReview =
-    isAuthorizedApprover &&
-    goal &&
-    reviewableStatuses.includes(goal.GoalStatus);
-
   let loggedInUserId = null;
   try {
     const token = localStorage.getItem("token");
@@ -95,9 +92,17 @@ const ViewGoal = () => {
     goal &&
     loggedInUserId != null &&
     Number(goal.UserID) === Number(loggedInUserId);
+  const isJointParticipant =
+    goal?.IsJointParticipant === true && !isGoalOwner;
+  const canSubmitReview =
+    isAuthorizedApprover &&
+    goal &&
+    !isJointParticipant &&
+    reviewableStatuses.includes(goal.GoalStatus);
 
   const canShowApproveReject =
     goal &&
+    !isJointParticipant &&
     ((canCfoApprove &&
       [
         "HOD Approved",
@@ -110,6 +115,7 @@ const ViewGoal = () => {
         goal.GoalStatus === "Submitted"));
 
   const canShowCfoActions =
+    !isJointParticipant &&
     canCfoApprove &&
     [
       "HOD Approved",
@@ -246,6 +252,35 @@ const ViewGoal = () => {
     }
   };
 
+  const handleJointStatusUpdate = async (status) => {
+    try {
+      setJointActionLoading(true);
+      await api.patch(
+        `/goals/joint-accountability/${goal.JointAccountabilityID}/status`,
+        { status },
+      );
+      setGoal((previous) => ({ ...previous, JointStatus: status }));
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to update your invitation.");
+    } finally {
+      setJointActionLoading(false);
+    }
+  };
+
+  const handleContributionNoteSave = async () => {
+    try {
+      setContributionSaving(true);
+      await api.put(
+        `/goals/joint-accountability/${goal.GoalID}/contribution-note`,
+        { contributionNote: goal.ContributionNote || "" },
+      );
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to save your contribution note.");
+    } finally {
+      setContributionSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 bg-slate-50/50 min-h-screen flex flex-col items-center justify-center text-slate-500 gap-3">
@@ -325,6 +360,71 @@ const ViewGoal = () => {
           </span>
         </div>
       </div>
+
+      {isJointParticipant && (
+        <section className="bg-sky-50 border border-sky-200 rounded-2xl p-5 sm:p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-sky-800">Joint accountability</p>
+              <p className="text-sm text-slate-700 mt-1">
+                Goal owner: <span className="font-semibold">{[goal.OwnerFirstName, goal.OwnerLastName].filter(Boolean).join(" ") || "Unknown"}</span>
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-sky-900 bg-white border border-sky-200 rounded-lg px-3 py-1.5">
+              {goal.JointStatus || "Pending"}
+            </span>
+          </div>
+          {goal.JointStatus === "Pending" && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleJointStatusUpdate("Accepted")}
+                disabled={jointActionLoading}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => handleJointStatusUpdate("Declined")}
+                disabled={jointActionLoading}
+                className="px-4 py-2 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                Decline
+              </button>
+            </div>
+          )}
+          <div className="space-y-2">
+            <label htmlFor="joint-contribution-note" className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+              Your contribution note
+            </label>
+            <textarea
+              id="joint-contribution-note"
+              rows={3}
+              maxLength={500}
+              value={goal.ContributionNote || ""}
+              onChange={(event) =>
+                setGoal((previous) => ({
+                  ...previous,
+                  ContributionNote: event.target.value,
+                }))
+              }
+              className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">{(goal.ContributionNote || "").length}/500</span>
+              <button
+                type="button"
+                onClick={handleContributionNoteSave}
+                disabled={contributionSaving}
+                className="px-4 py-2 bg-sky-700 hover:bg-sky-800 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {contributionSaving ? "Saving..." : "Save note"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Main Container Card */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-10 space-y-10">
@@ -581,7 +681,7 @@ const ViewGoal = () => {
                       <span className="text-xs font-semibold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs">
                         Weight: {sub.Weightage}%
                       </span>
-                      {isGoalOwner && sub.Status !== "Completed" ? (
+                      {isGoalOwner && !isJointParticipant && isApproved ? (
                         <select
                           aria-label={`Progress status for ${sub.SubGoalTitle}`}
                           value={sub.Status}
@@ -708,8 +808,8 @@ const ViewGoal = () => {
 
         {/* Bottom Actions */}
         <div className="pt-6 border-t border-slate-200 flex items-center justify-between">
-          {goal.GoalStatus === "Draft" ||
-          (goal.GoalStatus === "Rejected" && isGoalOwner) ? (
+          {isGoalOwner &&
+          (goal.GoalStatus === "Draft" || goal.GoalStatus === "Rejected") ? (
             <Link
               to={`/goals/edit/${goal.GoalID}`}
               className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm shadow-md transition-all ml-auto active:scale-[0.98] cursor-pointer"

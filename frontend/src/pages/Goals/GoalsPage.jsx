@@ -5,6 +5,9 @@ import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import API from '../../services/api';
+import { getCurrentFiscalQuarterValue, getFiscalQuarterOptions } from '../../utils/fiscalQuarter';
+
+const QUARTER_OPTIONS = getFiscalQuarterOptions();
 
 const GoalsPage = () => {
     const [rowData, setRowData] = useState([]);
@@ -12,7 +15,7 @@ const GoalsPage = () => {
     const [formData, setFormData] = useState({
         title: '',
         departmentId: 1,
-        quarter: 'Q1 2026',
+        quarter: getCurrentFiscalQuarterValue(),
         weightage: 20,
         description: '',
         isSubmitted: false
@@ -76,10 +79,9 @@ const GoalsPage = () => {
                     <Grid container spacing={2}>
                         <Grid item xs={6}>
                             <TextField fullWidth select label="Quarter" margin="normal" value={formData.quarter} onChange={e => setFormData({...formData, quarter: e.target.value})}>
-                                <MenuItem value="Q1 2026">Q1 2026</MenuItem>
-                                <MenuItem value="Q2 2026">Q2 2026</MenuItem>
-                                <MenuItem value="Q3 2026">Q3 2026</MenuItem>
-                                <MenuItem value="Q4 2026">Q4 2026</MenuItem>
+                                {QUARTER_OPTIONS.map(({ value, label }) => (
+                                    <MenuItem key={value} value={value}>{label}</MenuItem>
+                                ))}
                             </TextField>
                         </Grid>
                         <Grid item xs={6}>

@@ -40,6 +40,22 @@ const buildGoalDiff = (oldRow, newValuesMap) => {
   return { oldValues, newValues };
 };
 
+const hasJointAssignment = async (goalId, userId, transaction) => {
+  const pool = transaction ? null : await poolPromise;
+  const request = transaction
+    ? new sql.Request(transaction)
+    : pool.request();
+  const result = await request
+    .input("GoalID", sql.BigInt, goalId)
+    .input("UserID", sql.Int, userId)
+    .query(`
+      SELECT TOP 1 1 AS IsAssigned
+      FROM dbo.GoalJointAccountability
+      WHERE GoalID = @GoalID AND UserID = @UserID
+    `);
+  return result.recordset.length > 0;
+};
+
 // Helper function to log goal history using the values allowed by GoalHistory.Action.
 const logGoalHistory = async (
   transaction,
@@ -176,8 +192,9 @@ const getGoals = async (req, res) => {
   try {
     const pool = await poolPromise;
     let query = `
-            SELECT g.*, u.Username, u.FirstName, u.LastName,
-                 progress.SubGoalCompletionPercentage
+              SELECT g.*, u.Username, u.FirstName, u.LastName,
+                CAST(CASE WHEN g.UserID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsGoalOwner,
+                progress.SubGoalCompletionPercentage
             FROM dbo.Goals g
             JOIN dbo.Users u ON g.UserID = u.UserID
             OUTER APPLY (
@@ -387,7 +404,13 @@ const getGoalById = async (req, res) => {
     const goalResult = await pool
       .request()
       .input("GoalID", sql.BigInt, id)
-      .query("SELECT TOP 1 * FROM dbo.Goals WHERE GoalID = @GoalID");
+      .query(`
+        SELECT TOP 1 g.*, owner.FirstName AS OwnerFirstName,
+          owner.LastName AS OwnerLastName
+        FROM dbo.Goals g
+        LEFT JOIN dbo.Users owner ON owner.UserID = g.UserID
+        WHERE g.GoalID = @GoalID
+      `);
 
     if (goalResult.recordset.length === 0) {
       return res
@@ -428,10 +451,22 @@ const getGoalById = async (req, res) => {
           )
           .map(Number)
       : [];
+    const jointAssignmentResult = await pool
+      .request()
+      .input("GoalID", sql.BigInt, id)
+      .input("UserID", sql.Int, requesterUserId)
+      .query(`
+        SELECT TOP 1 JointAccountabilityID, ContributionNote, Status
+        FROM dbo.GoalJointAccountability
+        WHERE GoalID = @GoalID AND UserID = @UserID
+      `);
+    const jointAssignment = jointAssignmentResult.recordset[0] || null;
+    const isJointParticipant = Boolean(jointAssignment);
     const canViewGoal =
       Number(requesterUserId) === Number(goal.UserID) ||
       ["CFO", "ADMIN"].includes(requesterRole) ||
-      assignedApproverIds.includes(Number(requesterUserId));
+      assignedApproverIds.includes(Number(requesterUserId)) ||
+      isJointParticipant;
 
     if (!canViewGoal) {
       return res.status(403).json({
@@ -453,9 +488,10 @@ const getGoalById = async (req, res) => {
       );
 
     const canApproveOrReject =
-      requesterRole === "CFO" ||
-      requesterRole === "ADMIN" ||
-      (await canApproveOrRejectGoal(requesterUserId, goal.UserID));
+      (!isJointParticipant || Number(requesterUserId) === Number(goal.UserID)) &&
+      (requesterRole === "CFO" ||
+        requesterRole === "ADMIN" ||
+        (await canApproveOrRejectGoal(requesterUserId, goal.UserID)));
 
     return res.status(200).json({
       success: true,
@@ -464,6 +500,10 @@ const getGoalById = async (req, res) => {
         SubGoals: subGoalsResult.recordset,
         History: historyResult.recordset,
         CanApproveOrReject: canApproveOrReject,
+        IsJointParticipant: isJointParticipant,
+        JointAccountabilityID: jointAssignment?.JointAccountabilityID || null,
+        JointStatus: jointAssignment?.Status || null,
+        ContributionNote: jointAssignment?.ContributionNote || null,
       },
     });
   } catch (error) {
@@ -526,6 +566,7 @@ const createGoal = async (req, res) => {
     GoalDescription,
     Measurability,
     JointAccountability,
+    JointAccountabilities,
     Weightage,
     Priority,
     Timeline,
@@ -629,6 +670,10 @@ const createGoal = async (req, res) => {
     request.input("Weightage", sql.Decimal(5, 2), Weightage);
     request.input("Priority", sql.VarChar, Priority);
     request.input("Timeline", sql.Date, Timeline);
+    const { label: goalQuarter, quarterEndDate: goalQuarterEndDate } =
+      getFiscalQuarter(new Date(Timeline));
+    request.input("Quarter", sql.VarChar, goalQuarter);
+    request.input("QuarterEndDate", sql.Date, goalQuarterEndDate);
     request.input("MeetPerformance", sql.NVarChar, MeetPerformance || null);
     request.input("ExceedPerformance", sql.NVarChar, ExceedPerformance || null);
     request.input("ValidationSource", sql.NVarChar, ValidationSource || null);
@@ -644,14 +689,14 @@ const createGoal = async (req, res) => {
     const goalInsertResult = await request.query(`
             INSERT INTO dbo.Goals (
                 UserID, GoalNumber, GoalTitle, GoalDescription, Measurability, 
-                JointAccountability, Weightage, Priority, Timeline, MeetPerformance, 
+                JointAccountability, Weightage, Priority, Timeline, Quarter, QuarterEndDate, MeetPerformance, 
                 ExceedPerformance, ValidationSource, CrossFunctionalGoal, GoalCategory, 
                 GoalStatus, DraftVersion, SubmittedDate, CreatedDate
             )
             OUTPUT INSERTED.GoalID
             VALUES (
                 @UserID, @GoalNumber, @GoalTitle, @GoalDescription, @Measurability, 
-                @JointAccountability, @Weightage, @Priority, @Timeline, @MeetPerformance, 
+                @JointAccountability, @Weightage, @Priority, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance, 
                 @ExceedPerformance, @ValidationSource, @CrossFunctionalGoal, @GoalCategory, 
                 @GoalStatus, 1, @SubmittedDate, GETDATE()
             )
@@ -689,6 +734,12 @@ const createGoal = async (req, res) => {
           VALUES (@GoalID, @SubGoalNo, @SubGoalTitle, @SubGoalDescription, @Weightage, @Target, @Status, GETDATE())
       `);
     }
+
+    await jointAccountabilityModel.insertJointAccountabilities(
+      newGoalID,
+      Array.isArray(JointAccountabilities) ? JointAccountabilities : [],
+      transaction,
+    );
 
     await transaction.commit();
 
@@ -772,6 +823,17 @@ const updateGoal = async (req, res) => {
 
     const existingGoal = checkResult.recordset[0];
     const currentStatus = existingGoal.GoalStatus;
+
+    if (
+      Number(existingGoal.UserID) !== Number(userId) &&
+      (await hasJointAssignment(id, userId, transaction))
+    ) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "Joint participants can only update their contribution note.",
+      });
+    }
 
     const ownerHierarchyResult = await new sql.Request(transaction).input(
       "OwnerUserID",
@@ -917,9 +979,10 @@ const updateGoal = async (req, res) => {
       ? "Submitted"
       : GoalStatus || currentStatus;
 
+    const quarterTimeline = Timeline || existingGoal.Timeline;
     const { label: newQuarter, quarterEndDate: newQuarterEndDate } =
-      isCarryForward
-        ? getFiscalQuarter(new Date(Timeline))
+      isCarryForward || canEditAllFields
+        ? getFiscalQuarter(new Date(quarterTimeline))
         : {
             label: existingGoal.Quarter,
             quarterEndDate: existingGoal.QuarterEndDate,
@@ -1197,8 +1260,7 @@ const getGoalHistory = async (req, res) => {
   try {
     const pool = await poolPromise;
 
-    // History contains the same sensitive goal information as the detail
-    // page, so it must use the same owner/hierarchy/CFO/Admin access rule.
+    // History follows the same visibility rule as the goal detail page.
     const goalResult = await pool
       .request()
       .input("GoalID", sql.BigInt, id)
@@ -1235,7 +1297,8 @@ const getGoalHistory = async (req, res) => {
     const canViewHistory =
       Number(requesterUserId) === Number(goalOwnerId) ||
       ["CFO", "ADMIN"].includes(requesterRole) ||
-      assignedApproverIds.includes(Number(requesterUserId));
+      assignedApproverIds.includes(Number(requesterUserId)) ||
+      (await hasJointAssignment(id, requesterUserId));
 
     if (!canViewHistory) {
       return res.status(403).json({
@@ -1308,13 +1371,21 @@ const deleteGoal = async (req, res) => {
     const checkRequest = new sql.Request(transaction);
     const checkResult = await checkRequest
       .input("GoalID", sql.BigInt, id)
-      .query("SELECT GoalStatus FROM dbo.Goals WHERE GoalID = @GoalID");
+      .query("SELECT GoalStatus, UserID FROM dbo.Goals WHERE GoalID = @GoalID");
 
     if (checkResult.recordset.length === 0) {
       await transaction.rollback();
       return res
         .status(404)
         .json({ success: false, message: "Goal not found." });
+    }
+
+    if (Number(checkResult.recordset[0].UserID) !== Number(userId)) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "Only the goal owner can delete this goal.",
+      });
     }
 
     if (checkResult.recordset[0].GoalStatus !== "Draft") {
@@ -1481,6 +1552,17 @@ const changeGoalStatus = async (req, res) => {
     const oldStatus = oldRes.recordset[0].GoalStatus;
     const goalOwnerId = oldRes.recordset[0].UserID;
     const goalTitle = oldRes.recordset[0].GoalTitle;
+
+    if (
+      Number(goalOwnerId) !== Number(userId) &&
+      (await hasJointAssignment(id, userId, transaction))
+    ) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "Joint participants cannot change the goal status.",
+      });
+    }
 
     const role = (req.user?.Role || req.user?.role || "").toUpperCase();
 
@@ -1666,6 +1748,16 @@ const submitGoalReview = async (req, res) => {
     }
 
     const existingGoal = checkRes.recordset[0];
+    if (
+      Number(existingGoal.UserID) !== Number(userId) &&
+      (await hasJointAssignment(goalId, userId, transaction))
+    ) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "Joint participants cannot submit a goal review.",
+      });
+    }
     const oldStatus = existingGoal.GoalStatus;
     const newStatus = statusFlow[oldStatus];
 
@@ -1687,7 +1779,8 @@ const submitGoalReview = async (req, res) => {
     }
 
     const updateReq = new sql.Request(transaction);
-    const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+    const currentQuarter = getFiscalQuarter()
+      .label.match(/^Q[1-4]/)?.[0];
     await updateReq
       .input("GoalID", sql.BigInt, goalId)
       .input("Quarter", sql.VarChar(2), currentQuarter)
@@ -1880,6 +1973,42 @@ const updateJointAccountabilityStatus = async (req, res) => {
   }
 };
 
+const updateJointContributionNote = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+  const { contributionNote } = req.body;
+
+  if (
+    typeof contributionNote !== "string" ||
+    contributionNote.length > 500
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Contribution note must be 500 characters or fewer.",
+    });
+  }
+
+  try {
+    const updated = await jointAccountabilityModel.updateContributionNote(
+      req.params.goalId,
+      userId,
+      contributionNote || null,
+    );
+    if (!updated) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Joint participation not found." });
+    }
+    return res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error("Update Joint Contribution Note Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating contribution note.",
+      errors: error.message,
+    });
+  }
+};
+
 const updateSubGoalStatus = async (req, res) => {
   const { goalId, subGoalId } = req.params;
   const { Status } = req.body;
@@ -1902,7 +2031,7 @@ const updateSubGoalStatus = async (req, res) => {
     const goalRes = await goalReq
       .input("GoalID", sql.BigInt, goalId)
       .query(
-        "SELECT UserID, GoalTitle, Weightage FROM dbo.Goals WHERE GoalID = @GoalID",
+        "SELECT UserID, GoalTitle, Weightage, GoalStatus FROM dbo.Goals WHERE GoalID = @GoalID",
       );
 
     if (goalRes.recordset.length === 0) {
@@ -1913,14 +2042,32 @@ const updateSubGoalStatus = async (req, res) => {
     }
     const goal = goalRes.recordset[0];
 
+    const isJointParticipant =
+      Number(goal.UserID) !== Number(userId) &&
+      (await hasJointAssignment(goalId, userId, transaction));
     // Only the goal's own owner logs sub-goal progress; Admin can too for corrections.
     const isAuthorized =
-      role === "ADMIN" || Number(goal.UserID) === Number(userId);
+      !isJointParticipant &&
+      (role === "ADMIN" || Number(goal.UserID) === Number(userId));
     if (!isAuthorized) {
       await transaction.rollback();
       return res.status(403).json({
         success: false,
         message: "You are not authorized to update this sub-goal.",
+      });
+    }
+
+    const approvedGoalStatuses = [
+      "Approved",
+      "HOD Approved",
+      "Manager Approved",
+      "Business Head Approved",
+    ];
+    if (!approvedGoalStatuses.includes(goal.GoalStatus)) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Sub-goal progress can be updated after the goal is approved.",
       });
     }
 
@@ -1940,14 +2087,6 @@ const updateSubGoalStatus = async (req, res) => {
     }
     const subGoal = subGoalRes.recordset[0];
     const oldStatus = subGoal.Status;
-
-    if (oldStatus === "Completed" && Status !== "Completed") {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "Completed sub-goals cannot be reopened.",
-      });
-    }
 
     const updateReq = new sql.Request(transaction);
     await updateReq
@@ -2006,6 +2145,7 @@ module.exports = {
   getAllEmployeeGoals,
   getJointGoals,
   updateJointAccountabilityStatus,
+  updateJointContributionNote,
   getGoalHistory,
   updateSubGoalStatus,
   getTeamGoals,

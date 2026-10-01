@@ -1,11 +1,17 @@
+const { poolPromise, sql } = require("../config/db");
+
 // Insert multiple joint accountability rows for a goal
-const insertJointAccountabilities = async (goalId, jointAccountabilities) => {
+const insertJointAccountabilities = async (
+  goalId,
+  jointAccountabilities,
+  transaction = null,
+) => {
   const pool = await poolPromise;
 
   for (const ja of jointAccountabilities) {
     if (!ja.UserID) continue; // skip empty rows from the frontend
 
-    const request = pool.request();
+    const request = transaction ? new sql.Request(transaction) : pool.request();
     request.input("GoalID", sql.Int, goalId);
     request.input("UserID", sql.Int, ja.UserID);
     request.input("ContributionNote", sql.NVarChar(500), ja.ContributionNote || null);
@@ -79,7 +85,23 @@ const updateJointAccountabilityStatus = async (jointAccountabilityId, userId, st
     UPDATE dbo.GoalJointAccountability
     SET Status = @Status, ModifiedDate = GETDATE()
     OUTPUT INSERTED.*
-    WHERE JointAccountabilityID = @ID AND UserID = @UserID
+    WHERE JointAccountabilityID = @ID AND UserID = @UserID AND Status = 'Pending'
+  `);
+  return result.recordset[0];
+};
+
+const updateContributionNote = async (goalId, userId, contributionNote) => {
+  const pool = await poolPromise;
+  const request = pool.request();
+  request.input("GoalID", sql.Int, goalId);
+  request.input("UserID", sql.Int, userId);
+  request.input("ContributionNote", sql.NVarChar(500), contributionNote);
+
+  const result = await request.query(`
+    UPDATE dbo.GoalJointAccountability
+    SET ContributionNote = @ContributionNote, ModifiedDate = GETDATE()
+    OUTPUT INSERTED.*
+    WHERE GoalID = @GoalID AND UserID = @UserID
   `);
   return result.recordset[0];
 };
@@ -90,4 +112,5 @@ module.exports = {
   getJointGoalsForUser,
   replaceJointAccountabilities,
   updateJointAccountabilityStatus,
+  updateContributionNote,
 };
