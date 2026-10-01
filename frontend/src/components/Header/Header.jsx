@@ -205,31 +205,66 @@ const Header = ({ drawerWidth = 260 }) => {
             onClose={handleNotifClose}
             anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
             transformOrigin={{ vertical: "top", horizontal: "right" }}
-            SlotProps={{
+            slotProps={{
               paper: {
-                className:
-                  "w-[360px] max-w-[92vw] mt-2 rounded-xl border border-slate-300 shadow-2xl overflow-hidden bg-white text-slate-900",
+                elevation: 4,
+                sx: {
+                  width: 310,
+                  maxWidth: "92vw",
+                  mt: 1,
+                  borderRadius: "10px",
+                  border: "1px solid #e2e8f0",
+                  overflow: "hidden",
+                  boxShadow: "0 10px 20px -3px rgba(0, 0, 0, 0.08)",
+                },
               },
             }}
           >
             {/* Header */}
-            <Box className="px-4 py-3 flex items-center justify-between bg-slate-50 border-b border-slate-200">
-              <Typography className="text-base font-extrabold text-slate-900">
+            <Box
+              sx={{
+                px: 2,
+                py: 1.5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottom: "1px solid #e2e8f0",
+                bgcolor: "#ffffff",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: "#1e293b",
+                  letterSpacing: "0.02em",
+                }}
+              >
                 Notifications
-              </Typography>
+              </span>
               {notificationCount > 0 && (
-                <Typography className="px-2.5 py-0.5 text-xs font-extrabold text-blue-900 bg-blue-100 border border-blue-300 rounded-full">
-                  {notificationCount} unread
-                </Typography>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#1d4ed8",
+                    backgroundColor: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    padding: "2px 8px",
+                    borderRadius: "12px",
+                  }}
+                >
+                  {notificationCount} new
+                </span>
               )}
             </Box>
 
             {/* Empty State */}
             {latestFive.length === 0 && (
-              <Box className="px-4 py-8 text-center bg-white">
-                <Typography className="text-sm font-semibold text-slate-600">
-                  You're all caught up — no notifications yet.
-                </Typography>
+              <Box sx={{ px: 2, py: 4, textAlign: "center" }}>
+                <span style={{ fontSize: "12px", color: "#64748b" }}>
+                  You're all caught up! No notifications.
+                </span>
               </Box>
             )}
 
@@ -238,45 +273,87 @@ const Header = ({ drawerWidth = 260 }) => {
               <MenuItem
                 key={item.NotificationId}
                 onClick={handleNotifClose}
-                className={`px-4 py-3 flex items-start gap-3 transition-colors ${
-                  item.IsRead
-                    ? "bg-white hover:bg-slate-100"
-                    : "bg-blue-50/70 hover:bg-blue-100/80"
-                } ${index < latestFive.length - 1 ? "border-b border-slate-200" : ""}`}
+                disableRipple
+                sx={{
+                  px: 2,
+                  py: 1.25,
+                  minHeight: "unset",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 1.5,
+                  backgroundColor: item.IsRead ? "#ffffff" : "#f8fafc",
+                  borderBottom:
+                    index < latestFive.length - 1
+                      ? "1px solid #f1f5f9"
+                      : "none",
+                  "&:hover": {
+                    backgroundColor: item.IsRead ? "#f8fafc" : "#f1f5f9",
+                  },
+                }}
               >
-                {/* Unread Indicator Dot */}
-                <CircleIcon
-                  className={`text-[10px] mt-1 flex-shrink-0 ${
-                    item.IsRead ? "text-transparent" : "text-blue-600"
-                  }`}
+                {/* Unread Dot Indicator */}
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    marginTop: "5px",
+                    flexShrink: 0,
+                    backgroundColor: item.IsRead ? "transparent" : "#2563eb",
+                  }}
                 />
 
-                <Box className="min-w-0 flex-1">
-                  <Typography
-                    className={`text-sm leading-snug truncate ${
-                      item.IsRead
-                        ? "font-semibold text-slate-800"
-                        : "font-extrabold text-slate-950"
-                    }`}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "13px",
+                      lineHeight: "1.3",
+                      fontWeight: item.IsRead ? 500 : 700,
+                      color: "#0f172a",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
                   >
                     {item.Title}
-                  </Typography>
-                  <Typography className="text-xs font-medium text-slate-600 truncate mt-0.5">
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      marginTop: "2px",
+                      fontSize: "12px",
+                      lineHeight: "1.3",
+                      color: "#64748b",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
                     {item.Message}
-                  </Typography>
-                </Box>
+                  </p>
+                </div>
               </MenuItem>
             ))}
 
             {/* Footer */}
-            <Divider className="border-slate-200" />
             <MenuItem
               onClick={handleViewAll}
-              className="justify-center py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+              disableRipple
+              sx={{
+                justifyContent: "center",
+                py: 1.25,
+                minHeight: "unset",
+                backgroundColor: "#f8fafc",
+                borderTop: "1px solid #e2e8f0",
+                "&:hover": { backgroundColor: "#f1f5f9" },
+              }}
             >
-              <Typography className="text-sm font-extrabold text-blue-700 hover:text-blue-900">
-                View all notifications
-              </Typography>
+              <span
+                style={{ fontSize: "12px", fontWeight: 600, color: "#2563eb" }}
+              >
+                View all notifications &rarr;
+              </span>
             </MenuItem>
           </Menu>
 

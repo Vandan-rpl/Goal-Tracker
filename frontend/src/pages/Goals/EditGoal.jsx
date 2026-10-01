@@ -67,6 +67,10 @@ const EditGoal = () => {
   const [quarterEndDate, setQuarterEndDate] = useState(null);
 
   const [subGoals, setSubGoals] = useState([]);
+  const [jointAccountabilities, setJointAccountabilities] = useState([]);
+  const [hasExistingJointAccountabilities, setHasExistingJointAccountabilities] = useState(false);
+  const [jointAccountabilityUsers, setJointAccountabilityUsers] = useState([]);
+  const [jointAccountabilityUsersLoading, setJointAccountabilityUsersLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -87,6 +91,21 @@ const EditGoal = () => {
   useEffect(() => {
     fetchGoal();
   }, [id]);
+
+  useEffect(() => {
+    const loadJointAccountabilityUsers = async () => {
+      try {
+        const response = await api.get("/goals/joint-accountability-users");
+        setJointAccountabilityUsers(response.data?.data || []);
+      } catch (err) {
+        console.error("Failed to load employees for joint accountability", err);
+      } finally {
+        setJointAccountabilityUsersLoading(false);
+      }
+    };
+
+    loadJointAccountabilityUsers();
+  }, []);
 
   const fetchGoal = async () => {
     try {
@@ -110,6 +129,19 @@ const EditGoal = () => {
           GoalCategory: goal.GoalCategory || "",
           GoalStatus: goal.GoalStatus || "Draft",
         });
+        const existingJointAccountabilities = goal.JointAccountabilities || [];
+        setHasExistingJointAccountabilities(
+          existingJointAccountabilities.length > 0,
+        );
+        setJointAccountabilities(
+          existingJointAccountabilities.map((item) => ({
+            UserID: String(item.UserID),
+            ContributionNote: item.ContributionNote || "",
+            Weightage: item.Weightage ?? "",
+            FirstName: item.FirstName,
+            LastName: item.LastName,
+          })),
+        );
         setQuarterEndDate(goal.QuarterEndDate || null);
 
         if (goal.SubGoals && goal.SubGoals.length > 0) {
@@ -165,6 +197,28 @@ const EditGoal = () => {
     setSubGoals(updated);
   };
 
+  const handleJointAccountabilityChange = (index, e) => {
+    const { name, value } = e.target;
+    setJointAccountabilities((previous) =>
+      previous.map((item, currentIndex) =>
+        currentIndex === index ? { ...item, [name]: value } : item,
+      ),
+    );
+  };
+
+  const addJointAccountability = () => {
+    setJointAccountabilities((previous) => [
+      ...previous,
+      { UserID: "", ContributionNote: "", Weightage: "" },
+    ]);
+  };
+
+  const removeJointAccountability = (index) => {
+    setJointAccountabilities((previous) =>
+      previous.filter((_, currentIndex) => currentIndex !== index),
+    );
+  };
+
   const handleSubmit = async (e, status = formData.GoalStatus) => {
     e.preventDefault();
     setError("");
@@ -188,8 +242,32 @@ const EditGoal = () => {
     setSubmitting(true);
 
     try {
+      const selectedJointAccountabilities = [
+        ...new Map(
+          jointAccountabilities
+            .filter((item) => item.UserID)
+            .map((item) => [String(item.UserID), item]),
+        ).values(),
+      ];
+      const jointAccountabilityNames = selectedJointAccountabilities
+        .map((item) => {
+          const employee = jointAccountabilityUsers.find(
+            (candidate) => String(candidate.UserID) === String(item.UserID),
+          );
+          return employee
+            ? [employee.FirstName, employee.LastName].filter(Boolean).join(" ")
+            : [item.FirstName, item.LastName].filter(Boolean).join(" ");
+        })
+        .filter(Boolean)
+        .join(", ");
       const payload = {
         ...formData,
+        JointAccountability:
+          jointAccountabilityNames ||
+          (hasExistingJointAccountabilities
+            ? null
+            : formData.JointAccountability || null),
+        JointAccountabilities: selectedJointAccountabilities,
         GoalStatus: status,
         SubGoals: subGoals,
       };
@@ -310,55 +388,71 @@ const EditGoal = () => {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen overflow-y-auto p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-10">
-        <div className="flex justify-between items-center pb-6 border-b mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Edit Goal</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {inCarryForwardWindow
-                ? "This goal's quarter is closing. Push the Timeline out to carry it into the next quarter — this resubmits it for approval."
-                : isRejected
-                  ? "Revise the rejected goal, then submit it again for approval."
-                  : "Modify goal targets, metrics, and status."}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate("/goals")}
-            className="text-sm text-indigo-600 hover:text-indigo-800 font-semibold"
-          >
-            &larr; Back to Goals
-          </button>
+  <div className="flex-1 bg-white min-h-screen p-4 sm:p-6 md:p-8 text-slate-800">
+    <div className="max-w-5xl mx-auto space-y-6">
+      
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+        <div>
+          <span className="inline-block px-2.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1">
+            Goal Management
+          </span>
+          <h1 className="text-2xl font-bold text-slate-900">Edit Goal</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {inCarryForwardWindow
+              ? "This goal's quarter is closing. Push the Timeline out to carry it into the next quarter — this resubmits it for approval."
+              : isRejected
+                ? "Revise the rejected goal, then submit it again for approval."
+                : "Modify goal targets, metrics, and status."}
+          </p>
         </div>
 
-        {inCarryForwardWindow && (
-          <div className="mb-6 bg-indigo-50 text-indigo-800 p-4 rounded-xl text-sm font-medium">
-            This goal is locked, but the carry-forward window is open. Only
-            the Timeline field can be changed — saving will resubmit this
-            goal for approval with the new date.
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium">
-            {error}
-          </div>
-        )}
-
-        <form
-          onSubmit={(e) =>
-            handleSubmit(
-              e,
-              isDraft ? "Draft" : formData.GoalStatus,
-            )
-          }
-          className="space-y-6"
+        <button
+          type="button"
+          onClick={() => navigate("/goals")}
+          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium transition shrink-0 shadow-sm"
         >
+          &larr; Back to Goals
+        </button>
+      </div>
+
+      {/* Notice Banners */}
+      {inCarryForwardWindow && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg text-sm">
+          <span className="text-amber-600 font-bold">⚠️</span>
+          <p>
+            This goal is locked, but the carry-forward window is open. Only the <strong className="font-semibold underline">Timeline</strong> field can be changed — saving will resubmit this goal for approval with the new date.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg text-sm font-medium">
+          <span className="text-red-500 font-bold">✕</span>
+          <p>{error}</p>
+        </div>
+      )}
+
+      <form
+        onSubmit={(e) =>
+          handleSubmit(
+            e,
+            isDraft ? "Draft" : formData.GoalStatus,
+          )
+        }
+        className="space-y-6"
+      >
+        
+        {/* Section 1: Basic Details */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
+            Primary Details
+          </h2>
+          
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Goal No *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Goal No <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -367,12 +461,13 @@ const EditGoal = () => {
                 disabled={isRestrictedEdit}
                 value={formData.GoalNumber}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
               />
             </div>
+
             <div className="sm:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Goal Title *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Goal Title <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -381,10 +476,12 @@ const EditGoal = () => {
                 disabled={isRestrictedEdit}
                 value={formData.GoalTitle}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.GoalTitle ? "border-red-400" : ""}`}
+                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                  fieldErrors.GoalTitle ? "border-red-500" : "border-slate-300"
+                }`}
               />
               {fieldErrors.GoalTitle && (
-                <p className="text-red-600 text-xs mt-1">
+                <p className="text-red-600 text-xs mt-1 font-medium">
                   {fieldErrors.GoalTitle}
                 </p>
               )}
@@ -393,7 +490,7 @@ const EditGoal = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Category
               </label>
               <input
@@ -402,33 +499,37 @@ const EditGoal = () => {
                 disabled={isRestrictedEdit}
                 value={formData.GoalCategory}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.GoalCategory ? "border-red-400" : ""}`}
+                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                  fieldErrors.GoalCategory ? "border-red-500" : "border-slate-300"
+                }`}
               />
               {fieldErrors.GoalCategory && (
-                <p className="text-red-600 text-xs mt-1">
+                <p className="text-red-600 text-xs mt-1 font-medium">
                   {fieldErrors.GoalCategory}
                 </p>
               )}
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Priority *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Priority <span className="text-red-500">*</span>
               </label>
               <select
                 name="Priority"
                 disabled={isRestrictedEdit}
                 value={formData.Priority}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
               </select>
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Weightage (%) *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Weightage (%) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -438,37 +539,41 @@ const EditGoal = () => {
                 disabled={isRestrictedEdit}
                 value={formData.Weightage}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.Weightage ? "border-red-400" : ""}`}
+                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                  fieldErrors.Weightage ? "border-red-500" : "border-slate-300"
+                }`}
               />
               {fieldErrors.Weightage && (
-                <p className="text-red-600 text-xs mt-1">
+                <p className="text-red-600 text-xs mt-1 font-medium">
                   {fieldErrors.Weightage}
                 </p>
               )}
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Timeline *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Timeline <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 name="Timeline"
                 required
-                // The one field that stays open during the carry-forward
-                // window even though everything else is locked.
                 disabled={isRestrictedEdit && !inCarryForwardWindow}
                 value={formData.Timeline}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.Timeline ? "border-red-400" : ""} ${inCarryForwardWindow ? "border-indigo-400 ring-1 ring-indigo-200" : ""}`}
+                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                  fieldErrors.Timeline ? "border-red-500" : "border-slate-300"
+                } ${inCarryForwardWindow ? "ring-2 ring-amber-400 border-amber-400 bg-amber-50/50" : ""}`}
               />
               {fieldErrors.Timeline && (
-                <p className="text-red-600 text-xs mt-1">
+                <p className="text-red-600 text-xs mt-1 font-medium">
                   {fieldErrors.Timeline}
                 </p>
               )}
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Goal Status
               </label>
               <select
@@ -476,7 +581,7 @@ const EditGoal = () => {
                 disabled={isRestrictedEdit}
                 value={formData.GoalStatus}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
               >
                 {isDraft && <option value="Draft">Draft</option>}
                 {[
@@ -497,84 +602,111 @@ const EditGoal = () => {
               </select>
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Goal Description
-              </label>
-              <textarea
-                name="GoalDescription"
-                rows="3"
-                disabled={isRestrictedEdit}
-                value={formData.GoalDescription}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.GoalDescription ? "border-red-400" : ""}`}
-              />
-              {fieldErrors.GoalDescription && (
-                <p className="text-red-600 text-xs mt-1">
-                  {fieldErrors.GoalDescription}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Measurability *
-              </label>
-              <textarea
-                name="Measurability"
-                rows="3"
-                required
-                disabled={isRestrictedEdit}
-                value={formData.Measurability}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.Measurability ? "border-red-400" : ""}`}
-              />
-              {fieldErrors.Measurability && (
-                <p className="text-red-600 text-xs mt-1">
-                  {fieldErrors.Measurability}
-                </p>
-              )}
-            </div>
+        {/* Section 2: Descriptions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
+            <label className="block text-xs font-semibold text-slate-700">
+              Goal Description
+            </label>
+            <textarea
+              name="GoalDescription"
+              rows="4"
+              disabled={isRestrictedEdit}
+              value={formData.GoalDescription}
+              onChange={handleChange}
+              placeholder="Describe the objective..."
+              className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                fieldErrors.GoalDescription ? "border-red-500" : "border-slate-300"
+              }`}
+            />
+            {fieldErrors.GoalDescription && (
+              <p className="text-red-600 text-xs font-medium">
+                {fieldErrors.GoalDescription}
+              </p>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
+            <label className="block text-xs font-semibold text-slate-700">
+              Measurability <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              name="Measurability"
+              rows="4"
+              required
+              disabled={isRestrictedEdit}
+              value={formData.Measurability}
+              onChange={handleChange}
+              placeholder="How will progress be measured?"
+              className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                fieldErrors.Measurability ? "border-red-500" : "border-slate-300"
+              }`}
+            />
+            {fieldErrors.Measurability && (
+              <p className="text-red-600 text-xs font-medium">
+                {fieldErrors.Measurability}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Section 3: Performance Targets */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
+            Performance Targets
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Meet Performance Target
               </label>
               <textarea
                 name="MeetPerformance"
-                rows="2"
+                rows="3"
                 disabled={isRestrictedEdit}
                 value={formData.MeetPerformance}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500 ${fieldErrors.MeetPerformance ? "border-red-400" : ""}`}
+                placeholder="Expected standard outcome..."
+                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                  fieldErrors.MeetPerformance ? "border-red-500" : "border-slate-300"
+                }`}
               />
               {fieldErrors.MeetPerformance && (
-                <p className="text-red-600 text-xs mt-1">
+                <p className="text-red-600 text-xs mt-1 font-medium">
                   {fieldErrors.MeetPerformance}
                 </p>
               )}
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Exceed Performance Target
               </label>
               <textarea
                 name="ExceedPerformance"
-                rows="2"
+                rows="3"
                 disabled={isRestrictedEdit}
                 value={formData.ExceedPerformance}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                placeholder="Stretch goals or exceptional outcomes..."
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
               />
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Section 4: Validation & Accountability */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
+            Validation & Accountability
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Validation Source
               </label>
               <input
@@ -583,54 +715,153 @@ const EditGoal = () => {
                 disabled={isRestrictedEdit}
                 value={formData.ValidationSource}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                placeholder="e.g. System reports, Audit logs"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Joint Accountability
-              </label>
-              <input
-                type="text"
-                name="JointAccountability"
-                disabled={isRestrictedEdit}
-                value={formData.JointAccountability}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
-              />
+
+            <div className="space-y-4">
+              {!hasExistingJointAccountabilities && jointAccountabilities.length === 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Joint Accountability
+                  </label>
+                  <input
+                    type="text"
+                    name="JointAccountability"
+                    disabled={isRestrictedEdit}
+                    value={formData.JointAccountability}
+                    onChange={handleChange}
+                    placeholder="Specify joint team / owner"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Assigned Participants
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addJointAccountability}
+                    disabled={isRestrictedEdit}
+                    className="px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md transition disabled:opacity-50"
+                  >
+                    + Add Participant
+                  </button>
+                </div>
+
+                {jointAccountabilities.length === 0 ? (
+                  <div className="p-3 rounded-lg border border-dashed border-slate-200 text-center text-xs text-slate-400 bg-slate-50">
+                    No assigned joint participants.
+                  </div>
+                ) : (
+                  jointAccountabilities.map((item, index) => (
+                    <div key={`${item.UserID || "new"}-${index}`} className="grid grid-cols-1 sm:grid-cols-[1.2fr_1.5fr_0.8fr_auto] gap-2 items-center bg-slate-50 p-2 border border-slate-200 rounded-lg">
+                      <select
+                        name="UserID"
+                        value={item.UserID}
+                        disabled={isRestrictedEdit || jointAccountabilityUsersLoading}
+                        onChange={(event) => handleJointAccountabilityChange(index, event)}
+                        className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-800 disabled:bg-slate-100 focus:border-slate-800 focus:outline-none"
+                      >
+                        <option value="">Select Employee</option>
+                        {item.UserID && !jointAccountabilityUsers.some((employee) => String(employee.UserID) === String(item.UserID)) && (
+                          <option value={item.UserID}>
+                            {[item.FirstName, item.LastName].filter(Boolean).join(" ") || `Employee ${item.UserID}`}
+                          </option>
+                        )}
+                        {jointAccountabilityUsers.map((employee) => (
+                          <option
+                            key={employee.UserID}
+                            value={employee.UserID}
+                            disabled={jointAccountabilities.some((other, otherIndex) =>
+                              otherIndex !== index && String(other.UserID) === String(employee.UserID),
+                            )}
+                          >
+                            {[employee.FirstName, employee.LastName].filter(Boolean).join(" ")}
+                            {employee.Designation ? ` - ${employee.Designation}` : ""}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="text"
+                        name="ContributionNote"
+                        maxLength={500}
+                        placeholder="Contribution note"
+                        value={item.ContributionNote}
+                        disabled={isRestrictedEdit}
+                        onChange={(event) => handleJointAccountabilityChange(index, event)}
+                        className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs disabled:bg-slate-100 focus:border-slate-800 focus:outline-none"
+                      />
+
+                      <input
+                        type="number"
+                        name="Weightage"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="Weight %"
+                        value={item.Weightage}
+                        disabled={isRestrictedEdit}
+                        onChange={(event) => handleJointAccountabilityChange(index, event)}
+                        className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs disabled:bg-slate-100 focus:border-slate-800 focus:outline-none"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => removeJointAccountability(index)}
+                        disabled={isRestrictedEdit}
+                        className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
+                        aria-label={`Remove ${[item.FirstName, item.LastName].filter(Boolean).join(" ") || "joint participant"}`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
+        </div>
 
-          <hr className="my-6" />
-
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-800">Sub-Goals</h3>
-                <p className={`text-sm font-semibold mt-1 ${getSubGoalWeightageTotal(subGoals) === 100 ? "text-emerald-700" : "text-gray-500"}`}>
-                  Total weightage: {getSubGoalWeightageTotal(subGoals).toFixed(2)}% / 100%
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={addSubGoalRow}
-                disabled={isRestrictedEdit}
-                className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                + Add Sub-Goal
-              </button>
+        {/* Section 5: Sub-Goals */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sub-Goals Breakdown</h2>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                getSubGoalWeightageTotal(subGoals) === 100 
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                  : "bg-amber-50 text-amber-700 border border-amber-200"
+              }`}>
+                Total: {getSubGoalWeightageTotal(subGoals).toFixed(2)}% / 100%
+              </span>
             </div>
 
+            <button
+              type="button"
+              onClick={addSubGoalRow}
+              disabled={isRestrictedEdit}
+              className="inline-flex items-center justify-center px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              + Add Sub-Goal
+            </button>
+          </div>
+
+          <div className="space-y-3">
             {subGoals.map((sub, index) => (
               <div
                 key={index}
-                className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 relative space-y-3"
+                className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2"
               >
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-indigo-600 uppercase">
-                    Sub-Goal #{index + 1}
-                  </span>
-                </div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                  Sub-Goal #{index + 1}
+                </span>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <input
@@ -641,7 +872,7 @@ const EditGoal = () => {
                       disabled={isRestrictedEdit}
                       value={sub.SubGoalTitle}
                       onChange={(e) => handleSubGoalChange(index, e)}
-                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white disabled:bg-gray-100"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs font-medium bg-white focus:border-slate-800 focus:outline-none disabled:bg-slate-100"
                     />
                   </div>
                   <div>
@@ -652,7 +883,7 @@ const EditGoal = () => {
                       disabled={isRestrictedEdit}
                       value={sub.Target}
                       onChange={(e) => handleSubGoalChange(index, e)}
-                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white disabled:bg-gray-100"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white focus:border-slate-800 focus:outline-none disabled:bg-slate-100"
                     />
                   </div>
                   <div>
@@ -666,59 +897,65 @@ const EditGoal = () => {
                       disabled={isRestrictedEdit}
                       value={sub.Weightage}
                       onChange={(e) => handleSubGoalChange(index, e)}
-                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white disabled:bg-gray-100"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white focus:border-slate-800 focus:outline-none disabled:bg-slate-100"
                     />
                   </div>
                 </div>
               </div>
             ))}
-            {fieldErrors.SubGoals && (
-              <p className="text-red-600 text-xs mt-2 font-medium" role="alert">
-                {fieldErrors.SubGoals}
-              </p>
-            )}
           </div>
 
-          <div className="flex items-center justify-end space-x-4 pt-4 border-t">
+          {fieldErrors.SubGoals && (
+            <p className="text-red-600 text-xs font-medium" role="alert">
+              {fieldErrors.SubGoals}
+            </p>
+          )}
+        </div>
+
+        {/* Action Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={() => navigate("/goals")}
+            className="w-full sm:w-auto px-5 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg font-medium text-xs transition uppercase tracking-wide"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full sm:w-auto px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-medium text-xs transition uppercase tracking-wide disabled:opacity-50"
+          >
+            {submitting
+              ? "Saving..."
+              : isDraft
+                ? "Save as Draft"
+                : inCarryForwardWindow
+                  ? "Save New Timeline & Resubmit"
+                  : "Save Goal"}
+          </button>
+
+          {canSubmitForApproval && (
             <button
               type="button"
-              onClick={() => navigate("/goals")}
-              className="px-5 py-2 border rounded-xl text-gray-700 hover:bg-gray-100 font-medium text-sm transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
+              onClick={(e) => handleSubmit(e, "Submitted")}
               disabled={submitting}
-              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50"
+              className="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-xs transition uppercase tracking-wide disabled:opacity-50"
             >
               {submitting
-                ? "Saving..."
-                : isDraft
-                  ? "Save as Draft"
-                  : inCarryForwardWindow
-                    ? "Save New Timeline & Resubmit"
-                    : "Save Goal"}
+                ? "Submitting..."
+                : isRejected
+                  ? "Resubmit for Approval"
+                  : "Submit Goal"}
             </button>
-            {canSubmitForApproval && (
-              <button
-                type="button"
-                onClick={(e) => handleSubmit(e, "Submitted")}
-                disabled={submitting}
-                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm shadow-md transition disabled:opacity-50"
-              >
-                {submitting
-                  ? "Submitting..."
-                  : isRejected
-                    ? "Resubmit for Approval"
-                    : "Submit Goal"}
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
+          )}
+        </div>
+
+      </form>
     </div>
-  );
+  </div>
+);
 };
 
 export default EditGoal;

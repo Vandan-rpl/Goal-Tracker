@@ -492,6 +492,15 @@ const getGoalById = async (req, res) => {
       (requesterRole === "CFO" ||
         requesterRole === "ADMIN" ||
         (await canApproveOrRejectGoal(requesterUserId, goal.UserID)));
+    const canManageJointAccountabilities =
+      Number(requesterUserId) === Number(goal.UserID) ||
+      (!isJointParticipant &&
+        (["CFO", "ADMIN", "BUSINESSHEAD"].includes(requesterRole) ||
+          (["HOD", "MANAGER"].includes(requesterRole) &&
+            ownerHierarchy &&
+            [ownerHierarchy.ReportingManagerID, ownerHierarchy.HODID].some(
+              (approverId) => Number(approverId) === Number(requesterUserId),
+            ))));
 
     return res.status(200).json({
       success: true,
@@ -499,6 +508,9 @@ const getGoalById = async (req, res) => {
         ...goal,
         SubGoals: subGoalsResult.recordset,
         History: historyResult.recordset,
+        JointAccountabilities: canManageJointAccountabilities
+          ? await jointAccountabilityModel.getJointAccountabilitiesByGoalId(id)
+          : [],
         CanApproveOrReject: canApproveOrReject,
         IsJointParticipant: isJointParticipant,
         JointAccountabilityID: jointAssignment?.JointAccountabilityID || null,
@@ -788,6 +800,7 @@ const updateGoal = async (req, res) => {
     GoalDescription,
     Measurability,
     JointAccountability,
+    JointAccountabilities,
     Weightage,
     Priority,
     Timeline,
@@ -1111,6 +1124,14 @@ const updateGoal = async (req, res) => {
 `;
 
     await updateRequest.query(updateQuery);
+
+    if (canEditAllFields && Array.isArray(JointAccountabilities)) {
+      await jointAccountabilityModel.syncJointAccountabilities(
+        id,
+        JointAccountabilities,
+        transaction,
+      );
+    }
 
     const { oldValues, newValues } = buildGoalDiff(existingGoal, {
       GoalNumber: finalGoalNumber,

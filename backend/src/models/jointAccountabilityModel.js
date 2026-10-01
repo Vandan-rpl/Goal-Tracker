@@ -73,6 +73,70 @@ const replaceJointAccountabilities = async (goalId, jointAccountabilities) => {
   await insertJointAccountabilities(goalId, jointAccountabilities);
 };
 
+const syncJointAccountabilities = async (
+  goalId,
+  jointAccountabilities,
+  transaction,
+) => {
+  const pool = await poolPromise;
+  const request = transaction ? new sql.Request(transaction) : pool.request();
+  const existingResult = await request
+    .input("GoalID", sql.Int, goalId)
+    .query(`
+      SELECT UserID
+      FROM dbo.GoalJointAccountability
+      WHERE GoalID = @GoalID
+    `);
+  const existingUserIds = new Set(
+    existingResult.recordset.map((row) => Number(row.UserID)),
+  );
+  const selected = new Map(
+    (Array.isArray(jointAccountabilities) ? jointAccountabilities : [])
+      .filter((item) => Number.isInteger(Number(item?.UserID)) && Number(item.UserID) > 0)
+      .map((item) => [Number(item.UserID), item]),
+  );
+
+  for (const existingUserId of existingUserIds) {
+    const item = selected.get(existingUserId);
+    const rowRequest = transaction
+      ? new sql.Request(transaction)
+      : pool.request();
+    rowRequest.input("GoalID", sql.Int, goalId);
+    rowRequest.input("UserID", sql.Int, existingUserId);
+
+    if (!item) {
+      await rowRequest.query(`
+        DELETE FROM dbo.GoalJointAccountability
+        WHERE GoalID = @GoalID AND UserID = @UserID
+      `);
+      continue;
+    }
+
+    rowRequest.input(
+      "ContributionNote",
+      sql.NVarChar(500),
+      item.ContributionNote || null,
+    );
+    rowRequest.input(
+      "Weightage",
+      sql.Decimal(5, 2),
+      item.Weightage === "" ? null : item.Weightage ?? null,
+    );
+    await rowRequest.query(`
+      UPDATE dbo.GoalJointAccountability
+      SET ContributionNote = @ContributionNote,
+          Weightage = @Weightage,
+          ModifiedDate = GETDATE()
+      WHERE GoalID = @GoalID AND UserID = @UserID
+    `);
+  }
+
+  const additions = [...selected.entries()]
+    .filter(([userId]) => !existingUserIds.has(userId))
+    .map(([, item]) => item);
+  await insertJointAccountabilities(goalId, additions, transaction);
+};
+
 // Accept / Decline — scoped to the logged-in user's own row
 const updateJointAccountabilityStatus = async (jointAccountabilityId, userId, status) => {
   const pool = await poolPromise;
@@ -111,6 +175,7 @@ module.exports = {
   getJointAccountabilitiesByGoalId,
   getJointGoalsForUser,
   replaceJointAccountabilities,
+  syncJointAccountabilities,
   updateJointAccountabilityStatus,
   updateContributionNote,
 };
