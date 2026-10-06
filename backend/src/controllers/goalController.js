@@ -5,10 +5,7 @@ const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const { calculateGoalProgress } = require("../utils/goalProgress");
-const {
-  getFiscalQuarter,
-  isWithinCarryForwardWindow,
-} = require("../utils/fiscalQuarter");
+const { getFiscalQuarter } = require("../utils/fiscalQuarter");
 
 const normalizeForDiff = (value) => {
   if (value === undefined || value === null || value === "") return null;
@@ -534,6 +531,10 @@ const getSubGoalWeightageError = (subGoals) => {
     (subGoal) => String(subGoal?.SubGoalTitle ?? "").trim(),
   );
 
+  if (titledSubGoals.length > 5) {
+    return "A goal can have no more than 5 sub-goals.";
+  }
+
   if (titledSubGoals.length === 0) {
     return "At least one titled sub-goal is required.";
   }
@@ -558,17 +559,6 @@ const getSubGoalWeightageError = (subGoals) => {
   return totalWeightageHundredths === 10000
     ? null
     : `Sub-goal weightages must total 100%. Current total: ${(totalWeightageHundredths / 100).toFixed(2)}%.`;
-};
-
-const isBeforeOrOnQuarterEnd = (quarterEndDate) => {
-  if (!quarterEndDate) return false;
-  const quarterEnd =
-    quarterEndDate instanceof Date
-      ? quarterEndDate.toISOString().slice(0, 10)
-      : String(quarterEndDate).slice(0, 10);
-  const today = new Date();
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return todayDate <= quarterEnd;
 };
 
 const isDateBeforeToday = (dateValue) => {
@@ -910,30 +900,20 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    // Editability is based on goal status and timing, not editor role.
-    const isDraft = currentStatus === "Draft";
-    const approvedStatuses = [
-      "Approved",
-      "HOD Approved",
-      "Manager Approved",
-      "Business Head Approved",
-      "Reviewed By HOD",
-      "Review By Business Head",
-    ];
-    const effectiveQuarterEndDate =
-      existingGoal.QuarterEndDate ||
-      (existingGoal.Timeline
-        ? getFiscalQuarter(new Date(existingGoal.Timeline)).quarterEndDate
-        : null);
-    const timelineOverdue = isDateBeforeToday(existingGoal.Timeline);
-    const canEditApprovedGoal =
-      approvedStatuses.includes(currentStatus) &&
-      isBeforeOrOnQuarterEnd(effectiveQuarterEndDate) &&
-      !timelineOverdue;
-    const canEditAllFields =
-      isDraft ||
-      currentStatus === "Rejected" ||
-      canEditApprovedGoal;
+    const canEditAllFields = ["Draft", "Rejected"].includes(currentStatus);
+    const terminalStatus = ["Completed", "Cancelled"].includes(currentStatus);
+    const isCarryForward =
+      !canEditAllFields &&
+      !terminalStatus &&
+      isDateBeforeToday(existingGoal.Timeline);
+
+    if (!canEditAllFields && !isCarryForward) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "This goal cannot be modified in its current status.",
+      });
+    }
 
     if (canEditAllFields && Array.isArray(SubGoals) && SubGoals.length > 0) {
       const subGoalWeightageError = getSubGoalWeightageError(SubGoals);
@@ -947,80 +927,14 @@ const updateGoal = async (req, res) => {
       }
     }
 
-    const statusLocked = !canEditAllFields;
-
-    let isCarryForward = false;
-
-    if (statusLocked) {
-      const terminal = ["Completed", "Cancelled"].includes(currentStatus);
-      const canCarryForward =
-        !terminal &&
-        approvedStatuses.includes(currentStatus) &&
-        (isWithinCarryForwardWindow(effectiveQuarterEndDate) ||
-          isDateBeforeToday(effectiveQuarterEndDate) ||
-          timelineOverdue);
-
-      if (!canCarryForward) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: "This goal cannot be modified in its current status.",
-        });
-      }
-
-      // During carry-forward: only Timeline may change.
-      const guardedFields = {
-        GoalNumber,
-        GoalTitle,
-        GoalDescription,
-        Measurability,
-        JointAccountability,
-        Weightage,
-        Priority,
-        MeetPerformance,
-        ExceedPerformance,
-        ValidationSource,
-        CrossFunctionalGoal,
-        GoalCategory,
-      };
-      const normalizeGuardedValue = (field, value) => {
-        if (field === "CrossFunctionalGoal") {
-          return value === true || value === 1 || value === "1";
-        }
-        if (["GoalNumber", "Weightage"].includes(field)) {
-          return value === undefined || value === null || value === ""
-            ? null
-            : Number(value);
-        }
-        return value === undefined || value === null || value === ""
-          ? null
-          : String(value);
-      };
-      const onlyTimelineChanged = Object.entries(guardedFields).every(
-        ([field, value]) =>
-          value === undefined ||
-          normalizeGuardedValue(field, value) ===
-            normalizeGuardedValue(field, existingGoal[field]),
-      );
-
-      if (!onlyTimelineChanged) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message:
-            "Only the Timeline can be updated to carry this goal forward.",
-        });
-      }
-
+    if (isCarryForward) {
       if (!Timeline) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: "Timeline is required to carry this goal forward.",
+          message: "Timeline is required to resubmit this goal.",
         });
       }
-
-      isCarryForward = true;
     }
 
     // A rejected goal is returned to its owner for revision. The owner may
@@ -1089,12 +1003,7 @@ const updateGoal = async (req, res) => {
         : 0
       : existingGoal.CrossFunctionalGoal;
 
-    // SMART validation only applies when this update actually moves the
-    // goal to 'Submitted' — validated against the exact values that
-    // will be persisted below (finalGoalDesc/finalCategory respect the
-    // isDraft field-locking rule already in this function; Weightage
-    // and Timeline aren't isDraft-gated here — they never were, even
-    // before this fix — so they're validated as submitted directly).
+    // SMART validation uses the exact field values that will be persisted.
     // Uses the goal's own transaction connection for the Achievable
     // weightage-sum read, and the goal's real CreatedDate as the
     // Time-bound baseline (not "now" — this goal may have been created
@@ -1104,10 +1013,10 @@ const updateGoal = async (req, res) => {
         {
           GoalTitle: finalGoalTitle,
           GoalDescription: finalGoalDesc,
-          Measurability,
+          Measurability: finalMeasurability,
           MeetPerformance: finalMeetPerf,
           ExceedPerformance: finalExceedPerf,
-          Weightage,
+          Weightage: finalWeightage,
           GoalCategory: finalCategory,
           Timeline,
           CreatedDate: existingGoal.CreatedDate,
@@ -1195,10 +1104,10 @@ const updateGoal = async (req, res) => {
       GoalNumber: finalGoalNumber,
       GoalTitle: finalGoalTitle,
       GoalDescription: finalGoalDesc,
-      Measurability,
+      Measurability: finalMeasurability,
       JointAccountability: finalJointAcc,
-      Weightage,
-      Priority,
+      Weightage: finalWeightage,
+      Priority: finalPriority,
       Timeline,
       MeetPerformance: finalMeetPerf,
       ExceedPerformance: finalExceedPerf,

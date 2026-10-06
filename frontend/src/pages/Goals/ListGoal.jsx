@@ -6,6 +6,7 @@ import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import { Button } from '@mui/material';
 import api from '../../services/api';
 import { getFiscalQuarterOptions } from '../../utils/fiscalQuarter';
+import { canEditGoal } from '../../utils/goalEditability';
 
 const STATUS_OPTIONS = [
   'Draft', 'Submitted', 'HOD Approved', 'Reviewed By HOD',
@@ -177,7 +178,7 @@ const ListGoal = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                         <Link to={`/goals/view/${goal.GoalID}`} className="text-indigo-600 hover:text-indigo-900 font-semibold">View</Link>
 
-                        {goal.IsGoalOwner && goal.GoalStatus !== 'Submitted' && (
+                        {goal.IsGoalOwner && canEditGoal(goal) && (
                           <Link to={`/goals/edit/${goal.GoalID}`} className="text-blue-600 hover:text-blue-900 font-semibold">Edit</Link>
                         )}
 

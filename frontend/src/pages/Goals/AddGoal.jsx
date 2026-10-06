@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import api from "../../services/api";
 
+const MAX_SUB_GOALS = 5;
+
 const getSubGoalWeightageTotal = (subGoals) =>
   subGoals
     .filter((subGoal) => subGoal.SubGoalTitle.trim())
@@ -138,16 +140,20 @@ const AddGoal = () => {
   };
 
   const addSubGoalRow = () => {
-    setSubGoals((prev) => [
-      ...prev,
-      {
-        SubGoalNo: prev.length + 1,
-        SubGoalTitle: "",
-        SubGoalDescription: "",
-        Weightage: "",
-        Target: "",
-      },
-    ]);
+    setSubGoals((prev) =>
+      prev.length >= MAX_SUB_GOALS
+        ? prev
+        : [
+            ...prev,
+            {
+              SubGoalNo: prev.length + 1,
+              SubGoalTitle: "",
+              SubGoalDescription: "",
+              Weightage: "",
+              Target: "",
+            },
+          ],
+    );
   };
 
   const removeSubGoalRow = (index) => {
@@ -167,6 +173,13 @@ const AddGoal = () => {
     }
 
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
+    if (titledSubGoals.length > MAX_SUB_GOALS) {
+      const message = `A goal can have no more than ${MAX_SUB_GOALS} sub-goals.`;
+      setError(message);
+      setFieldErrors({ SubGoals: message });
+      return;
+    }
+
     const invalidWeightage = titledSubGoals.some((sub) => {
       const weightage = Number(sub.Weightage);
       return sub.Weightage === "" || !Number.isFinite(weightage) || weightage <= 0 || weightage > 100;
@@ -239,7 +252,7 @@ const AddGoal = () => {
   };
 
 return (
-    <div className="flex-1 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 min-h-screen overflow-y-auto p-4 sm:p-8">
+    <div className="flex-1 bg-linear-to-br from-slate-50 via-white to-indigo-50/40 min-h-screen overflow-y-auto p-4 sm:p-8">
       <div className="max-w-[1600px] mx-auto">
         <div className="bg-white/90 backdrop-blur rounded-3xl shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-6 sm:p-10 lg:p-12">
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-6 border-b border-slate-100 mb-8">
@@ -634,13 +647,14 @@ return (
                     Sub-Goals <span className="text-red-500">*</span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Add sub-goals with weightages totaling 100% to track this goal's progress
+                    Add up to {MAX_SUB_GOALS} sub-goals with weightages totaling 100% to track this goal's progress
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={addSubGoalRow}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-sm font-semibold transition cursor-pointer"
+                  disabled={subGoals.length >= MAX_SUB_GOALS}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -732,7 +746,7 @@ return (
                 type="button"
                 disabled={loading}
                 onClick={(e) => handleSubmit(e, "Submitted")}
-                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-semibold text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-2.5 bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-semibold text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 cursor-pointer"
               >
                 Submit Goal
               </button>

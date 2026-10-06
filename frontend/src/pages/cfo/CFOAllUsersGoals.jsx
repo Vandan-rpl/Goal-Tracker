@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
 import { getFiscalQuarterOptions } from "../../utils/fiscalQuarter";
+import { canEditGoal } from "../../utils/goalEditability";
 
 const statusBadgeClass = (status) => {
   if (status?.includes("Approved")) return "bg-green-100 text-green-700";
@@ -185,9 +186,11 @@ const CFOAllUsersGoals = () => {
                         <Link to={`/goals/view/${goal.GoalID}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer">
                           View details
                         </Link>
-                        <Link to={`/goals/edit/${goal.GoalID}`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
-                          Edit
-                        </Link>
+                        {canEditGoal(goal) && (
+                          <Link to={`/goals/edit/${goal.GoalID}`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                            Edit
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </tr>

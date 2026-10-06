@@ -1,88 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../services/api";
+import { canEditGoal, isTimelineOverdue } from "../../utils/goalEditability";
+
+const MAX_SUB_GOALS = 5;
 
 const getSubGoalWeightageTotal = (subGoals) =>
   subGoals
     .filter((subGoal) => subGoal.SubGoalTitle.trim())
     .reduce((total, subGoal) => total + Math.round(Number(subGoal.Weightage || 0) * 100), 0) / 100;
-
-function getDateKey(value) {
-  if (!value) return null;
-
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) return null;
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-  }
-
-  const dateString = String(value).trim();
-  const dateOnlyMatch = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (dateOnlyMatch) {
-    return `${dateOnlyMatch[1]}-${dateOnlyMatch[2].padStart(2, "0")}-${dateOnlyMatch[3].padStart(2, "0")}`;
-  }
-
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) return null;
-  return `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`;
-}
-
-function getLocalDateOnly(value) {
-  const dateKey = getDateKey(value);
-  if (!dateKey) return null;
-
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function getTodayDateKey() {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-}
-
-function getQuarterEndDate(dateValue) {
-  const date = getLocalDateOnly(dateValue);
-  if (!date) return null;
-
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  if (month >= 3 && month <= 5) return new Date(year, 5, 30);
-  if (month >= 6 && month <= 8) return new Date(year, 8, 30);
-  if (month >= 9) return new Date(year, 11, 31);
-  return new Date(year, 2, 31);
-}
-
-// TODO: consider moving this to a shared utils/fiscalQuarter.js on the
-// frontend (mirroring the backend's utils/fiscalQuarter.js) if more than
-// one component ends up needing it.
-function isWithinCarryForwardWindow(quarterEndDate) {
-  const qEnd = getLocalDateOnly(quarterEndDate);
-  if (!qEnd) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const windowStart = new Date(qEnd);
-  windowStart.setDate(windowStart.getDate() - 10);
-
-  // Next quarter start = day after this quarter ends
-  const nextQuarterStart = new Date(qEnd);
-  nextQuarterStart.setDate(nextQuarterStart.getDate() + 1);
-
-  const windowEnd = new Date(nextQuarterStart);
-  windowEnd.setDate(windowEnd.getDate() + 15);
-
-  return today >= windowStart && today <= windowEnd;
-}
-
-function isBeforeOrOnQuarterEnd(quarterEndDate) {
-  const quarterEnd = getDateKey(quarterEndDate);
-  return Boolean(quarterEnd && getTodayDateKey() <= quarterEnd);
-}
-
-function isDateOverdue(dateValue) {
-  const date = getDateKey(dateValue);
-  return Boolean(date && date < getTodayDateKey());
-}
 
 const EditGoal = () => {
   const { id } = useParams();
@@ -105,11 +31,7 @@ const EditGoal = () => {
     GoalStatus: "Draft",
   });
 
-  // QuarterEndDate isn't an editable form field — it's only needed to
-  // compute whether we're inside the carry-forward window, so it's kept
-  // separate from formData rather than sent back in the update payload.
-  const [quarterEndDate, setQuarterEndDate] = useState(null);
-
+  const [originalGoal, setOriginalGoal] = useState(null);
   const [subGoals, setSubGoals] = useState([]);
   const [jointAccountabilities, setJointAccountabilities] = useState([]);
   const [hasExistingJointAccountabilities, setHasExistingJointAccountabilities] = useState(false);
@@ -147,6 +69,10 @@ const EditGoal = () => {
       const res = await api.get(`/goals/${id}`);
       if (res.data.success) {
         const goal = res.data.data;
+        setOriginalGoal({
+          GoalStatus: goal.GoalStatus || "Draft",
+          Timeline: goal.Timeline || null,
+        });
         setFormData({
           GoalNumber: goal.GoalNumber || 1,
           GoalTitle: goal.GoalTitle || "",
@@ -176,8 +102,6 @@ const EditGoal = () => {
             LastName: item.LastName,
           })),
         );
-        setQuarterEndDate(goal.QuarterEndDate || null);
-
         if (goal.SubGoals && goal.SubGoals.length > 0) {
           setSubGoals(
             goal.SubGoals.map((sub) => ({
@@ -264,7 +188,11 @@ const EditGoal = () => {
       return sub.Weightage === "" || !Number.isFinite(weightage) || weightage <= 0 || weightage > 100;
     });
     const subGoalWeightageTotal = getSubGoalWeightageTotal(titledSubGoals);
-    if (titledSubGoals.length > 0 && (invalidSubGoalWeightage || subGoalWeightageTotal !== 100)) {
+    if (
+      !canEditTimelineOnly &&
+      titledSubGoals.length > 0 &&
+      (invalidSubGoalWeightage || subGoalWeightageTotal !== 100)
+    ) {
       const message = invalidSubGoalWeightage
         ? "Each titled sub-goal must have a weightage greater than 0 and no more than 100%."
         : `Sub-goal weightages must total 100%. Current total: ${subGoalWeightageTotal}%.`;
@@ -336,61 +264,25 @@ const EditGoal = () => {
     );
   }
 
-  const isSubmitted = formData.GoalStatus === "Submitted";
-  const isRejected = formData.GoalStatus === "Rejected";
-  const isDraft = formData.GoalStatus === "Draft";
+  const originalStatus = originalGoal?.GoalStatus || formData.GoalStatus;
+  const isRejected = originalStatus === "Rejected";
+  const isDraft = originalStatus === "Draft";
   const canSubmitForApproval = isDraft || isRejected;
-  const terminalStatus = ["Completed", "Cancelled"].includes(
-    formData.GoalStatus,
-  );
-  const approvedStatuses = [
-    "Approved",
-    "HOD Approved",
-    "Manager Approved",
-    "Business Head Approved",
-    "Reviewed By HOD",
-    "Review By Business Head",
-  ];
-  const timelineOverdue = isDateOverdue(formData.Timeline);
-  const effectiveQuarterEndDate =
-    quarterEndDate || getQuarterEndDate(formData.Timeline);
-  const canEditApprovedGoal =
-    approvedStatuses.includes(formData.GoalStatus) &&
-    isBeforeOrOnQuarterEnd(effectiveQuarterEndDate) &&
-    !timelineOverdue;
+  const terminalStatus = ["Completed", "Cancelled"].includes(originalStatus);
+  const timelineOverdue = isTimelineOverdue(originalGoal?.Timeline);
+  const canEditAllFields = isDraft || isRejected;
+  const canEditTimelineOnly =
+    !canEditAllFields && !terminalStatus && timelineOverdue;
+  const canEdit = canEditGoal(originalGoal);
+  const isRestrictedEdit = canEditTimelineOnly;
 
-  // Edit permissions follow the goal's status and quarter window for every
-  // authorized editor, regardless of role.
-  const isStatusLocked =
-    !isDraft &&
-    !isRejected &&
-    !canEditApprovedGoal;
-
-  const canCarryForward =
-    approvedStatuses.includes(formData.GoalStatus) &&
-    !terminalStatus &&
-    (isWithinCarryForwardWindow(effectiveQuarterEndDate) ||
-      isDateOverdue(effectiveQuarterEndDate) ||
-      timelineOverdue);
-
-  // Terminal statuses and locked goals outside the carry-forward window
-  // cannot be edited.
-  const isFullyLocked = isStatusLocked && !canCarryForward;
-
-  // During carry-forward, only Timeline is editable.
-  const isRestrictedEdit = isStatusLocked || canCarryForward;
-
-  if (isFullyLocked) {
+  if (!canEdit) {
     return (
       <div className="flex-1 bg-gray-50 min-h-screen p-8 text-center">
         <div className="bg-amber-50 text-amber-800 p-4 rounded-xl max-w-md mx-auto mb-4 font-medium">
           {terminalStatus
             ? `This goal is ${formData.GoalStatus} and cannot be edited.`
-            : isSubmitted
-              ? "This goal is currently Submitted and cannot be edited by the user."
-              : approvedStatuses.includes(formData.GoalStatus)
-                ? "This approved goal can only be edited before its quarter ends."
-                : "This goal is awaiting approval and cannot be edited right now."}
+            : `This goal is ${originalStatus} and can only be edited when it is Draft or Rejected, or after its Timeline has passed.`}
         </div>
         <button
           onClick={() => navigate("/goals")}
@@ -403,16 +295,20 @@ const EditGoal = () => {
   }
 
   const addSubGoalRow = () => {
-    setSubGoals((prev) => [
-      ...prev,
-      {
-        SubGoalNo: prev.length + 1,
-        SubGoalTitle: "",
-        SubGoalDescription: "",
-        Weightage: "",
-        Target: "",
-      },
-    ]);
+    setSubGoals((prev) =>
+      prev.length >= MAX_SUB_GOALS
+        ? prev
+        : [
+            ...prev,
+            {
+              SubGoalNo: prev.length + 1,
+              SubGoalTitle: "",
+              SubGoalDescription: "",
+              Weightage: "",
+              Target: "",
+            },
+          ],
+    );
   };
 
   return (
@@ -427,10 +323,8 @@ const EditGoal = () => {
           </span>
           <h1 className="text-2xl font-bold text-slate-900">Edit Goal</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {canCarryForward
-              ? timelineOverdue
-                ? "This goal is overdue. Extend the Timeline to carry it forward; saving resubmits it for approval."
-                : "This goal's quarter is closing. Push the Timeline out to carry it into the next quarter — this resubmits it for approval."
+            {canEditTimelineOnly
+              ? "This goal is overdue. Only its Timeline can be changed; saving resubmits it for approval."
               : isRejected
                 ? "Revise the rejected goal, then submit it again for approval."
                 : "Modify goal targets, metrics, and status."}
@@ -447,13 +341,12 @@ const EditGoal = () => {
       </div>
 
       {/* Notice Banners */}
-      {canCarryForward && (
+      {canEditTimelineOnly && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg text-sm">
           <span className="text-amber-600 font-bold">⚠️</span>
           <p>
-            {timelineOverdue
-              ? "This goal is overdue. Only the Timeline can be changed; saving will resubmit it for approval with the new date."
-              : "This goal is locked, but the carry-forward window is open. Only the Timeline field can be changed — saving will resubmit this goal for approval with the new date."}
+            This goal's Timeline has passed. Only the Timeline can be changed;
+            saving will resubmit it for approval with the new date.
           </p>
         </div>
       )}
@@ -469,7 +362,11 @@ const EditGoal = () => {
         onSubmit={(e) =>
           handleSubmit(
             e,
-            isDraft ? "Draft" : formData.GoalStatus,
+            canEditTimelineOnly
+              ? "Submitted"
+              : isDraft
+                ? "Draft"
+                : formData.GoalStatus,
           )
         }
         className="space-y-6"
@@ -590,12 +487,11 @@ const EditGoal = () => {
                 type="date"
                 name="Timeline"
                 required
-                disabled={isRestrictedEdit && !canCarryForward}
                 value={formData.Timeline}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
                   fieldErrors.Timeline ? "border-red-500" : "border-slate-300"
-                } ${canCarryForward ? "ring-2 ring-amber-400 border-amber-400 bg-amber-50/50" : ""}`}
+                } ${canEditTimelineOnly ? "ring-2 ring-amber-400 border-amber-400 bg-amber-50/50" : ""}`}
               />
               {fieldErrors.Timeline && (
                 <p className="text-red-600 text-xs mt-1 font-medium">
@@ -877,10 +773,10 @@ const EditGoal = () => {
             <button
               type="button"
               onClick={addSubGoalRow}
-              disabled={isRestrictedEdit}
+              disabled={isRestrictedEdit || subGoals.length >= MAX_SUB_GOALS}
               className="inline-flex items-center justify-center px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              + Add Sub-Goal
+              + Add Sub-Goal ({subGoals.length}/{MAX_SUB_GOALS})
             </button>
           </div>
 
@@ -963,8 +859,8 @@ const EditGoal = () => {
               ? "Saving..."
               : isDraft
                 ? "Save as Draft"
-                : canCarryForward
-                  ? "Save New Timeline & Resubmit"
+                : canEditTimelineOnly
+                  ? "Save Timeline & Resubmit"
                   : "Save Goal"}
           </button>
 

@@ -4,6 +4,7 @@ import { jwtDecode } from "jwt-decode";
 import api from "../../services/api";
 import GoalStatusStepper from "../../components/GoalStatusStepper/GoalStatusStepper";
 import GoalHistory from "./Goalhistory";
+import { canEditGoal as isGoalEditable } from "../../utils/goalEditability";
 
 const ViewGoal = () => {
   const { id } = useParams();
@@ -90,6 +91,7 @@ const ViewGoal = () => {
     goal &&
     loggedInUserId != null &&
     Number(goal.UserID) === Number(loggedInUserId);
+  const canEditCurrentGoal = isGoalEditable(goal);
   const isJointParticipant =
     goal?.IsJointParticipant === true && !isGoalOwner;
   const isReviewTimingOpen = (goalData) => {
@@ -710,8 +712,7 @@ const ViewGoal = () => {
 
         {/* Bottom Actions */}
         <div className="pt-6 border-t border-slate-200 flex items-center justify-between">
-          {isGoalOwner &&
-          (goal.GoalStatus === "Draft" || goal.GoalStatus === "Rejected") ? (
+          {isGoalOwner && canEditCurrentGoal ? (
             <Link
               to={`/goals/edit/${goal.GoalID}`}
               className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm shadow-md transition-all ml-auto active:scale-[0.98] cursor-pointer"
@@ -726,12 +727,14 @@ const ViewGoal = () => {
                 CFO approval required:
               </span>
               <div className="flex flex-col sm:flex-row gap-3">
-                <Link
-                  to={`/goals/edit/${goal.GoalID}`}
-                  className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-center rounded-xl font-bold text-sm shadow-sm transition cursor-pointer"
-                >
-                  Edit Goal
-                </Link>
+                {canEditCurrentGoal && (
+                  <Link
+                    to={`/goals/edit/${goal.GoalID}`}
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-center rounded-xl font-bold text-sm shadow-sm transition cursor-pointer"
+                  >
+                    Edit Goal
+                  </Link>
+                )}
                 <button
                   onClick={() => handleGoalAction("Rejected")}
                   disabled={actionLoading}
@@ -758,12 +761,14 @@ const ViewGoal = () => {
                 Review and take action on this goal:
               </span>
               <div className="flex flex-col sm:flex-row gap-3">
-                <Link
-                  to={`/goals/edit/${goal.GoalID}`}
-                  className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-center rounded-xl font-bold text-sm shadow-sm transition cursor-pointer"
-                >
-                  Modify Goal
-                </Link>
+                {canEditCurrentGoal && (
+                  <Link
+                    to={`/goals/edit/${goal.GoalID}`}
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-center rounded-xl font-bold text-sm shadow-sm transition cursor-pointer"
+                  >
+                    Modify Goal
+                  </Link>
+                )}
                 <button
                   onClick={() => handleGoalAction("Rejected")}
                   disabled={actionLoading}
