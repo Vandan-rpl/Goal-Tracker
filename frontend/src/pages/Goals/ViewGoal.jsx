@@ -89,9 +89,14 @@ const ViewGoal = () => {
 
   const isGoalOwner =
     goal &&
-    loggedInUserId != null &&
-    Number(goal.UserID) === Number(loggedInUserId);
-  const canEditCurrentGoal = isGoalEditable(goal);
+    (goal.IsGoalOwner === true ||
+      (goal.IsGoalOwner == null &&
+        loggedInUserId != null &&
+        Number(goal.UserID) === Number(loggedInUserId)));
+  const canEditCurrentGoal = isGoalEditable(
+    goal,
+    isAuthorizedApprover && !isGoalOwner,
+  );
   const isJointParticipant =
     goal?.IsJointParticipant === true && !isGoalOwner;
   const isReviewTimingOpen = (goalData) => {

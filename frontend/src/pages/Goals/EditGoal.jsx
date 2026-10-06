@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import api from "../../services/api";
-import { canEditGoal, isTimelineOverdue } from "../../utils/goalEditability";
+import {
+  canEditGoal,
+  canEditTimelineOnlyGoal,
+  isApproverRole,
+  isTimelineOverdue,
+} from "../../utils/goalEditability";
 
 const MAX_SUB_GOALS = 5;
 
@@ -70,6 +76,9 @@ const EditGoal = () => {
       if (res.data.success) {
         const goal = res.data.data;
         setOriginalGoal({
+          CarryForwardCount: goal.CarryForwardCount,
+          IsGoalOwner: goal.IsGoalOwner,
+          UserID: goal.UserID,
           GoalStatus: goal.GoalStatus || "Draft",
           Timeline: goal.Timeline || null,
         });
@@ -265,15 +274,39 @@ const EditGoal = () => {
   }
 
   const originalStatus = originalGoal?.GoalStatus || formData.GoalStatus;
+  let currentUserId = null;
+  let currentRole = "";
+  try {
+    const token = localStorage.getItem("token");
+    if (token) currentUserId = jwtDecode(token).userId;
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    currentRole =
+      user.role ||
+      user.Role ||
+      user.userRole ||
+      user.UserRole ||
+      user.designation ||
+      user.Designation ||
+      "";
+  } catch (error) {
+    console.error("Failed to read the current user's edit permissions", error);
+  }
+  const isGoalOwner =
+    originalGoal &&
+    (originalGoal.IsGoalOwner === true ||
+      (originalGoal.IsGoalOwner == null &&
+        currentUserId != null &&
+        Number(originalGoal.UserID) === Number(currentUserId)));
+  const isApprover = isApproverRole(currentRole) && !isGoalOwner;
   const isRejected = originalStatus === "Rejected";
   const isDraft = originalStatus === "Draft";
   const canSubmitForApproval = isDraft || isRejected;
   const terminalStatus = ["Completed", "Cancelled"].includes(originalStatus);
   const timelineOverdue = isTimelineOverdue(originalGoal?.Timeline);
-  const canEditAllFields = isDraft || isRejected;
+  const canEditAllFields = isDraft || isRejected || isApprover;
   const canEditTimelineOnly =
-    !canEditAllFields && !terminalStatus && timelineOverdue;
-  const canEdit = canEditGoal(originalGoal);
+    !canEditAllFields && canEditTimelineOnlyGoal(originalGoal);
+  const canEdit = canEditGoal(originalGoal, isApprover);
   const isRestrictedEdit = canEditTimelineOnly;
 
   if (!canEdit) {

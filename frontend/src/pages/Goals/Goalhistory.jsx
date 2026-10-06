@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getGoalHistory } from "../../services/goalService";
 
+// Goal content fields shown in history. GoalStatus is intentionally left out:
+// approvals, rejections and resubmissions are workflow events, not edits.
 const FIELD_LABELS = {
   GoalNumber: "Goal Number",
   GoalTitle: "Goal Title",
@@ -15,8 +17,36 @@ const FIELD_LABELS = {
   ValidationSource: "Validation Source",
   CrossFunctionalGoal: "Cross-Functional Goal",
   GoalCategory: "Category",
-  GoalStatus: "Status",
 };
+
+const TRACKED_FIELDS = new Set(Object.keys(FIELD_LABELS));
+
+const isCreateEntry = (entry) =>
+  (entry.action || entry.Action || "").toLowerCase() === "created";
+
+// Older history rows were logged before status changes were excluded.
+// Strip non-content fields from them, rebuild the auto-generated
+// "Updated: ..." remark, and drop entries left with no real changes.
+const toContentHistory = (entries) =>
+  entries
+    .map((entry) => {
+      const changes = (entry.changes || []).filter((change) =>
+        TRACKED_FIELDS.has(change.field),
+      );
+      const isAutoRemark =
+        !entry.remarks || entry.remarks.startsWith("Updated:");
+      return {
+        ...entry,
+        changes,
+        remarks:
+          isAutoRemark && changes.length > 0
+            ? `Updated: ${changes
+                .map((change) => FIELD_LABELS[change.field])
+                .join(", ")}`
+            : entry.remarks,
+      };
+    })
+    .filter((entry) => entry.changes.length > 0 || isCreateEntry(entry));
 
 const formatValue = (val) => {
   if (val === null || val === undefined || val === "") {
@@ -46,13 +76,12 @@ export default function GoalHistory({ goalId }) {
     setLoading(true);
     getGoalHistory(goalId)
       .then((data) => {
-        if (!cancelled) {
-          const list = data.history || [];
-          setHistory(list);
-          // Expand the most recent history entry by default
-          if (list.length > 0) {
-            setOpenEntries({ [list[0].historyId]: true });
-          }
+        if (cancelled) return;
+        const list = toContentHistory(data.history || []);
+        setHistory(list);
+        // Expand the most recent history entry by default
+        if (list.length > 0) {
+          setOpenEntries({ [list[0].historyId]: true });
         }
       })
       .catch(() => {
@@ -84,8 +113,16 @@ export default function GoalHistory({ goalId }) {
   if (error) {
     return (
       <div className="flex items-center gap-3 p-4 text-sm text-red-700 bg-red-50 rounded-xl border border-red-200">
-        <svg className="h-5 w-5 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+        <svg
+          className="h-5 w-5 shrink-0 text-red-500"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+            clipRule="evenodd"
+          />
         </svg>
         <span className="font-medium">{error}</span>
       </div>
@@ -97,12 +134,26 @@ export default function GoalHistory({ goalId }) {
     return (
       <div className="text-center p-10 bg-white rounded-xl border border-slate-200/80 shadow-sm">
         <div className="inline-flex p-3 rounded-full bg-slate-100 text-slate-400 mb-3">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.5"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
         </div>
-        <h4 className="text-base font-semibold text-slate-800">No history recorded</h4>
-        <p className="text-sm text-slate-500 mt-1">No changes have been made to this goal yet.</p>
+        <h4 className="text-base font-semibold text-slate-800">
+          No history recorded
+        </h4>
+        <p className="text-sm text-slate-500 mt-1">
+          No details of this goal have been changed yet.
+        </p>
       </div>
     );
   }
@@ -111,12 +162,6 @@ export default function GoalHistory({ goalId }) {
     <div className="max-w-4xl mx-auto space-y-6 font-sans">
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-        {/* <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-bold text-slate-800">Audit History</h3>
-        </div> */}
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
           {history.length} {history.length === 1 ? "Revision" : "Revisions"}
         </span>
@@ -167,7 +212,10 @@ export default function GoalHistory({ goalId }) {
 
                   {/* Remarks tag */}
                   {entry.remarks && (
-                    <div className="hidden sm:block max-w-[200px] truncate text-xs italic text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60" title={entry.remarks}>
+                    <div
+                      className="hidden sm:block max-w-[200px] truncate text-xs italic text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60"
+                      title={entry.remarks}
+                    >
                       "{entry.remarks}"
                     </div>
                   )}
@@ -177,7 +225,7 @@ export default function GoalHistory({ goalId }) {
                     <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">
                       {hasChanges
                         ? `${entry.changes.length} change${entry.changes.length > 1 ? "s" : ""}`
-                        : "No field changes"}
+                        : "Goal created"}
                     </span>
                     <svg
                       className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
@@ -188,7 +236,11 @@ export default function GoalHistory({ goalId }) {
                       stroke="currentColor"
                       strokeWidth="2"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M19 9l-7 7-7-7"
+                      />
                     </svg>
                   </div>
                 </button>
@@ -205,7 +257,7 @@ export default function GoalHistory({ goalId }) {
                   <div className="border-t border-slate-100 bg-slate-50/50 p-4">
                     {!hasChanges ? (
                       <p className="text-xs italic text-slate-500 py-1">
-                        No field-level changes recorded for this entry.
+                        Goal was created. Later edits to its details will appear here.
                       </p>
                     ) : (
                       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
@@ -213,13 +265,18 @@ export default function GoalHistory({ goalId }) {
                           <thead>
                             <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold tracking-wider uppercase text-[10px]">
                               <th className="py-2.5 px-3.5 w-1/4">Field</th>
-                              <th className="py-2.5 px-3.5 w-3/8">Previous Value</th>
+                              <th className="py-2.5 px-3.5 w-3/8">
+                                Previous Value
+                              </th>
                               <th className="py-2.5 px-3.5 w-3/8">New Value</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {entry.changes.map((change) => (
-                              <tr key={change.field} className="hover:bg-slate-50/50">
+                              <tr
+                                key={change.field}
+                                className="hover:bg-slate-50/50"
+                              >
                                 <td className="py-2.5 px-3.5 font-semibold text-slate-800 align-top">
                                   {FIELD_LABELS[change.field] || change.field}
                                 </td>

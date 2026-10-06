@@ -53,6 +53,42 @@ const hasJointAssignment = async (goalId, userId, transaction) => {
   return result.recordset.length > 0;
 };
 
+//For the goal history
+const TRACKED_GOAL_FIELDS = [
+  "GoalNumber",
+  "GoalTitle",
+  "GoalDescription",
+  "Measurability",
+  "JointAccountability",
+  "Weightage",
+  "Priority",
+  "Timeline",
+  "MeetPerformance",
+  "ExceedPerformance",
+  "ValidationSource",
+  "CrossFunctionalGoal",
+  "GoalCategory",
+];
+ 
+// Parse a JSON diff string and keep only tracked fields.
+// Returns null for plain-text values (e.g. "Approved"), which are status
+// events rather than content changes.
+const pickTrackedFields = (json) => {
+  if (!json) return null;
+  try {
+    const obj = JSON.parse(json);
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+    return Object.fromEntries(
+      TRACKED_GOAL_FIELDS.filter((field) => field in obj).map((field) => [
+        field,
+        obj[field],
+      ]),
+    );
+  } catch {
+    return null;
+  }
+};
+
 // Helper function to log goal history using the values allowed by GoalHistory.Action.
 const logGoalHistory = async (
   transaction,
@@ -64,6 +100,26 @@ const logGoalHistory = async (
   performedBy,
 ) => {
   try {
+    if (action !== "CREATE") {
+      const oldTracked = pickTrackedFields(oldValue) || {};
+      const newTracked = pickTrackedFields(newValue) || {};
+      const changedFields = [
+        ...new Set([...Object.keys(oldTracked), ...Object.keys(newTracked)]),
+      ];
+ 
+      // Status-only events (approve, reject, review, resubmit) are not logged
+      if (changedFields.length === 0) return;
+ 
+      oldValue = JSON.stringify(oldTracked);
+      newValue = JSON.stringify(newTracked);
+ 
+      // Rebuild the auto-generated remark so it no longer lists GoalStatus;
+      // keep any custom remark a caller passed in
+      if (!remarks || remarks.startsWith("Updated:")) {
+        remarks = `Updated: ${changedFields.join(", ")}`;
+      }
+    }
+ 
     const req = new sql.Request(transaction);
     await req
       .input("GoalID", sql.BigInt, goalId)
@@ -72,9 +128,9 @@ const logGoalHistory = async (
       .input("NewValue", sql.NVarChar, newValue || null)
       .input("Remarks", sql.NVarChar, remarks || null)
       .input("PerformedBy", sql.Int, performedBy || null).query(`
-               INSERT INTO dbo.GoalHistory (GoalID, Action, OldValue, NewValue, Remarks, PerformedBy, PerformedDate)
-               VALUES (@GoalID, @Action, @OldValue, @NewValue, @Remarks, @PerformedBy, GETDATE())
-           `);
+        INSERT INTO dbo.GoalHistory (GoalID, Action, OldValue, NewValue, Remarks, PerformedBy, PerformedDate)
+        VALUES (@GoalID, @Action, @OldValue, @NewValue, @Remarks, @PerformedBy, GETDATE())
+      `);
   } catch (err) {
     console.error("Goal History Logging Error:", err);
   }
@@ -191,9 +247,29 @@ const getGoals = async (req, res) => {
     let query = `
               SELECT g.*, u.Username, u.FirstName, u.LastName,
                 CAST(CASE WHEN g.UserID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsGoalOwner,
-                progress.SubGoalCompletionPercentage
+                progress.SubGoalCompletionPercentage,
+                timelineForDashboard.DashboardTimeline
             FROM dbo.Goals g
             JOIN dbo.Users u ON g.UserID = u.UserID
+            OUTER APPLY (
+              SELECT TOP 1
+                TRY_CONVERT(
+                  date,
+                  CASE WHEN ISJSON(h.OldValue) = 1
+                    THEN JSON_VALUE(h.OldValue, '$.Timeline')
+                  END
+                ) AS PreviousTimeline
+              FROM dbo.GoalHistory h
+              WHERE h.GoalID = g.GoalID
+                AND h.Action = 'Updated'
+                AND TRY_CONVERT(
+                  date,
+                  CASE WHEN ISJSON(h.NewValue) = 1
+                    THEN JSON_VALUE(h.NewValue, '$.Timeline')
+                  END
+                ) = g.Timeline
+              ORDER BY h.PerformedDate DESC, h.GoalHistoryID DESC
+            ) pendingTimeline
             OUTER APPLY (
               SELECT ISNULL(
                 SUM(CASE WHEN sg.Status = 'Completed' THEN sg.Weightage ELSE 0 END),
@@ -202,6 +278,14 @@ const getGoals = async (req, res) => {
               FROM dbo.GoalSubGoals sg
               WHERE sg.GoalID = g.GoalID
             ) progress
+            CROSS APPLY (
+              SELECT CASE
+                WHEN ISNULL(g.CarryForwardCount, 0) > 0
+                  AND g.GoalStatus NOT IN ('Approved', 'Completed', 'Cancelled')
+                  THEN ISNULL(pendingTimeline.PreviousTimeline, g.Timeline)
+                ELSE g.Timeline
+              END AS DashboardTimeline
+            ) timelineForDashboard
             WHERE g.UserID = @UserID
     `;
 
@@ -222,6 +306,7 @@ const getGoals = async (req, res) => {
 
     const result = await request.query(query);
 
+    res.set("Cache-Control", "no-store");
     return res.status(200).json({ success: true, data: result.recordset });
   } catch (error) {
     console.error("Get Goals Error:", error);
@@ -503,6 +588,7 @@ const getGoalById = async (req, res) => {
       success: true,
       data: {
         ...goal,
+        IsGoalOwner: Number(requesterUserId) === Number(goal.UserID),
         SubGoals: subGoalsResult.recordset,
         CompletionPercentage: calculateGoalProgress(subGoalsResult.recordset),
         History: historyResult.recordset,
@@ -900,11 +986,27 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    const canEditAllFields = ["Draft", "Rejected"].includes(currentStatus);
     const terminalStatus = ["Completed", "Cancelled"].includes(currentStatus);
+    const isGoalOwner = Number(existingGoal.UserID) === Number(userId);
+    const isApprover = isEnterpriseGoalManager || isTeamGoalManager;
+    const canEditAllFields =
+      !terminalStatus &&
+      (["Draft", "Rejected"].includes(currentStatus) ||
+        (isApprover && !isGoalOwner));
+    const timelineOnlyEditStatuses = [
+      "HOD Approved",
+      "Manager Approved",
+      "Business Head Approved",
+      "Reviewed By HOD",
+      "Review By Business Head",
+      "Approved",
+    ];
     const isCarryForward =
+      isGoalOwner &&
       !canEditAllFields &&
       !terminalStatus &&
+      timelineOnlyEditStatuses.includes(currentStatus) &&
+      Number(existingGoal.CarryForwardCount || 0) === 0 &&
       isDateBeforeToday(existingGoal.Timeline);
 
     if (!canEditAllFields && !isCarryForward) {
@@ -1195,7 +1297,12 @@ const updateGoal = async (req, res) => {
 
       await new sql.Request(transaction)
         .input("GoalID", sql.BigInt, id)
-        .input("FromQuarter", sql.VarChar, existingGoal.Quarter)
+        .input(
+          "FromQuarter",
+          sql.VarChar,
+          existingGoal.Quarter ||
+            getFiscalQuarter(existingGoal.Timeline).label,
+        )
         .input("ToQuarter", sql.VarChar, newQuarter)
         .input("ProgressAtCarryForward", sql.Decimal(5, 2), progressAtCarryForward)
         .query(`

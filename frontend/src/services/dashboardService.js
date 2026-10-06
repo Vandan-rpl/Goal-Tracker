@@ -16,7 +16,9 @@ const BASE = "/goals";
  * Completion is the total weightage of completed sub-goals.
  */
 export async function getEmployeeGoals() {
-  const res = await api.get(BASE);
+  const res = await api.get(BASE, {
+    headers: { "Cache-Control": "no-cache" },
+  });
   return res.data.data;
 }
 

@@ -1,5 +1,13 @@
 const EDITABLE_STATUSES = new Set(["Draft", "Rejected"]);
 const TERMINAL_STATUSES = new Set(["Completed", "Cancelled"]);
+const TIMELINE_ONLY_EDIT_STATUSES = new Set([
+  "HOD Approved",
+  "Manager Approved",
+  "Business Head Approved",
+  "Reviewed By HOD",
+  "Review By Business Head",
+  "Approved",
+]);
 
 const getDateKey = (value) => {
   if (!value) return null;
@@ -23,9 +31,34 @@ export const isTimelineOverdue = (timeline) => {
   return timelineDate < todayDate;
 };
 
-export const canEditGoal = (goal) => {
+export const canEditGoal = (goal, isApprover = false) => {
   if (!goal) return false;
-  if (EDITABLE_STATUSES.has(goal.GoalStatus)) return true;
   if (TERMINAL_STATUSES.has(goal.GoalStatus)) return false;
-  return isTimelineOverdue(goal.Timeline);
+  if (EDITABLE_STATUSES.has(goal.GoalStatus) || isApprover) return true;
+  return canEditTimelineOnlyGoal(goal);
+};
+
+export const canEditTimelineOnlyGoal = (goal) =>
+  Boolean(
+    goal &&
+      TIMELINE_ONLY_EDIT_STATUSES.has(goal.GoalStatus) &&
+      Number(goal.CarryForwardCount || 0) === 0 &&
+      isTimelineOverdue(goal.Timeline),
+  );
+
+export const isApproverRole = (role) => {
+  const normalizedRole = String(role || "")
+    .toLowerCase()
+    .trim()
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ");
+
+  return [
+    "hod",
+    "cfo",
+    "admin",
+    "businesshead",
+    "business head",
+    "manager",
+  ].includes(normalizedRole);
 };

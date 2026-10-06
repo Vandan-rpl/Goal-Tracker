@@ -176,7 +176,7 @@ const ApproveGoals = () => {
                       >
                         Reject Goal
                       </button>
-                      {canEditGoal(goal) && (
+                      {canEditGoal(goal, true) && (
                         <Link
                           to={`/goals/edit/${goal.GoalID}`}
                           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition"

@@ -186,7 +186,7 @@ const CFOAllUsersGoals = () => {
                         <Link to={`/goals/view/${goal.GoalID}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer">
                           View details
                         </Link>
-                        {canEditGoal(goal) && (
+                        {canEditGoal(goal, true) && (
                           <Link to={`/goals/edit/${goal.GoalID}`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
                             Edit
                           </Link>

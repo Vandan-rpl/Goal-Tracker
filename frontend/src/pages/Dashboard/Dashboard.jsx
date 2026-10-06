@@ -55,14 +55,49 @@ function progressFromGoal(goal) {
     : progressFromStatus(goal.GoalStatus);
 }
 
-function daysUntil(dateStr) {
+function getDateOnly(dateStr) {
   if (!dateStr) return null;
-  return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
+
+  const dateMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateMatch) {
+    return {
+      year: Number(dateMatch[1]),
+      month: Number(dateMatch[2]),
+      day: Number(dateMatch[3]),
+    };
+  }
+
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+  };
+}
+
+function daysUntil(dateStr) {
+  const date = getDateOnly(dateStr);
+  if (!date) return null;
+
+  const today = new Date();
+  const targetDay = Date.UTC(date.year, date.month - 1, date.day);
+  const todayDay = Date.UTC(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  return Math.round((targetDay - todayDay) / (1000 * 60 * 60 * 24));
 }
 
 function formatDate(dateStr) {
   if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const date = getDateOnly(dateStr);
+  if (!date) return "—";
+  return new Date(date.year, date.month - 1, date.day).toLocaleDateString(
+    "en-IN",
+    { day: "numeric", month: "short", year: "numeric" },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +111,8 @@ function GoalCard({ goal }) {
     : STATUS_STYLES[goal.GoalStatus] || DEFAULT_STATUS_STYLE;
   const StatusIcon = style.icon;
   const progress = progressFromGoal(goal);
-  const days = daysUntil(goal.Timeline);
+  const displayedTimeline = goal.DashboardTimeline || goal.Timeline;
+  const days = daysUntil(displayedTimeline);
   const normalizedStatus = normalizeGoalStatus(goal.GoalStatus);
   const overdue = days !== null && days < 0 && !["completed", "cancelled"].includes(normalizedStatus);
 
@@ -109,7 +145,7 @@ function GoalCard({ goal }) {
           <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
             <span className="flex items-center gap-1">
               <Calendar size={12} />
-              {formatDate(goal.Timeline)}
+              {formatDate(displayedTimeline)}
             </span>
             {days !== null && (
               <span className={overdue ? "text-red-600 font-medium" : ""}>
