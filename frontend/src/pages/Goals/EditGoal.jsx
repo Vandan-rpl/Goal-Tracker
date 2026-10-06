@@ -7,17 +7,59 @@ const getSubGoalWeightageTotal = (subGoals) =>
     .filter((subGoal) => subGoal.SubGoalTitle.trim())
     .reduce((total, subGoal) => total + Math.round(Number(subGoal.Weightage || 0) * 100), 0) / 100;
 
+function getDateKey(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+
+  const dateString = String(value).trim();
+  const dateOnlyMatch = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (dateOnlyMatch) {
+    return `${dateOnlyMatch[1]}-${dateOnlyMatch[2].padStart(2, "0")}-${dateOnlyMatch[3].padStart(2, "0")}`;
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+  return `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`;
+}
+
+function getLocalDateOnly(value) {
+  const dateKey = getDateKey(value);
+  if (!dateKey) return null;
+
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function getTodayDateKey() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
+function getQuarterEndDate(dateValue) {
+  const date = getLocalDateOnly(dateValue);
+  if (!date) return null;
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  if (month >= 3 && month <= 5) return new Date(year, 5, 30);
+  if (month >= 6 && month <= 8) return new Date(year, 8, 30);
+  if (month >= 9) return new Date(year, 11, 31);
+  return new Date(year, 2, 31);
+}
+
 // TODO: consider moving this to a shared utils/fiscalQuarter.js on the
 // frontend (mirroring the backend's utils/fiscalQuarter.js) if more than
 // one component ends up needing it.
 function isWithinCarryForwardWindow(quarterEndDate) {
-  if (!quarterEndDate) return false;
+  const qEnd = getLocalDateOnly(quarterEndDate);
+  if (!qEnd) return false;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  const qEnd = new Date(quarterEndDate);
-  qEnd.setHours(0, 0, 0, 0);
 
   const windowStart = new Date(qEnd);
   windowStart.setDate(windowStart.getDate() - 10);
@@ -33,19 +75,13 @@ function isWithinCarryForwardWindow(quarterEndDate) {
 }
 
 function isBeforeOrOnQuarterEnd(quarterEndDate) {
-  if (!quarterEndDate) return false;
-  const quarterEnd = String(quarterEndDate).slice(0, 10);
-  const today = new Date();
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return todayDate <= quarterEnd;
+  const quarterEnd = getDateKey(quarterEndDate);
+  return Boolean(quarterEnd && getTodayDateKey() <= quarterEnd);
 }
 
-function isTimelineOverdue(timeline) {
-  if (!timeline) return false;
-  const timelineDate = String(timeline).slice(0, 10);
-  const today = new Date();
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return timelineDate < todayDate;
+function isDateOverdue(dateValue) {
+  const date = getDateKey(dateValue);
+  return Boolean(date && date < getTodayDateKey());
 }
 
 const EditGoal = () => {
@@ -315,9 +351,13 @@ const EditGoal = () => {
     "Reviewed By HOD",
     "Review By Business Head",
   ];
+  const timelineOverdue = isDateOverdue(formData.Timeline);
+  const effectiveQuarterEndDate =
+    quarterEndDate || getQuarterEndDate(formData.Timeline);
   const canEditApprovedGoal =
     approvedStatuses.includes(formData.GoalStatus) &&
-    isBeforeOrOnQuarterEnd(quarterEndDate);
+    isBeforeOrOnQuarterEnd(effectiveQuarterEndDate) &&
+    !timelineOverdue;
 
   // Edit permissions follow the goal's status and quarter window for every
   // authorized editor, regardless of role.
@@ -326,18 +366,19 @@ const EditGoal = () => {
     !isRejected &&
     !canEditApprovedGoal;
 
-  const timelineOverdue = isTimelineOverdue(formData.Timeline);
   const canCarryForward =
-    isStatusLocked &&
+    approvedStatuses.includes(formData.GoalStatus) &&
     !terminalStatus &&
-    (isWithinCarryForwardWindow(quarterEndDate) || timelineOverdue);
+    (isWithinCarryForwardWindow(effectiveQuarterEndDate) ||
+      isDateOverdue(effectiveQuarterEndDate) ||
+      timelineOverdue);
 
   // Terminal statuses and locked goals outside the carry-forward window
   // cannot be edited.
   const isFullyLocked = isStatusLocked && !canCarryForward;
 
   // During carry-forward, only Timeline is editable.
-  const isRestrictedEdit = isStatusLocked;
+  const isRestrictedEdit = isStatusLocked || canCarryForward;
 
   if (isFullyLocked) {
     return (

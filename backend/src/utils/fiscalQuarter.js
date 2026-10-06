@@ -1,3 +1,14 @@
+function toDate(dateValue) {
+  if (dateValue instanceof Date) return dateValue;
+
+  if (typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    const [year, month, day] = dateValue.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  return new Date(dateValue);
+}
+
 function getQuarterStartDate(quarterEndDate) {
   const start = new Date(quarterEndDate);
   start.setMonth(start.getMonth() - 2, 1);
@@ -6,8 +17,13 @@ function getQuarterStartDate(quarterEndDate) {
 }
 
 function getFiscalQuarter(date = new Date()) {
-  const month = date.getMonth();
-  const year = date.getFullYear();
+  const localDate = toDate(date);
+  if (Number.isNaN(localDate.getTime())) {
+    throw new RangeError("A valid date is required to calculate a fiscal quarter.");
+  }
+
+  const month = localDate.getMonth();
+  const year = localDate.getFullYear();
   let quarter, fyStartYear, quarterEndDate;
 
   if (month >= 3 && month <= 5) {

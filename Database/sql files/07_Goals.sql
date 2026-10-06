@@ -11,6 +11,8 @@ CREATE TABLE Goals
     Priority VARCHAR(20) NOT NULL
         CHECK (Priority IN ('Low','Medium','High','Critical')),
     Timeline DATE NOT NULL,
+    Quarter VARCHAR(10) NULL,
+    QuarterEndDate DATE NULL,
     MeetPerformance NVARCHAR(MAX) NULL,
     ExceedPerformance NVARCHAR(MAX) NULL,
     ValidationSource NVARCHAR(MAX) NULL,

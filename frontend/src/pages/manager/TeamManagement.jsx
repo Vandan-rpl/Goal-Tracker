@@ -224,12 +224,12 @@ const TeamManagement = () => {
               Goals for: <span className="text-indigo-600">{selectedUser.name}</span>
             </h3>
             <div className="flex items-center gap-3">
-              <Link
+              {/* <Link
                 to={`/goals/final-evaluation/${selectedUser.id}`}
                 className="text-sm bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-md hover:bg-indigo-100 font-semibold transition"
               >
                 View Final Evaluation
-              </Link>
+              </Link> */}
               <button
                 onClick={() => {
                   setSelectedUser(null);
@@ -305,7 +305,13 @@ const TeamManagement = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 text-emerald-800">
+                          <span
+                            className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              goal.GoalStatus === 'Rejected'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
                             {goal.GoalStatus}
                           </span>
                         </td>
@@ -313,12 +319,14 @@ const TeamManagement = () => {
                           <Link to={`/goals/view/${goal.GoalID}`} className="text-indigo-600 hover:text-indigo-900 font-semibold">
                             View
                           </Link>
-                          <Link
-                            to={`/goals/review?goalId=${goal.GoalID}`}
-                            className="text-emerald-600 hover:text-emerald-900 font-semibold bg-emerald-50 px-3 py-1.5 rounded-md transition hover:bg-emerald-100"
-                          >
-                            Review
-                          </Link>
+                          {goal.GoalStatus !== 'Rejected' && (
+                            <Link
+                              to={`/goals/review?goalId=${goal.GoalID}`}
+                              className="text-emerald-600 hover:text-emerald-900 font-semibold bg-emerald-50 px-3 py-1.5 rounded-md transition hover:bg-emerald-100"
+                            >
+                              Review
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     ))

@@ -13,7 +13,6 @@ const ViewGoal = () => {
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [jointActionLoading, setJointActionLoading] = useState(false);
-  const [subGoalUpdatingId, setSubGoalUpdatingId] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
   // Quarterly update history state
@@ -93,11 +92,35 @@ const ViewGoal = () => {
     Number(goal.UserID) === Number(loggedInUserId);
   const isJointParticipant =
     goal?.IsJointParticipant === true && !isGoalOwner;
-  const canSubmitReview =
+  const isReviewTimingOpen = (goalData) => {
+    if (!goalData) return false;
+
+    const completionPercentage = Number(goalData.CompletionPercentage ?? 0);
+    if (Number.isFinite(completionPercentage) && completionPercentage >= 100) {
+      return true;
+    }
+
+    const quarterEndDate = goalData.QuarterEndDate || goalData.QuarterEnd;
+    if (!quarterEndDate) return false;
+
+    const endDate = new Date(quarterEndDate);
+    if (Number.isNaN(endDate.getTime())) return false;
+
+    const reviewWindowStart = new Date(endDate);
+    reviewWindowStart.setDate(endDate.getDate() - 10);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today >= reviewWindowStart;
+  };
+
+  const isReviewer =
     isAuthorizedApprover &&
     goal &&
     !isJointParticipant &&
     reviewableStatuses.includes(goal.GoalStatus);
+
+  const canSubmitReview = isReviewer && isReviewTimingOpen(goal);
 
   const canShowApproveReject =
     goal &&
@@ -192,38 +215,6 @@ const ViewGoal = () => {
       );
     } finally {
       setActionLoading(false);
-    }
-  };
-
-  const handleSubGoalStatusChange = async (subGoal, status) => {
-    try {
-      setSubGoalUpdatingId(subGoal.SubGoalID);
-      const response = await api.put(
-        `/goals/${id}/subgoals/${subGoal.SubGoalID}/status`,
-        { Status: status },
-      );
-
-      if (response.data.success) {
-        setGoal((previous) => ({
-          ...previous,
-          CompletionPercentage:
-            response.data.data?.progress?.completionPct ??
-            previous.CompletionPercentage,
-          SubGoals: previous.SubGoals.map((item) =>
-            item.SubGoalID === subGoal.SubGoalID
-              ? { ...item, Status: status }
-              : item,
-          ),
-        }));
-      } else {
-        alert(response.data.message || "Failed to update sub-goal progress.");
-      }
-    } catch (err) {
-      alert(
-        err.response?.data?.message || "Server error while updating sub-goal progress.",
-      );
-    } finally {
-      setSubGoalUpdatingId(null);
     }
   };
 
@@ -616,71 +607,6 @@ const ViewGoal = () => {
           )}
         </div>
 
-        <hr className="border-slate-200" />
-
-        {/* Sub-Goals Section */}
-        <div className="space-y-5">
-          <h3 className="text-lg font-bold text-slate-900 tracking-tight">Associated Sub-Goals</h3>
-          {goal.SubGoals?.filter((sub) => sub.SubGoalTitle?.trim()).length > 0 ? (
-            <div className="space-y-3">
-              {goal.SubGoals
-                .filter((sub) => sub.SubGoalTitle?.trim())
-                .map((sub, index) => (
-                  <div
-                    key={sub.SubGoalID || index}
-                    className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-5 border border-slate-200 rounded-2xl bg-slate-50/50 gap-4"
-                  >
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200">
-                        Sub-Goal #{sub.SubGoalNo || index + 1}
-                      </span>
-                      <h4 className="text-sm font-bold text-slate-800">{sub.SubGoalTitle}</h4>
-                      {sub.Target && (
-                        <p className="text-xs text-slate-500">Target: {sub.Target}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-semibold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs">
-                        Weight: {sub.Weightage}%
-                      </span>
-                      {isGoalOwner && !isJointParticipant && isApproved ? (
-                        <select
-                          aria-label={`Progress status for ${sub.SubGoalTitle}`}
-                          value={sub.Status}
-                          disabled={subGoalUpdatingId === sub.SubGoalID}
-                          onChange={(event) =>
-                            handleSubGoalStatusChange(sub, event.target.value)
-                          }
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-60"
-                        >
-                          {["Pending", "In Progress", "Completed", "Cancelled"].map(
-                            (status) => (
-                              <option key={status} value={status}>
-                                {status}
-                              </option>
-                            ),
-                          )}
-                        </select>
-                      ) : (
-                        <span className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${
-                          sub.Status === "Completed"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-sky-50 text-sky-700 border-sky-200"
-                        }`}>
-                          {sub.Status}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <div className="text-xs text-slate-500 bg-slate-50 p-8 rounded-2xl text-center border border-dashed border-slate-300 font-medium">
-              No sub-goals added for this goal.
-            </div>
-          )}
-        </div>
-
         {/* Reviewer Feedback */}
         {goal.ManagerRating && (
           <>
@@ -717,12 +643,26 @@ const ViewGoal = () => {
         )}
 
         {/* Submit Review Form */}
-        {canSubmitReview && (
+        {isReviewer && !canSubmitReview ? (
+          <>
+            <hr className="border-slate-200" />
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight">Submit Your Review</h3>
+              <div className="bg-amber-50/60 border border-amber-200 p-6 rounded-2xl text-sm text-amber-900 font-medium">
+                Review opens when the goal is complete or near quarter end
+              </div>
+            </div>
+          </>
+        ) : canSubmitReview ? (
           <>
             <hr className="border-slate-200" />
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-slate-900 tracking-tight">Submit Your Review</h3>
               <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-200 space-y-5">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-white/70 px-4 py-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Completion</span>
+                  <span className="text-base font-black text-indigo-700">{goal.CompletionPercentage}%</span>
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
                     Rating (1 to 5 Stars)
@@ -766,7 +706,7 @@ const ViewGoal = () => {
               </div>
             </div>
           </>
-        )}
+        ) : null}
 
         {/* Bottom Actions */}
         <div className="pt-6 border-t border-slate-200 flex items-center justify-between">

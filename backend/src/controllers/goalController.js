@@ -582,6 +582,28 @@ const isDateBeforeToday = (dateValue) => {
   return date < todayDate;
 };
 
+const isGoalReviewWindowOpen = (goal) => {
+  if (!goal) return false;
+
+  const completion = Number(goal.CompletionPercentage ?? goal.CompletionPct ?? 0);
+  if (Number.isFinite(completion) && completion >= 100) {
+    return true;
+  }
+
+  const quarterEndDate = goal.QuarterEndDate || goal.QuarterEnd;
+  if (!quarterEndDate) return false;
+
+  const endDate = new Date(quarterEndDate);
+  if (Number.isNaN(endDate.getTime())) return false;
+
+  const reviewWindowStart = new Date(endDate);
+  reviewWindowStart.setDate(endDate.getDate() - 10);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today >= reviewWindowStart;
+};
+
 // 3. Add Goal
 const createGoal = async (req, res) => {
   const {
@@ -695,7 +717,7 @@ const createGoal = async (req, res) => {
     request.input("Priority", sql.VarChar, Priority);
     request.input("Timeline", sql.Date, Timeline);
     const { label: goalQuarter, quarterEndDate: goalQuarterEndDate } =
-      getFiscalQuarter(new Date(Timeline));
+      getFiscalQuarter(Timeline);
     request.input("Quarter", sql.VarChar, goalQuarter);
     request.input("QuarterEndDate", sql.Date, goalQuarterEndDate);
     request.input("MeetPerformance", sql.NVarChar, MeetPerformance || null);
@@ -898,9 +920,16 @@ const updateGoal = async (req, res) => {
       "Reviewed By HOD",
       "Review By Business Head",
     ];
+    const effectiveQuarterEndDate =
+      existingGoal.QuarterEndDate ||
+      (existingGoal.Timeline
+        ? getFiscalQuarter(new Date(existingGoal.Timeline)).quarterEndDate
+        : null);
+    const timelineOverdue = isDateBeforeToday(existingGoal.Timeline);
     const canEditApprovedGoal =
       approvedStatuses.includes(currentStatus) &&
-      isBeforeOrOnQuarterEnd(existingGoal.QuarterEndDate);
+      isBeforeOrOnQuarterEnd(effectiveQuarterEndDate) &&
+      !timelineOverdue;
     const canEditAllFields =
       isDraft ||
       currentStatus === "Rejected" ||
@@ -926,8 +955,10 @@ const updateGoal = async (req, res) => {
       const terminal = ["Completed", "Cancelled"].includes(currentStatus);
       const canCarryForward =
         !terminal &&
-        (isWithinCarryForwardWindow(existingGoal.QuarterEndDate) ||
-          isDateBeforeToday(existingGoal.Timeline));
+        approvedStatuses.includes(currentStatus) &&
+        (isWithinCarryForwardWindow(effectiveQuarterEndDate) ||
+          isDateBeforeToday(effectiveQuarterEndDate) ||
+          timelineOverdue);
 
       if (!canCarryForward) {
         await transaction.rollback();
@@ -1821,17 +1852,9 @@ const submitGoalReview = async (req, res) => {
         message: "Joint participants cannot submit a goal review.",
       });
     }
+
     const oldStatus = existingGoal.GoalStatus;
     const newStatus = statusFlow[oldStatus];
-
-    console.log(
-      "DEBUG → oldStatus:",
-      JSON.stringify(oldStatus),
-      "| newStatus:",
-      JSON.stringify(newStatus),
-      "| userId:",
-      userId,
-    );
 
     if (!newStatus) {
       await transaction.rollback();
@@ -1841,12 +1864,51 @@ const submitGoalReview = async (req, res) => {
       });
     }
 
+    const subGoalsResult = await new sql.Request(transaction)
+      .input("GoalID", sql.BigInt, goalId)
+      .query("SELECT * FROM dbo.GoalSubGoals WHERE GoalID = @GoalID");
+
+    const completionPercentage = Number(
+      existingGoal.CompletionPercentage ??
+        existingGoal.CompletionPct ??
+        calculateGoalProgress(subGoalsResult.recordset ?? []),
+    );
+    const reviewWindowOpen = isGoalReviewWindowOpen({
+      ...existingGoal,
+      CompletionPercentage: completionPercentage,
+    });
+    if (completionPercentage < 100 && !reviewWindowOpen) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message:
+          "Review opens when the goal is complete or within 10 days of the quarter end.",
+      });
+    }
+
+    const reviewQuarter = existingGoal.Quarter || getFiscalQuarter(new Date(existingGoal.Timeline || new Date())).label;
+    const duplicateCheckReq = new sql.Request(transaction);
+    const duplicateCheckRes = await duplicateCheckReq
+      .input("GoalID", sql.BigInt, goalId)
+      .input("Quarter", sql.VarChar, reviewQuarter)
+      .query(`
+        SELECT TOP 1 GoalID
+        FROM dbo.HODRatings
+        WHERE GoalID = @GoalID AND Quarter = @Quarter
+      `);
+
+    if (duplicateCheckRes.recordset.length > 0) {
+      await transaction.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This goal has already been reviewed in this quarter.",
+      });
+    }
+
     const updateReq = new sql.Request(transaction);
-    const currentQuarter = getFiscalQuarter()
-      .label.match(/^Q[1-4]/)?.[0];
     await updateReq
       .input("GoalID", sql.BigInt, goalId)
-      .input("Quarter", sql.VarChar(2), currentQuarter)
+      .input("Quarter", sql.VarChar, reviewQuarter)
       .input("Rating", sql.Int, rating)
       .input("AchievementPercentage", sql.Decimal(5, 2), Number(rating) * 20)
       .input("Comments", sql.NVarChar, comment || null)

@@ -1,5 +1,6 @@
 const QUARTERS = [1, 2, 3, 4];
-const FISCAL_YEAR_ENDS = [2026, 2027];
+const QUARTER_END_MONTHS = ["June", "September", "December", "March"];
+const FISCAL_YEAR_ENDS = [2027];
 
 const getFiscalYearStart = (date) =>
   date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
@@ -14,10 +15,10 @@ export const getCurrentFiscalQuarterValue = (date = new Date()) => {
 
 export const getFiscalQuarterOptions = () => {
   return FISCAL_YEAR_ENDS.flatMap((endYear) => {
-      const fiscalYear = getFiscalYearLabel(endYear);
-      return QUARTERS.map((quarter) => ({
-        value: `Q${quarter}-${endYear}`,
-        label: `Q${quarter} ${fiscalYear}`,
-      }));
+    const fiscalYear = getFiscalYearLabel(endYear);
+    return QUARTERS.map((quarter) => ({
+      value: `Q${quarter}-${endYear}`,
+      label: `${QUARTER_END_MONTHS[quarter - 1]} Quarter ${fiscalYear}`,
+    }));
   });
 };
