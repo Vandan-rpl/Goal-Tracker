@@ -40,6 +40,14 @@ function isBeforeOrOnQuarterEnd(quarterEndDate) {
   return todayDate <= quarterEnd;
 }
 
+function isTimelineOverdue(timeline) {
+  if (!timeline) return false;
+  const timelineDate = String(timeline).slice(0, 10);
+  const today = new Date();
+  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return timelineDate < todayDate;
+}
+
 const EditGoal = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -77,16 +85,6 @@ const EditGoal = () => {
   // Field-level SMART validation errors from the backend — same 400 shape
   // as AddGoal.jsx: { success:false, message, errors: { Field: "message" } }
   const [fieldErrors, setFieldErrors] = useState({});
-
-  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-  const currentRole = String(
-    currentUser.Role || currentUser.role || currentUser.userRole || "",
-  ).toUpperCase();
-  const canManageAllGoals =
-    currentRole === "CFO" ||
-    currentRole === "BUSINESSHEAD" ||
-    currentRole === "ADMIN";
-  const canManageTeamGoals = currentRole === "HOD" || currentRole === "MANAGER";
 
   useEffect(() => {
     fetchGoal();
@@ -317,40 +315,29 @@ const EditGoal = () => {
     "Reviewed By HOD",
     "Review By Business Head",
   ];
-  const canOwnerEditApprovedGoal =
-    !canManageAllGoals &&
-    !canManageTeamGoals &&
-    !terminalStatus &&
+  const canEditApprovedGoal =
     approvedStatuses.includes(formData.GoalStatus) &&
     isBeforeOrOnQuarterEnd(quarterEndDate);
 
-  // True for any status the owner can't freely edit — i.e. anything except
-  // Draft or Rejected — for a regular employee (not a manager/approver
-  // role). This matches the backend's canEditAllFields / ownerLocked logic:
-  // previously this only caught the literal "Submitted" status, which let
-  // Timeline/Weightage/Priority/GoalStatus slip through unrestricted on
-  // every other locked status (HOD Approved, Manager Approved, Approved,
-  // Running, Postpone, etc).
-  const isOwnerLocked =
-    !canManageAllGoals &&
-    !canManageTeamGoals &&
+  // Edit permissions follow the goal's status and quarter window for every
+  // authorized editor, regardless of role.
+  const isStatusLocked =
     !isDraft &&
     !isRejected &&
-    !canOwnerEditApprovedGoal;
+    !canEditApprovedGoal;
 
-  const inCarryForwardWindow =
-    isOwnerLocked &&
+  const timelineOverdue = isTimelineOverdue(formData.Timeline);
+  const canCarryForward =
+    isStatusLocked &&
     !terminalStatus &&
-    isWithinCarryForwardWindow(quarterEndDate);
+    (isWithinCarryForwardWindow(quarterEndDate) || timelineOverdue);
 
-  // Fully locked = owner-locked and NOT inside the carry-forward window.
-  // Terminal statuses (Completed/Cancelled) are always fully locked for
-  // the owner — carry-forward never applies to them.
-  const isFullyLocked = isOwnerLocked && !inCarryForwardWindow;
+  // Terminal statuses and locked goals outside the carry-forward window
+  // cannot be edited.
+  const isFullyLocked = isStatusLocked && !canCarryForward;
 
-  // All fields except Timeline are locked whenever the owner is locked at
-  // all — even during the carry-forward window, only Timeline opens up.
-  const isRestrictedEdit = isOwnerLocked;
+  // During carry-forward, only Timeline is editable.
+  const isRestrictedEdit = isStatusLocked;
 
   if (isFullyLocked) {
     return (
@@ -399,8 +386,10 @@ const EditGoal = () => {
           </span>
           <h1 className="text-2xl font-bold text-slate-900">Edit Goal</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {inCarryForwardWindow
-              ? "This goal's quarter is closing. Push the Timeline out to carry it into the next quarter — this resubmits it for approval."
+            {canCarryForward
+              ? timelineOverdue
+                ? "This goal is overdue. Extend the Timeline to carry it forward; saving resubmits it for approval."
+                : "This goal's quarter is closing. Push the Timeline out to carry it into the next quarter — this resubmits it for approval."
               : isRejected
                 ? "Revise the rejected goal, then submit it again for approval."
                 : "Modify goal targets, metrics, and status."}
@@ -417,11 +406,13 @@ const EditGoal = () => {
       </div>
 
       {/* Notice Banners */}
-      {inCarryForwardWindow && (
+      {canCarryForward && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg text-sm">
           <span className="text-amber-600 font-bold">⚠️</span>
           <p>
-            This goal is locked, but the carry-forward window is open. Only the <strong className="font-semibold underline">Timeline</strong> field can be changed — saving will resubmit this goal for approval with the new date.
+            {timelineOverdue
+              ? "This goal is overdue. Only the Timeline can be changed; saving will resubmit it for approval with the new date."
+              : "This goal is locked, but the carry-forward window is open. Only the Timeline field can be changed — saving will resubmit this goal for approval with the new date."}
           </p>
         </div>
       )}
@@ -558,12 +549,12 @@ const EditGoal = () => {
                 type="date"
                 name="Timeline"
                 required
-                disabled={isRestrictedEdit && !inCarryForwardWindow}
+                disabled={isRestrictedEdit && !canCarryForward}
                 value={formData.Timeline}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
                   fieldErrors.Timeline ? "border-red-500" : "border-slate-300"
-                } ${inCarryForwardWindow ? "ring-2 ring-amber-400 border-amber-400 bg-amber-50/50" : ""}`}
+                } ${canCarryForward ? "ring-2 ring-amber-400 border-amber-400 bg-amber-50/50" : ""}`}
               />
               {fieldErrors.Timeline && (
                 <p className="text-red-600 text-xs mt-1 font-medium">
@@ -931,7 +922,7 @@ const EditGoal = () => {
               ? "Saving..."
               : isDraft
                 ? "Save as Draft"
-                : inCarryForwardWindow
+                : canCarryForward
                   ? "Save New Timeline & Resubmit"
                   : "Save Goal"}
           </button>

@@ -507,6 +507,7 @@ const getGoalById = async (req, res) => {
       data: {
         ...goal,
         SubGoals: subGoalsResult.recordset,
+        CompletionPercentage: calculateGoalProgress(subGoalsResult.recordset),
         History: historyResult.recordset,
         JointAccountabilities: canManageJointAccountabilities
           ? await jointAccountabilityModel.getJointAccountabilitiesByGoalId(id)
@@ -568,6 +569,17 @@ const isBeforeOrOnQuarterEnd = (quarterEndDate) => {
   const today = new Date();
   const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return todayDate <= quarterEnd;
+};
+
+const isDateBeforeToday = (dateValue) => {
+  if (!dateValue) return false;
+  const date =
+    dateValue instanceof Date
+      ? dateValue.toISOString().slice(0, 10)
+      : String(dateValue).slice(0, 10);
+  const today = new Date();
+  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return date < todayDate;
 };
 
 // 3. Add Goal
@@ -876,7 +888,7 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    // isDraft/canEditAllFields must be declared BEFORE ownerLocked uses them
+    // Editability is based on goal status and timing, not editor role.
     const isDraft = currentStatus === "Draft";
     const approvedStatuses = [
       "Approved",
@@ -886,17 +898,13 @@ const updateGoal = async (req, res) => {
       "Reviewed By HOD",
       "Review By Business Head",
     ];
-    const isGoalOwner = Number(existingGoal.UserID) === Number(userId);
-    const ownerCanEditApprovedGoal =
-      isGoalOwner &&
+    const canEditApprovedGoal =
       approvedStatuses.includes(currentStatus) &&
       isBeforeOrOnQuarterEnd(existingGoal.QuarterEndDate);
     const canEditAllFields =
       isDraft ||
       currentStatus === "Rejected" ||
-      isEnterpriseGoalManager ||
-      isTeamGoalManager ||
-      ownerCanEditApprovedGoal;
+      canEditApprovedGoal;
 
     if (canEditAllFields && Array.isArray(SubGoals) && SubGoals.length > 0) {
       const subGoalWeightageError = getSubGoalWeightageError(SubGoals);
@@ -910,19 +918,18 @@ const updateGoal = async (req, res) => {
       }
     }
 
-    const ownerLocked =
-      !isEnterpriseGoalManager && !isTeamGoalManager && !canEditAllFields;
-    // ownerLocked is true for the owner on ANY non-Draft/non-Rejected status —
-    // Submitted, Manager Approved, HOD Approved, Approved, etc.
+    const statusLocked = !canEditAllFields;
 
     let isCarryForward = false;
 
-    if (ownerLocked) {
+    if (statusLocked) {
       const terminal = ["Completed", "Cancelled"].includes(currentStatus);
-      const inWindow =
-        !terminal && isWithinCarryForwardWindow(existingGoal.QuarterEndDate);
+      const canCarryForward =
+        !terminal &&
+        (isWithinCarryForwardWindow(existingGoal.QuarterEndDate) ||
+          isDateBeforeToday(existingGoal.Timeline));
 
-      if (!inWindow) {
+      if (!canCarryForward) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
@@ -930,7 +937,7 @@ const updateGoal = async (req, res) => {
         });
       }
 
-      // In the carry-forward window: only Timeline may change.
+      // During carry-forward: only Timeline may change.
       const guardedFields = {
         GoalNumber,
         GoalTitle,
@@ -945,9 +952,24 @@ const updateGoal = async (req, res) => {
         CrossFunctionalGoal,
         GoalCategory,
       };
+      const normalizeGuardedValue = (field, value) => {
+        if (field === "CrossFunctionalGoal") {
+          return value === true || value === 1 || value === "1";
+        }
+        if (["GoalNumber", "Weightage"].includes(field)) {
+          return value === undefined || value === null || value === ""
+            ? null
+            : Number(value);
+        }
+        return value === undefined || value === null || value === ""
+          ? null
+          : String(value);
+      };
       const onlyTimelineChanged = Object.entries(guardedFields).every(
         ([field, value]) =>
-          value === undefined || value === existingGoal[field],
+          value === undefined ||
+          normalizeGuardedValue(field, value) ===
+            normalizeGuardedValue(field, existingGoal[field]),
       );
 
       if (!onlyTimelineChanged) {
@@ -955,7 +977,7 @@ const updateGoal = async (req, res) => {
         return res.status(400).json({
           success: false,
           message:
-            "Only the Timeline can be updated during the carry-forward window.",
+            "Only the Timeline can be updated to carry this goal forward.",
         });
       }
 
@@ -1010,6 +1032,11 @@ const updateGoal = async (req, res) => {
     const finalGoalDesc = canEditAllFields
       ? GoalDescription
       : existingGoal.GoalDescription;
+    const finalMeasurability = isCarryForward
+      ? existingGoal.Measurability
+      : Measurability;
+    const finalWeightage = isCarryForward ? existingGoal.Weightage : Weightage;
+    const finalPriority = isCarryForward ? existingGoal.Priority : Priority;
     const finalMeetPerf = canEditAllFields
       ? MeetPerformance
       : existingGoal.MeetPerformance;
@@ -1072,14 +1099,14 @@ const updateGoal = async (req, res) => {
     updateRequest.input("GoalNumber", sql.Int, finalGoalNumber);
     updateRequest.input("GoalTitle", sql.NVarChar, finalGoalTitle);
     updateRequest.input("GoalDescription", sql.NVarChar, finalGoalDesc || null);
-    updateRequest.input("Measurability", sql.NVarChar, Measurability || null);
+    updateRequest.input("Measurability", sql.NVarChar, finalMeasurability || null);
     updateRequest.input(
       "JointAccountability",
       sql.NVarChar,
       finalJointAcc || null,
     );
-    updateRequest.input("Weightage", sql.Decimal(5, 2), Weightage);
-    updateRequest.input("Priority", sql.VarChar, Priority);
+    updateRequest.input("Weightage", sql.Decimal(5, 2), finalWeightage);
+    updateRequest.input("Priority", sql.VarChar, finalPriority);
     updateRequest.input("Timeline", sql.Date, Timeline);
     updateRequest.input("MeetPerformance", sql.NVarChar, finalMeetPerf || null);
     updateRequest.input(
@@ -1215,12 +1242,27 @@ const updateGoal = async (req, res) => {
     // stay Completed).
 
     if (isCarryForward) {
+      const subGoalsForProgress = await new sql.Request(transaction)
+        .input("GoalID", sql.BigInt, id)
+        .query(`
+          SELECT Status, Weightage
+          FROM dbo.GoalSubGoals
+          WHERE GoalID = @GoalID
+        `);
+      const progressAtCarryForward = calculateGoalProgress(
+        subGoalsForProgress.recordset,
+      );
+
       await new sql.Request(transaction)
         .input("GoalID", sql.BigInt, id)
         .input("FromQuarter", sql.VarChar, existingGoal.Quarter)
-        .input("ToQuarter", sql.VarChar, newQuarter).query(`
-          INSERT INTO dbo.GoalCarryForwardHistory (GoalID, FromQuarter, ToQuarter, CarriedForwardDate)
-          VALUES (@GoalID, @FromQuarter, @ToQuarter, GETDATE())
+        .input("ToQuarter", sql.VarChar, newQuarter)
+        .input("ProgressAtCarryForward", sql.Decimal(5, 2), progressAtCarryForward)
+        .query(`
+          INSERT INTO dbo.GoalCarryForwardHistory (
+            GoalID, FromQuarter, ToQuarter, ProgressAtCarryForward, CarriedForwardDate
+          )
+          VALUES (@GoalID, @FromQuarter, @ToQuarter, @ProgressAtCarryForward, GETDATE())
         `);
     }
 
@@ -1994,42 +2036,6 @@ const updateJointAccountabilityStatus = async (req, res) => {
   }
 };
 
-const updateJointContributionNote = async (req, res) => {
-  const userId = req.user?.UserID || req.user?.userId;
-  const { contributionNote } = req.body;
-
-  if (
-    typeof contributionNote !== "string" ||
-    contributionNote.length > 500
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: "Contribution note must be 500 characters or fewer.",
-    });
-  }
-
-  try {
-    const updated = await jointAccountabilityModel.updateContributionNote(
-      req.params.goalId,
-      userId,
-      contributionNote || null,
-    );
-    if (!updated) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Joint participation not found." });
-    }
-    return res.status(200).json({ success: true, data: updated });
-  } catch (error) {
-    console.error("Update Joint Contribution Note Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error while updating contribution note.",
-      errors: error.message,
-    });
-  }
-};
-
 const updateSubGoalStatus = async (req, res) => {
   const { goalId, subGoalId } = req.params;
   const { Status } = req.body;
@@ -2132,12 +2138,15 @@ const updateSubGoalStatus = async (req, res) => {
 
     // Return updated progress so the frontend can refresh immediately without a second fetch
     const allSubGoals = await goalModel.getSubGoalsByGoalId(goalId);
-    const progress = calculateGoalProgress(goal, allSubGoals);
+    const completionPct = calculateGoalProgress(allSubGoals);
+    const earnedWeightage = Number(
+      (Number(goal.Weightage) * (completionPct / 100)).toFixed(2),
+    );
 
     return res.status(200).json({
       success: true,
       message: "Sub-goal status updated successfully.",
-      data: { progress },
+      data: { progress: { completionPct, earnedWeightage } },
     });
   } catch (error) {
     if (transaction._aborted === false && transaction._acquiredConnection) {
@@ -2166,7 +2175,6 @@ module.exports = {
   getAllEmployeeGoals,
   getJointGoals,
   updateJointAccountabilityStatus,
-  updateJointContributionNote,
   getGoalHistory,
   updateSubGoalStatus,
   getTeamGoals,

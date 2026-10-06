@@ -15,7 +15,6 @@ const {
     updateSubGoalStatus,
     getTeamGoals,
     updateJointAccountabilityStatus,
-    updateJointContributionNote,
 } = require('../controllers/goalController');
 
 const { verifyToken } = require('../middleware/authMiddleware');
@@ -28,7 +27,6 @@ router.get('/', getGoals);
 router.get('/joint-accountability-users', getJointAccountabilityUsers);
 router.get('/joint-accountability', getJointGoals);
 router.patch('/joint-accountability/:id/status', updateJointAccountabilityStatus);
-router.put('/joint-accountability/:goalId/contribution-note', updateJointContributionNote);
 
 //get all employee goals for CFO
 router.get('/all-employee-goals', getAllEmployeeGoals);

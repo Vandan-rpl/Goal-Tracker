@@ -13,7 +13,6 @@ const ViewGoal = () => {
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [jointActionLoading, setJointActionLoading] = useState(false);
-  const [contributionSaving, setContributionSaving] = useState(false);
   const [subGoalUpdatingId, setSubGoalUpdatingId] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -207,6 +206,9 @@ const ViewGoal = () => {
       if (response.data.success) {
         setGoal((previous) => ({
           ...previous,
+          CompletionPercentage:
+            response.data.data?.progress?.completionPct ??
+            previous.CompletionPercentage,
           SubGoals: previous.SubGoals.map((item) =>
             item.SubGoalID === subGoal.SubGoalID
               ? { ...item, Status: status }
@@ -267,20 +269,6 @@ const ViewGoal = () => {
     }
   };
 
-  const handleContributionNoteSave = async () => {
-    try {
-      setContributionSaving(true);
-      await api.put(
-        `/goals/joint-accountability/${goal.GoalID}/contribution-note`,
-        { contributionNote: goal.ContributionNote || "" },
-      );
-    } catch (err) {
-      alert(err.response?.data?.message || "Unable to save your contribution note.");
-    } finally {
-      setContributionSaving(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex-1 bg-slate-50/50 min-h-screen flex flex-col items-center justify-center text-slate-500 gap-3">
@@ -321,13 +309,6 @@ const ViewGoal = () => {
     if (status === "Rejected") return "bg-rose-50 text-rose-700 border-rose-200/60";
     return "bg-amber-50 text-amber-700 border-amber-200/60";
   };
-
-  const goalCompletionPercentage = Number(
-    (goal.SubGoals || [])
-      .filter((subGoal) => subGoal.Status === "Completed")
-      .reduce((total, subGoal) => total + Number(subGoal.Weightage || 0), 0)
-      .toFixed(2),
-  );
 
   return (
   <div className="flex-1 bg-slate-50 min-h-screen overflow-y-auto py-10 px-4 sm:px-6 lg:px-8 text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
@@ -394,35 +375,16 @@ const ViewGoal = () => {
               </button>
             </div>
           )}
-          <div className="space-y-2">
-            <label htmlFor="joint-contribution-note" className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-              Your contribution note
-            </label>
-            <textarea
-              id="joint-contribution-note"
-              rows={3}
-              maxLength={500}
-              value={goal.ContributionNote || ""}
-              onChange={(event) =>
-                setGoal((previous) => ({
-                  ...previous,
-                  ContributionNote: event.target.value,
-                }))
-              }
-              className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600"
-            />
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-slate-500">{(goal.ContributionNote || "").length}/500</span>
-              <button
-                type="button"
-                onClick={handleContributionNoteSave}
-                disabled={contributionSaving}
-                className="px-4 py-2 bg-sky-700 hover:bg-sky-800 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
-              >
-                {contributionSaving ? "Saving..." : "Save note"}
-              </button>
+          {goal.ContributionNote && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Your contribution
+              </p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                {goal.ContributionNote}
+              </p>
             </div>
-          </div>
+          )}
         </section>
       )}
 
@@ -466,7 +428,7 @@ const ViewGoal = () => {
               Overall Completion
             </span>
             <span className="text-sm font-bold text-emerald-700">
-              {goalCompletionPercentage}%
+              {goal.CompletionPercentage}%
             </span>
           </div>
           <div
@@ -474,12 +436,12 @@ const ViewGoal = () => {
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={goalCompletionPercentage}
+            aria-valuenow={goal.CompletionPercentage}
             aria-label="Overall goal completion percentage"
           >
             <div
               className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-              style={{ width: `${Math.min(100, goalCompletionPercentage)}%` }}
+              style={{ width: `${Math.min(100, goal.CompletionPercentage)}%` }}
             />
           </div>
         </div>
