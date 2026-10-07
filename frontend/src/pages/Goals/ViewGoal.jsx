@@ -155,17 +155,15 @@ const ViewGoal = () => {
     ].includes(goal?.GoalStatus);
 
   const quarterlyUpdateEligibleStatuses = [
-    "HOD Approved",
-    "Manager Approved",
-    "Business Head Approved",
     "Approved",
-    "Reviewed By HOD",
-    "Review By Business Head",
+    "Running",
   ];
   const canLogQuarterlyUpdate =
     isGoalOwner &&
     goal &&
-    quarterlyUpdateEligibleStatuses.includes(goal.GoalStatus);
+    quarterlyUpdateEligibleStatuses.includes(
+      String(goal.GoalStatus || "").trim(),
+    );
 
   useEffect(() => {
     fetchGoalDetails();

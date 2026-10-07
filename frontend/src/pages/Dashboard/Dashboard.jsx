@@ -10,6 +10,7 @@ import {
   XCircle,
   Filter,
   Loader2,
+  Plus,
   RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -285,12 +286,6 @@ export default function GoalDashboard() {
     };
   }, [fetchGoals]);
 
-  const overallProgress = useMemo(() => {
-    const totalWeight = goals.reduce((s, g) => s + (g.Weightage || 0), 0);
-    const achieved = goals.reduce((s, g) => s + (g.Weightage || 0) * (progressFromGoal(g) / 100), 0);
-    return totalWeight ? Math.round((achieved / totalWeight) * 100) : 0;
-  }, [goals]);
-
   const statusCounts = useMemo(() => {
     const c = {};
     goals.forEach((g) => {
@@ -303,33 +298,24 @@ export default function GoalDashboard() {
     if (dashboardSummary?.currentQuarterWeightage) {
       return dashboardSummary.currentQuarterWeightage;
     }
-    const quarter = getCurrentFiscalQuarterValue();
-    const quarterGoals = goals.filter(
-      (goal) =>
-        goal.Quarter === quarter &&
-        !["Rejected", "Cancelled"].includes(goal.GoalStatus),
-    );
-    const allocatedHundredths = quarterGoals.reduce(
-      (total, goal) => total + Math.round(Number(goal.Weightage || 0) * 100),
-      0,
-    );
-    const achievedPercentage = quarterGoals.reduce(
-      (total, goal) =>
-        total +
-        (Number(goal.Weightage || 0) *
-          Math.max(0, Math.min(100, progressFromGoal(goal)))) /
-          100,
-      0,
-    );
-
     return {
-      quarter,
-      goalCount: quarterGoals.length,
-      allocatedPercentage: allocatedHundredths / 100,
-      achievedPercentage,
-      remainingPercentage: Math.max(0, 10000 - allocatedHundredths) / 100,
+      quarter: getCurrentFiscalQuarterValue(),
+      goalCount: 0,
+      allocated: 0,
+      achieved: 0,
+      unallocated: 100,
     };
-  }, [dashboardSummary, goals]);
+  }, [dashboardSummary]);
+
+  const currentQuarterAllocated = Math.round(
+    Number(currentQuarterAllocation.allocated || 0),
+  );
+  const currentQuarterAchieved = Math.round(
+    Number(currentQuarterAllocation.achieved || 0),
+  );
+  const currentQuarterUnallocated = Math.round(
+    Number(currentQuarterAllocation.unallocated || 0),
+  );
 
   const goalStatusCounts =
     dashboardSummary?.goalStatusCounts ||
@@ -394,126 +380,81 @@ export default function GoalDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">My Goals</h1>
         </div>
 
-        {/* Summary strip */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row sm:items-center gap-6">
-          <div className="flex items-center gap-4">
-            <div className="relative w-20 h-20 shrink-0">
-              <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
-                <path
-                  className="text-gray-100"
-                  stroke="currentColor"
-                  strokeWidth="3.5"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  className="text-indigo-600"
-                  stroke="currentColor"
-                  strokeWidth="3.5"
-                  strokeDasharray={`${overallProgress}, 100`}
-                  strokeLinecap="round"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-gray-900">{overallProgress}%</span>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800">Weighted progress</p>
-              <p className="text-xs text-gray-400">Across {goals.length} goals, by completed sub-goal weightage</p>
-            </div>
-          </div>
-
-          {/* Status filter dropdown — 12 possible GoalStatus values is too many for a tile grid */}
-          <div className="flex-1 flex items-center gap-2">
-            <Filter size={14} className="text-gray-400 shrink-0" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="All">All statuses ({goals.length})</option>
-              {["Pending approval", "Approved"].map((group) => (
-                <option key={group} value={group}>
-                  {group} ({goalStatusCounts[group] || 0})
-                </option>
-              ))}
-              {Object.entries(statusCounts)
-                .filter(([status]) => status !== "Approved")
-                .map(([status, count]) => (
-                  <option key={status} value={status}>
-                    {status} ({count})
-                  </option>
-                ))}
-            </select>
-          </div>
-        </div>
-
         <section
           className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
-          aria-label={`${currentQuarterAllocation.quarter} goal weightage allocation`}
+          aria-label={`${currentQuarterAllocation.quarter} progress`}
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-800">
-                {currentQuarterAllocation.quarter} goal weightage
-              </p>
-              <p className="mt-1 text-xs text-gray-500">
-                Allocated {currentQuarterAllocation.allocatedPercentage.toFixed(2)}%
-                {" · "}Achieved {currentQuarterAllocation.achievedPercentage.toFixed(2)}%
-                {" · "}
-                {currentQuarterAllocation.remainingPercentage.toFixed(2)}% remaining
-              </p>
-            </div>
-            <p className="text-xs font-medium text-gray-500">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-semibold text-gray-800">
+              {currentQuarterAllocation.quarter} progress
+            </p>
+            <p className="shrink-0 text-xs font-medium text-gray-500">
               {currentQuarterAllocation.goalCount} of {MAX_GOALS_PER_QUARTER} goals
             </p>
           </div>
-          <div
-            className="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-100"
-            role="progressbar"
-            aria-label="Quarterly goal weightage allocated"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.min(
-              100,
-              currentQuarterAllocation.allocatedPercentage,
-            )}
-            aria-valuetext={`Allocated ${currentQuarterAllocation.allocatedPercentage.toFixed(2)}%, achieved ${currentQuarterAllocation.achievedPercentage.toFixed(2)}%`}
-          >
-            <div
-              className="relative h-full rounded-full bg-indigo-200 transition-all"
-              style={{
-                width: `${Math.min(100, currentQuarterAllocation.allocatedPercentage)}%`,
-              }}
-            >
-              <div
-                className="absolute inset-y-0 left-0 rounded-full bg-indigo-600 transition-all"
-                style={{
-                  width: `${currentQuarterAllocation.allocatedPercentage
-                    ? Math.min(
-                        100,
-                        (currentQuarterAllocation.achievedPercentage /
-                          currentQuarterAllocation.allocatedPercentage) *
-                          100,
-                      )
-                    : 0}%`,
-                }}
-              />
+
+          {currentQuarterAllocation.goalCount === 0 ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-gray-400">
+                No goals added for this quarter yet
+              </p>
+              <Link
+                to="/goals/add"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+              >
+                <Plus size={15} />
+                Create Goal
+              </Link>
             </div>
-          </div>
-          <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-indigo-200" />
-              Allocated
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-indigo-600" />
-              Achieved
-            </span>
-          </div>
+          ) : (
+            <>
+              <div
+                className="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-100"
+                role="progressbar"
+                aria-label="Quarterly goal weightage allocated"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.min(100, currentQuarterAllocation.allocated)}
+                aria-valuetext={`Allocated ${currentQuarterAllocated}%, achieved ${currentQuarterAchieved}%`}
+              >
+                <div
+                  className="relative h-full rounded-full bg-indigo-200 transition-all"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, currentQuarterAllocation.allocated))}%`,
+                  }}
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-indigo-600 transition-all"
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          currentQuarterAllocation.allocated,
+                          currentQuarterAllocation.achieved,
+                        ),
+                      ) / Math.max(0.01, currentQuarterAllocation.allocated) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-indigo-200" />
+                  Allocated {currentQuarterAllocated}%
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-indigo-600" />
+                  Achieved {currentQuarterAchieved}%
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-gray-100 ring-1 ring-gray-200" />
+                  {currentQuarterUnallocated}% unallocated
+                </span>
+              </div>
+            </>
+          )}
         </section>
 
         {dashboardSummary?.carryForward?.windowOpen && (
@@ -559,7 +500,7 @@ export default function GoalDashboard() {
             <h2 className="text-sm font-semibold text-gray-800">
               Sub-goal progress · {currentQuarterAllocation.quarter}
             </h2>
-            {currentQuarterAllocation.quarterGoalCount === 0 ? (
+            {currentQuarterAllocation.goalCount === 0 ? (
               <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
                 No goals in this quarter yet.
               </p>
@@ -695,10 +636,47 @@ export default function GoalDashboard() {
               </p>
             )}
           </section>
+
         </div>
 
         {/* Goal list */}
         <div id="goal-list" className="space-y-4 scroll-mt-6">
+          <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-800">Your goals</h2>
+              <p className="mt-1 text-xs text-gray-400">
+                {filtered.length} {filtered.length === 1 ? "goal" : "goals"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter size={14} className="shrink-0 text-gray-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                aria-label="Filter goals by status"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-indigo-500 sm:w-auto"
+              >
+                <option value="All">All statuses ({goals.length})</option>
+                {Object.entries(STATUS_GROUPS).map(([group]) => (
+                  <option key={group} value={group}>
+                    {group} ({goalStatusCounts[group] || 0})
+                  </option>
+                ))}
+                {Object.entries(statusCounts)
+                  .filter(
+                    ([status]) =>
+                      !Object.values(STATUS_GROUPS).some((statuses) =>
+                        statuses.includes(normalizeGoalStatus(status)),
+                      ),
+                  )
+                  .map(([status, count]) => (
+                    <option key={status} value={status}>
+                      {status} ({count})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
           {filtered.map((goal) => (
             <GoalCard key={goal.GoalID} goal={goal} />
           ))}

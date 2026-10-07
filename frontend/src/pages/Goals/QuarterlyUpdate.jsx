@@ -193,21 +193,14 @@ const QuarterlyUpdate = () => {
 
   const isOwner = loggedInUserId != null && Number(goal.UserID) === Number(loggedInUserId);
 
-  // "Goal status allows updates" — the goal needs to have been approved
-  // (at any stage of the approval/review chain) before an employee logs
-  // quarterly progress against it. There's no single canonical "approved
-  // and active" status used consistently across this codebase (see the
-  // flags from earlier prompts), so this is a judgment call covering every
-  // status past initial approval.
+  // A goal must reach final approval before quarterly updates are available.
   const eligibleStatuses = [
-    'HOD Approved',
-    'Manager Approved',
-    'Business Head Approved',
     'Approved',
-    'Reviewed By HOD',
-    'Review By Business Head',
+    'Running',
   ];
-  const statusAllowsUpdate = eligibleStatuses.includes(goal.GoalStatus);
+  const statusAllowsUpdate = eligibleStatuses.includes(
+    String(goal.GoalStatus || '').trim(),
+  );
 
   if (!isOwner || !statusAllowsUpdate) {
     return (

@@ -82,6 +82,17 @@ const submitQuarterlyUpdate = async (req, res) => {
       });
     }
 
+    if (
+      !["Approved", "Running"].includes(
+        String(goal.GoalStatus || "").trim(),
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Quarterly updates are available after the goal is approved.",
+      });
+    }
+
     // NOTE ON QuarterlyUpdates SCHEMA:
     // This table isn't defined anywhere else that shows a full CREATE TABLE,
     // but it IS referenced elsewhere (src/models/dashboardModel.js), which

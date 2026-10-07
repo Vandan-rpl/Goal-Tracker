@@ -338,8 +338,7 @@ const getEmployeeDashboardSummary = (
   const dayDifference = (date) =>
     Math.round((date.getTime() - today.getTime()) / 86400000);
   const statusOf = (goal) => String(goal.GoalStatus || "").trim().toLowerCase();
-  const isExcludedFromAllocation = (goal) =>
-    ["rejected", "cancelled"].includes(statusOf(goal));
+  const isCancelled = (goal) => statusOf(goal) === "cancelled";
   const weightageOf = (goal) => {
     const weightage = Number(goal.Weightage);
     return Number.isFinite(weightage) ? weightage : 0;
@@ -356,7 +355,7 @@ const getEmployeeDashboardSummary = (
     (goal) => goal.Quarter === currentQuarter.label,
   );
   const allocatedGoals = currentQuarterGoals.filter(
-    (goal) => !isExcludedFromAllocation(goal),
+    (goal) => !isCancelled(goal),
   );
   const allocatedPercentage = allocatedGoals.reduce(
     (total, goal) => total + weightageOf(goal),
@@ -418,7 +417,7 @@ const getEmployeeDashboardSummary = (
     }
     const quarterGoals = [...quarterGoalsById.values()];
     const allocated = quarterGoals.filter(
-      (goal) => !isExcludedFromAllocation(goal),
+      (goal) => !["rejected", "cancelled"].includes(statusOf(goal)),
     );
     return {
       quarter: quarter.label,
@@ -524,10 +523,13 @@ const getEmployeeDashboardSummary = (
     currentQuarterWeightage: {
       quarter: currentQuarter.label,
       goalCount: allocatedGoals.length,
-      quarterGoalCount: currentQuarterGoals.length,
+      quarterGoalCount: allocatedGoals.length,
+      allocated: allocatedPercentage,
+      achieved: achievedPercentage,
+      unallocated: Math.max(0, 100 - allocatedPercentage),
       allocatedPercentage,
       achievedPercentage,
-      remainingPercentage: Math.max(0, 100 - allocatedPercentage),
+      unallocatedPercentage: Math.max(0, 100 - allocatedPercentage),
     },
     goalStatusCounts,
     subGoalStatusCounts: {
