@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
+
+const MAX_GOALS_PER_QUARTER = 8;
 
 // Recursive row component: renders one user, and — if expanded — renders
 // its own direct reports as nested TeamRow instances underneath it.
@@ -102,6 +105,26 @@ const TeamManagement = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const quarterGoalSummary = useMemo(() => {
+    const quarter = getCurrentFiscalQuarterValue();
+    const activeQuarterGoals = goals.filter(
+      (goal) =>
+        goal.Quarter === quarter &&
+        !['Rejected', 'Cancelled'].includes(goal.GoalStatus),
+    );
+    const allocatedHundredths = activeQuarterGoals.reduce((total, goal) => {
+      const weightage = Number(goal.Weightage);
+      return total + (Number.isFinite(weightage) ? Math.round(weightage * 100) : 0);
+    }, 0);
+
+    return {
+      quarter,
+      goalCount: activeQuarterGoals.length,
+      allocatedPercentage: allocatedHundredths / 100,
+      remainingPercentage: Math.max(0, 10000 - allocatedHundredths) / 100,
+    };
+  }, [goals]);
+
   useEffect(() => {
     fetchTeamUsers();
   }, []);
@@ -137,6 +160,7 @@ const TeamManagement = () => {
 
   const handleViewGoals = async (userId, userName) => {
     setSelectedUser({ id: userId, name: userName });
+    setGoals([]);
     setLoading(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/teams/user-goals/${userId}`, {
@@ -222,6 +246,9 @@ const TeamManagement = () => {
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-700">
               Goals for: <span className="text-indigo-600">{selectedUser.name}</span>
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                {quarterGoalSummary.quarter}: {quarterGoalSummary.allocatedPercentage.toFixed(2)}% allocated, {quarterGoalSummary.remainingPercentage.toFixed(2)}% remaining · {quarterGoalSummary.goalCount}/{MAX_GOALS_PER_QUARTER} goals
+              </span>
             </h3>
             <div className="flex items-center gap-3">
               {/* <Link

@@ -2,8 +2,18 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import api from "../../services/api";
+import { getFiscalQuarterValue } from "../../utils/fiscalQuarter";
 
 const MAX_SUB_GOALS = 5;
+const MAX_GOALS_PER_QUARTER = 8;
+const MIN_GOAL_WEIGHTAGE = 5;
+const MAX_GOAL_WEIGHTAGE = 30;
+
+const isQuarterGoalActive = (goal) =>
+  !["Rejected", "Cancelled"].includes(goal.GoalStatus);
+
+const getWeightageHundredths = (weightage) =>
+  Math.round(Number(weightage || 0) * 100);
 
 const getSubGoalWeightageTotal = (subGoals) =>
   subGoals
@@ -13,6 +23,9 @@ const getSubGoalWeightageTotal = (subGoals) =>
 const AddGoal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [goals, setGoals] = useState([]);
+  const [goalAllocationLoading, setGoalAllocationLoading] = useState(true);
+  const [goalAllocationError, setGoalAllocationError] = useState("");
 
   const [jointAccountabilities, setJointAccountabilities] = useState([
     { UserID: "", ContributionNote: "", Weightage: "" },
@@ -83,6 +96,7 @@ const AddGoal = () => {
       try {
         const response = await api.get("/goals");
         const goals = response.data?.data || [];
+        setGoals(goals);
         const highestGoalNumber = goals.reduce(
           (highest, goal) => Math.max(highest, Number(goal.GoalNumber) || 0),
           0,
@@ -94,6 +108,11 @@ const AddGoal = () => {
         }));
       } catch (err) {
         console.error("Failed to determine next goal number", err);
+        setGoalAllocationError(
+          "Unable to load current goal allocations. Refresh and try again.",
+        );
+      } finally {
+        setGoalAllocationLoading(false);
       }
     };
 
@@ -160,10 +179,70 @@ const AddGoal = () => {
     setSubGoals((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const selectedQuarter = getFiscalQuarterValue(formData.Timeline);
+  const selectedQuarterGoals = goals.filter(
+    (goal) =>
+      goal.Quarter === selectedQuarter && isQuarterGoalActive(goal),
+  );
+  const allocatedWeightageHundredths = selectedQuarterGoals.reduce(
+    (total, goal) => total + getWeightageHundredths(goal.Weightage),
+    0,
+  );
+  const remainingWeightageHundredths = Math.max(
+    0,
+    10000 - allocatedWeightageHundredths,
+  );
+  const remainingGoalSlots = Math.max(
+    0,
+    MAX_GOALS_PER_QUARTER - selectedQuarterGoals.length,
+  );
+  const additionalGoalsByWeightage = Math.floor(
+    remainingWeightageHundredths / (MIN_GOAL_WEIGHTAGE * 100),
+  );
+  const additionalGoalsAvailable = Math.min(
+    remainingGoalSlots,
+    additionalGoalsByWeightage,
+  );
+
   const handleSubmit = async (e, status = "Draft") => {
     e.preventDefault();
     setError("");
     setFieldErrors({});
+
+    if (goalAllocationLoading || goalAllocationError) {
+      setError(
+        goalAllocationError ||
+          "Current goal allocations are still loading. Please try again.",
+      );
+      return;
+    }
+
+    const goalWeightage = Number(formData.Weightage);
+    if (
+      !Number.isFinite(goalWeightage) ||
+      goalWeightage < MIN_GOAL_WEIGHTAGE ||
+      goalWeightage > MAX_GOAL_WEIGHTAGE ||
+      Math.abs(goalWeightage * 100 - Math.round(goalWeightage * 100)) > 1e-8
+    ) {
+      const message = `Each goal must have a weightage from ${MIN_GOAL_WEIGHTAGE}% to ${MAX_GOAL_WEIGHTAGE}%, with no more than two decimal places.`;
+      setError(message);
+      setFieldErrors({ Weightage: message });
+      return;
+    }
+
+    if (remainingGoalSlots === 0) {
+      const message = `A maximum of ${MAX_GOALS_PER_QUARTER} goals can be added per quarter.`;
+      setError(message);
+      setFieldErrors({ GoalCount: message });
+      return;
+    }
+
+    if (getWeightageHundredths(goalWeightage) > remainingWeightageHundredths) {
+      const message = `Quarterly goal weightage cannot exceed 100%. There is ${(remainingWeightageHundredths / 100).toFixed(2)}% remaining.`;
+      setError(message);
+      setFieldErrors({ Weightage: message });
+      return;
+    }
 
     const hasTitledSubGoal = subGoals.some((sub) => sub.SubGoalTitle.trim());
     if (!hasTitledSubGoal) {
@@ -381,6 +460,8 @@ return (
                   </label>
                   <input
                     type="number"
+                    min={MIN_GOAL_WEIGHTAGE}
+                    max={MAX_GOAL_WEIGHTAGE}
                     step="0.01"
                     name="Weightage"
                     required
@@ -421,6 +502,34 @@ return (
                     </p>
                   )}
                 </div>
+              </div>
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-950">
+                {goalAllocationLoading ? (
+                  <p className="text-xs text-indigo-800">
+                    Loading current goal allocations...
+                  </p>
+                ) : goalAllocationError ? (
+                  <p className="text-xs text-red-700">{goalAllocationError}</p>
+                ) : selectedQuarter ? (
+                  <>
+                    <p className="font-semibold">
+                      {selectedQuarter} allocation:{" "}
+                      {(allocatedWeightageHundredths / 100).toFixed(2)}% used,{" "}
+                      {(remainingWeightageHundredths / 100).toFixed(2)}% remaining.
+                    </p>
+                    <p className="mt-1 text-xs text-indigo-800">
+                      {selectedQuarterGoals.length} of {MAX_GOALS_PER_QUARTER} goals added; up to{" "}
+                      {additionalGoalsAvailable} more can fit with the current weightage.
+                    </p>
+                    <p className="mt-1 text-xs text-indigo-800">
+                      Save goals as drafts while allocating; submission requires the quarter total to reach 100%.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-indigo-800">
+                    Choose a timeline to see the quarter's remaining goal slots and weightage.
+                  </p>
+                )}
               </div>
             </section>
 

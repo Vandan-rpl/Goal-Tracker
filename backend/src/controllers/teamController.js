@@ -32,10 +32,12 @@ const getTeamMembers = async (req, res) => {
                 (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals,
                 CASE WHEN EXISTS (
                     SELECT 1 FROM dbo.Users sub
-                    WHERE sub.ReportingManagerID = u.UserID OR sub.HODID = u.UserID
+                    WHERE sub.IsActive = 1
+                      AND (sub.ReportingManagerID = u.UserID OR sub.HODID = u.UserID)
                 ) THEN 1 ELSE 0 END AS HasDirectReports
                 FROM dbo.Users u
                 WHERE u.BusinessHeadID = @ManagerID
+                  AND u.IsActive = 1
                   AND u.UserID <> @ManagerID
                   AND (
                       (u.ReportingManagerID IS NULL AND u.HODID IS NULL)
@@ -49,10 +51,13 @@ const getTeamMembers = async (req, res) => {
                 (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals,
                 CASE WHEN EXISTS (
                     SELECT 1 FROM dbo.Users sub
-                    WHERE sub.ReportingManagerID = u.UserID OR sub.HODID = u.UserID
+                    WHERE sub.IsActive = 1
+                      AND (sub.ReportingManagerID = u.UserID OR sub.HODID = u.UserID)
                 ) THEN 1 ELSE 0 END AS HasDirectReports
                 FROM dbo.Users u
-                WHERE (u.ReportingManagerID = @ManagerID OR u.HODID = @ManagerID) AND u.UserID <> @ManagerID
+                WHERE u.IsActive = 1
+                  AND (u.ReportingManagerID = @ManagerID OR u.HODID = @ManagerID)
+                  AND u.UserID <> @ManagerID
             `;
     }
 

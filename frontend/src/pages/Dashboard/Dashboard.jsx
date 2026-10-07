@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getEmployeeGoals } from "../../services/dashboardService";
+import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
+
+const MAX_GOALS_PER_QUARTER = 8;
 
 // ---------------------------------------------------------------------------
 // STATUS STYLING — mapped to the real GoalStatus enum values.
@@ -280,6 +283,26 @@ export default function GoalDashboard() {
     return c;
   }, [goals]);
 
+  const currentQuarterAllocation = useMemo(() => {
+    const quarter = getCurrentFiscalQuarterValue();
+    const quarterGoals = goals.filter(
+      (goal) =>
+        goal.Quarter === quarter &&
+        !["Rejected", "Cancelled"].includes(goal.GoalStatus),
+    );
+    const allocatedHundredths = quarterGoals.reduce(
+      (total, goal) => total + Math.round(Number(goal.Weightage || 0) * 100),
+      0,
+    );
+
+    return {
+      quarter,
+      goalCount: quarterGoals.length,
+      allocatedPercentage: allocatedHundredths / 100,
+      remainingPercentage: Math.max(0, 10000 - allocatedHundredths) / 100,
+    };
+  }, [goals]);
+
   const filtered = statusFilter === "All" ? goals : goals.filter((g) => g.GoalStatus === statusFilter);
 
   if (loading) {
@@ -369,6 +392,45 @@ export default function GoalDashboard() {
             </select>
           </div>
         </div>
+
+        <section
+          className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
+          aria-label={`${currentQuarterAllocation.quarter} goal weightage allocation`}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">
+                {currentQuarterAllocation.quarter} goal weightage
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                {currentQuarterAllocation.allocatedPercentage.toFixed(2)}% added
+                {" · "}
+                {currentQuarterAllocation.remainingPercentage.toFixed(2)}% remaining
+              </p>
+            </div>
+            <p className="text-xs font-medium text-gray-500">
+              {currentQuarterAllocation.goalCount} of {MAX_GOALS_PER_QUARTER} goals
+            </p>
+          </div>
+          <div
+            className="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-100"
+            role="progressbar"
+            aria-label="Quarterly goal weightage allocated"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.min(
+              100,
+              currentQuarterAllocation.allocatedPercentage,
+            )}
+          >
+            <div
+              className="h-full rounded-full bg-indigo-600 transition-all"
+              style={{
+                width: `${Math.min(100, currentQuarterAllocation.allocatedPercentage)}%`,
+              }}
+            />
+          </div>
+        </section>
 
         {/* Goal list */}
         <div className="space-y-4">

@@ -13,6 +13,15 @@ export const getCurrentFiscalQuarterValue = (date = new Date()) => {
   return `Q${quarter}-${getFiscalYearStart(date) + 1}`;
 };
 
+export const getFiscalQuarterValue = (dateValue) => {
+  if (!dateValue) return "";
+  const date =
+    dateValue instanceof Date
+      ? dateValue
+      : new Date(`${dateValue}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? "" : getCurrentFiscalQuarterValue(date);
+};
+
 export const getFiscalQuarterOptions = () => {
   return FISCAL_YEAR_ENDS.flatMap((endYear) => {
     const fiscalYear = getFiscalYearLabel(endYear);

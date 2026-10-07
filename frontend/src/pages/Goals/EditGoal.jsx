@@ -10,6 +10,8 @@ import {
 } from "../../utils/goalEditability";
 
 const MAX_SUB_GOALS = 5;
+const MIN_GOAL_WEIGHTAGE = 5;
+const MAX_GOAL_WEIGHTAGE = 30;
 
 const getSubGoalWeightageTotal = (subGoals) =>
   subGoals
@@ -190,6 +192,19 @@ const EditGoal = () => {
     e.preventDefault();
     setError("");
     setFieldErrors({});
+
+    const goalWeightage = Number(formData.Weightage);
+    if (
+      !Number.isFinite(goalWeightage) ||
+      goalWeightage < MIN_GOAL_WEIGHTAGE ||
+      goalWeightage > MAX_GOAL_WEIGHTAGE ||
+      Math.abs(goalWeightage * 100 - Math.round(goalWeightage * 100)) > 1e-8
+    ) {
+      const message = `Each goal must have a weightage from ${MIN_GOAL_WEIGHTAGE}% to ${MAX_GOAL_WEIGHTAGE}%, with no more than two decimal places.`;
+      setError(message);
+      setFieldErrors({ Weightage: message });
+      return;
+    }
 
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
     const invalidSubGoalWeightage = titledSubGoals.some((sub) => {
@@ -495,6 +510,8 @@ const EditGoal = () => {
               </label>
               <input
                 type="number"
+                min={MIN_GOAL_WEIGHTAGE}
+                max={MAX_GOAL_WEIGHTAGE}
                 step="0.01"
                 name="Weightage"
                 required

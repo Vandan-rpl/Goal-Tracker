@@ -1,4 +1,5 @@
 const { sql } = require('../config/db');
+const { getFiscalQuarter } = require('./fiscalQuarter');
 
 /**
  * SMART Goal Validator
@@ -23,10 +24,9 @@ const { sql } = require('../config/db');
  * Measurable — Measurability must be filled, AND at least one of
  *   MeetPerformance / ExceedPerformance must describe a concrete metric.
  *
- * Achievable — Weightage must be a number in (0, 100], AND the SUM of
- *   Weightage across the employee's other active goals (plus this one)
- *   must not exceed 100. This half of the check needs a DB read — see
- *   getExistingWeightageTotal() below and the "cycle" caveat inside it.
+ * Achievable — Weightage must be between 5% and 30%, AND the SUM of
+ *   Weightage across the employee's other active goals in the same fiscal
+ *   quarter (plus this one) must not exceed 100%.
  *
  * Relevant — GoalCategory must be non-empty.
  *   IMPORTANT: there is no enum/allowed-list of GoalCategory values
@@ -50,25 +50,16 @@ const MIN_DESCRIPTION_LENGTH = 20;
 const MAX_YEARS_OUT = 2;
 
 /**
- * Sums Weightage across an employee's other "active" goals (excluding
- * Draft/Rejected, since those aren't really competing for weightage
- * share) so the Achievable check can catch a submission that would push
- * the employee's total over 100%.
- *
- * NOTE ON "cycle": there is no ReviewCycle / period / year column
- * anywhere on dbo.Goals — confirmed by searching the whole codebase.
- * "Same cycle" is therefore approximated as "same calendar year as this
- * goal's own Timeline" (YEAR(Timeline) match). If this goal has no
- * Timeline yet, no year filter is applied and the sum covers ALL of the
- * employee's active goals. This is a stand-in, not a modeled concept —
- * flagged in my response, not silently assumed.
+ * Sums Weightage across an employee's other active goals in the same
+ * fiscal quarter so submissions use the same 100% allocation boundary
+ * enforced by goalController.js.
  *
  * @param {object} pool - resolved mssql pool
  * @param {number} userId
  * @param {number|string} [excludeGoalId] - the goal being updated, so it
  *   doesn't get counted against itself
- * @param {string|Date} [timeline] - this goal's Timeline, used for the
- *   best-effort "cycle" year filter described above
+ * @param {string|Date} [timeline] - this goal's Timeline, used to
+ *   determine its fiscal quarter
  */
 const getExistingWeightageTotal = async (pool, userId, excludeGoalId, timeline) => {
     const request = pool.request().input('UserID', sql.Int, userId);
@@ -77,7 +68,7 @@ const getExistingWeightageTotal = async (pool, userId, excludeGoalId, timeline) 
         SELECT ISNULL(SUM(Weightage), 0) AS TotalWeightage
         FROM dbo.Goals
         WHERE UserID = @UserID
-          AND GoalStatus NOT IN ('Draft', 'Rejected')
+          AND GoalStatus NOT IN ('Rejected', 'Cancelled')
     `;
 
     if (excludeGoalId) {
@@ -88,8 +79,9 @@ const getExistingWeightageTotal = async (pool, userId, excludeGoalId, timeline) 
     if (timeline) {
         const timelineDate = new Date(timeline);
         if (!Number.isNaN(timelineDate.getTime())) {
-            request.input('CycleYear', sql.Int, timelineDate.getFullYear());
-            query += ` AND YEAR(Timeline) = @CycleYear`;
+            const { label: quarter } = getFiscalQuarter(timeline);
+            request.input('Quarter', sql.VarChar, quarter);
+            query += ` AND Quarter = @Quarter`;
         }
     }
 
@@ -113,7 +105,7 @@ const getExistingWeightageTotal = async (pool, userId, excludeGoalId, timeline) 
  * @param {object} [options]
  * @param {object} [options.pool] - resolved mssql pool; required to run
  *   the Achievable cross-goal weightage-sum check. If omitted, that half
- *   of the Achievable check is skipped (only the single-goal 0-100 range
+ *   of the Achievable check is skipped (only the single-goal 5-30 range
  *   check still runs) — callers should always pass this in practice.
  * @param {number} [options.userId] - required alongside `pool` for the
  *   weightage-sum check
@@ -173,11 +165,13 @@ const validateSmartGoal = async (goalData = {}, options = {}) => {
         Weightage !== null &&
         Weightage !== '' &&
         !Number.isNaN(weightageNum) &&
-        weightageNum > 0 &&
-        weightageNum <= 100;
+        Number.isFinite(weightageNum) &&
+        weightageNum >= 5 &&
+        weightageNum <= 30 &&
+        Math.abs(weightageNum * 100 - Math.round(weightageNum * 100)) <= 1e-8;
 
     if (!weightageIsValidNumber) {
-        errors.Weightage = 'Goal must be Achievable: Weightage must be a number greater than 0 and no more than 100.';
+        errors.Weightage = 'Goal must be Achievable: Weightage must be from 5% to 30%, with no more than two decimal places.';
     } else if (options.pool && options.userId) {
         try {
             const existingTotal = await getExistingWeightageTotal(
@@ -189,14 +183,11 @@ const validateSmartGoal = async (goalData = {}, options = {}) => {
             const projectedTotal = Math.round((existingTotal + weightageNum) * 100) / 100;
 
             if (projectedTotal > 100) {
-                errors.Weightage = `Goal must be Achievable: your total Weightage across active goals this cycle would be ${projectedTotal}% (${existingTotal}% existing + ${weightageNum}% for this goal), which exceeds 100%.`;
+                errors.Weightage = `Goal must be Achievable: your total Weightage in this fiscal quarter would be ${projectedTotal}% (${existingTotal}% existing + ${weightageNum}% for this goal), which exceeds 100%.`;
             }
         } catch (sumError) {
-            // Don't silently pass, but also don't hard-fail submission just
-            // because the aggregate check itself errored (e.g. a transient
-            // DB hiccup) — the single-goal 0-100 range check above already
-            // ran. Log loudly so this doesn't go unnoticed.
-            console.error('[SMART VALIDATION] Could not compute existing Weightage total (Achievable cross-goal check skipped):', sumError.message);
+            console.error('[SMART VALIDATION] Could not compute existing quarterly Weightage total:', sumError.message);
+            errors.Weightage = 'Could not verify the total quarterly goal weightage. Please try again.';
         }
     }
 

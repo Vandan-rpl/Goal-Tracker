@@ -7,6 +7,79 @@ const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const { calculateGoalProgress } = require("../utils/goalProgress");
 const { getFiscalQuarter } = require("../utils/fiscalQuarter");
 
+const MAX_GOALS_PER_QUARTER = 8;
+const MIN_GOAL_WEIGHTAGE = 5;
+const MAX_GOAL_WEIGHTAGE = 30;
+
+const getQuarterGoalAllocation = async (
+  transaction,
+  userId,
+  quarter,
+  excludeGoalId = null,
+) => {
+  const request = new sql.Request(transaction)
+    .input("UserID", sql.Int, userId)
+    .input("Quarter", sql.VarChar, quarter);
+  let query = `
+    SELECT COUNT(*) AS GoalCount, ISNULL(SUM(Weightage), 0) AS TotalWeightage
+    FROM dbo.Goals WITH (UPDLOCK, HOLDLOCK)
+    WHERE UserID = @UserID
+      AND Quarter = @Quarter
+      AND GoalStatus NOT IN ('Rejected', 'Cancelled')
+  `;
+
+  if (excludeGoalId) {
+    request.input("ExcludeGoalID", sql.BigInt, excludeGoalId);
+    query += " AND GoalID <> @ExcludeGoalID";
+  }
+
+  const result = await request.query(query);
+  const allocation = result.recordset[0];
+  return {
+    goalCount: Number(allocation?.GoalCount || 0),
+    totalWeightageHundredths: Math.round(
+      Number(allocation?.TotalWeightage || 0) * 100,
+    ),
+  };
+};
+
+const getGoalWeightageError = (weightage) => {
+  const numericWeightage = Number(weightage);
+  if (
+    weightage === undefined ||
+    weightage === null ||
+    weightage === "" ||
+    !Number.isFinite(numericWeightage) ||
+    numericWeightage < MIN_GOAL_WEIGHTAGE ||
+    numericWeightage > MAX_GOAL_WEIGHTAGE ||
+    Math.abs(numericWeightage * 100 - Math.round(numericWeightage * 100)) >
+      1e-8
+  ) {
+    return `Each goal must have a weightage from ${MIN_GOAL_WEIGHTAGE}% to ${MAX_GOAL_WEIGHTAGE}%, with no more than two decimal places.`;
+  }
+  return null;
+};
+
+const getQuarterAllocationError = (allocation, weightage) => {
+  if (allocation.goalCount >= MAX_GOALS_PER_QUARTER) {
+    return {
+      field: "GoalCount",
+      message: `A maximum of ${MAX_GOALS_PER_QUARTER} goals can be added per quarter.`,
+    };
+  }
+
+  const weightageHundredths = Math.round(Number(weightage) * 100);
+  const projectedTotalHundredths =
+    allocation.totalWeightageHundredths + weightageHundredths;
+  if (projectedTotalHundredths > 10000) {
+    return {
+      field: "Weightage",
+      message: `Quarterly goal weightage cannot exceed 100%. There is ${Math.max(0, 10000 - allocation.totalWeightageHundredths) / 100}% remaining.`,
+    };
+  }
+  return null;
+};
+
 const normalizeForDiff = (value) => {
   if (value === undefined || value === null || value === "") return null;
   if (value instanceof Date) return value.toISOString().split("T")[0];
@@ -709,6 +782,15 @@ const createGoal = async (req, res) => {
       .json({ success: false, message: "Mandatory goal fields are missing." });
   }
 
+  const goalWeightageError = getGoalWeightageError(Weightage);
+  if (goalWeightageError) {
+    return res.status(400).json({
+      success: false,
+      message: goalWeightageError,
+      errors: { Weightage: goalWeightageError },
+    });
+  }
+
   const validSubGoals = (Array.isArray(SubGoals) ? SubGoals : []).filter(
     (sub) => String(sub?.SubGoalTitle ?? "").trim(),
   );
@@ -794,6 +876,23 @@ const createGoal = async (req, res) => {
     request.input("Timeline", sql.Date, Timeline);
     const { label: goalQuarter, quarterEndDate: goalQuarterEndDate } =
       getFiscalQuarter(Timeline);
+    const allocation = await getQuarterGoalAllocation(
+      transaction,
+      userId,
+      goalQuarter,
+    );
+    const allocationError = getQuarterAllocationError(
+      allocation,
+      Weightage,
+    );
+    if (allocationError) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: allocationError.message,
+        errors: { [allocationError.field]: allocationError.message },
+      });
+    }
     request.input("Quarter", sql.VarChar, goalQuarter);
     request.input("QuarterEndDate", sql.Date, goalQuarterEndDate);
     request.input("MeetPerformance", sql.NVarChar, MeetPerformance || null);
@@ -1105,6 +1204,37 @@ const updateGoal = async (req, res) => {
         : 0
       : existingGoal.CrossFunctionalGoal;
 
+    const goalWeightageError = getGoalWeightageError(finalWeightage);
+    if (goalWeightageError) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: goalWeightageError,
+        errors: { Weightage: goalWeightageError },
+      });
+    }
+
+    if (!["Rejected", "Cancelled"].includes(newStatus)) {
+      const allocation = await getQuarterGoalAllocation(
+        transaction,
+        existingGoal.UserID,
+        newQuarter,
+        id,
+      );
+      const allocationError = getQuarterAllocationError(
+        allocation,
+        finalWeightage,
+      );
+      if (allocationError) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: allocationError.message,
+          errors: { [allocationError.field]: allocationError.message },
+        });
+      }
+    }
+
     // SMART validation uses the exact field values that will be persisted.
     // Uses the goal's own transaction connection for the Achievable
     // weightage-sum read, and the goal's real CreatedDate as the
@@ -1123,7 +1253,11 @@ const updateGoal = async (req, res) => {
           Timeline,
           CreatedDate: existingGoal.CreatedDate,
         },
-        { pool: await poolPromise, userId, excludeGoalId: id },
+        {
+          pool: await poolPromise,
+          userId: existingGoal.UserID,
+          excludeGoalId: id,
+        },
       );
       if (!valid) {
         await transaction.rollback();
