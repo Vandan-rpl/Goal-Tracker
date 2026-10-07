@@ -193,7 +193,7 @@ export default function GoalHistory({ goalId }) {
                   className="w-full flex items-center gap-3 p-4 text-left bg-white hover:bg-slate-50/80 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset"
                 >
                   {/* Avatar */}
-                  <div className="flex shrink-0 items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-white font-semibold text-xs shadow-sm">
+                  <div className="flex shrink-0 items-center justify-center w-9 h-9 rounded-full bg-linear-to-br from-indigo-500 to-indigo-700 text-white font-semibold text-xs shadow-sm">
                     {getInitials(entry.performedBy)}
                   </div>
 
@@ -213,7 +213,7 @@ export default function GoalHistory({ goalId }) {
                   {/* Remarks tag */}
                   {entry.remarks && (
                     <div
-                      className="hidden sm:block max-w-[200px] truncate text-xs italic text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60"
+                      className="hidden sm:block max-w-50 truncate text-xs italic text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60"
                       title={entry.remarks}
                     >
                       "{entry.remarks}"
@@ -280,10 +280,10 @@ export default function GoalHistory({ goalId }) {
                                 <td className="py-2.5 px-3.5 font-semibold text-slate-800 align-top">
                                   {FIELD_LABELS[change.field] || change.field}
                                 </td>
-                                <td className="py-2.5 px-3.5 text-rose-700 bg-rose-50/60 font-mono text-[11px] align-top break-words ">
+                                <td className="py-2.5 px-3.5 text-rose-700 bg-rose-50/60 font-mono text-[11px] align-top wrap-break-word ">
                                   {formatValue(change.oldValue)}
                                 </td>
-                                <td className="py-2.5 px-3.5 text-emerald-800 bg-emerald-50/60 font-mono text-[11px] align-top break-words font-medium">
+                                <td className="py-2.5 px-3.5 text-emerald-800 bg-emerald-50/60 font-mono text-[11px] align-top wrap-break-word font-medium">
                                   {formatValue(change.newValue)}
                                 </td>
                               </tr>

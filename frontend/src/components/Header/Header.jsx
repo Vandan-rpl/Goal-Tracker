@@ -110,13 +110,13 @@ const Header = ({ drawerWidth = 260 }) => {
     dispatch(fetchNotifications());
   }, [dispatch]);
 
-  const handleMenuClick = () => {
-    if (isMobile) {
-      dispatch(toggleMobile());
-    } else {
-      dispatch(toggleSidebar());
-    }
-  };
+  // const handleMenuClick = () => {
+  //   if (isMobile) {
+  //     dispatch(toggleMobile());
+  //   } else {
+  //     dispatch(toggleSidebar());
+  //   }
+  // };
 
   const handleNotifOpen = (event) => {
     setNotifAnchorEl(event.currentTarget);
@@ -159,7 +159,7 @@ const Header = ({ drawerWidth = 260 }) => {
         <IconButton
           edge="start"
           color="inherit"
-          onClick={handleMenuClick}
+          // onClick={handleMenuClick}
           sx={{ mr: 2 }}
         >
           {collapsed ? <MenuIcon /> : <MenuOpenIcon />}
