@@ -5,7 +5,11 @@ const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const { calculateGoalProgress } = require("../utils/goalProgress");
-const { getFiscalQuarter } = require("../utils/fiscalQuarter");
+const {
+  getFiscalQuarter,
+  getQuarterStartDate,
+  isWithinCarryForwardWindow,
+} = require("../utils/fiscalQuarter");
 
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
@@ -311,6 +315,245 @@ const notifyGoalHierarchy = async (
 };
 
 // 1. Get All Goals
+const getEmployeeDashboardSummary = (
+  goals,
+  carryForwardHistory,
+  now = new Date(),
+) => {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const parseDate = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) {
+      return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? null
+      : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  };
+  const dayDifference = (date) =>
+    Math.round((date.getTime() - today.getTime()) / 86400000);
+  const statusOf = (goal) => String(goal.GoalStatus || "").trim().toLowerCase();
+  const isExcludedFromAllocation = (goal) =>
+    ["rejected", "cancelled"].includes(statusOf(goal));
+  const weightageOf = (goal) => {
+    const weightage = Number(goal.Weightage);
+    return Number.isFinite(weightage) ? weightage : 0;
+  };
+  const completionOf = (goal) => {
+    const completion = Number(goal.SubGoalCompletionPercentage);
+    return Number.isFinite(completion)
+      ? Math.max(0, Math.min(100, completion))
+      : 0;
+  };
+
+  const currentQuarter = getFiscalQuarter(now);
+  const currentQuarterGoals = goals.filter(
+    (goal) => goal.Quarter === currentQuarter.label,
+  );
+  const allocatedGoals = currentQuarterGoals.filter(
+    (goal) => !isExcludedFromAllocation(goal),
+  );
+  const allocatedPercentage = allocatedGoals.reduce(
+    (total, goal) => total + weightageOf(goal),
+    0,
+  );
+  const achievedPercentage = allocatedGoals.reduce(
+    (total, goal) =>
+      total + (weightageOf(goal) * completionOf(goal)) / 100,
+    0,
+  );
+
+  const statusGroups = {
+    Draft: ["draft"],
+    "Pending approval": [
+      "submitted",
+      "manager approved",
+      "hod approved",
+      "reviewed by hod",
+      "review by business head",
+    ],
+    Approved: ["approved", "business head approved", "running"],
+    Rejected: ["rejected"],
+    Completed: ["completed"],
+  };
+  const goalStatusCounts = Object.fromEntries(
+    Object.entries(statusGroups).map(([label, statuses]) => [
+      label,
+      goals.filter((goal) => statuses.includes(statusOf(goal))).length,
+    ]),
+  );
+
+  const quarterPeriods = [];
+  let period = currentQuarter;
+  for (let index = 0; index < 4; index += 1) {
+    quarterPeriods.unshift(period);
+    const quarterStart = getQuarterStartDate(period.quarterEndDate);
+    quarterStart.setDate(quarterStart.getDate() - 1);
+    period = getFiscalQuarter(quarterStart);
+  }
+  const quarterHistory = quarterPeriods.map((quarter) => {
+    const currentQuarterGoals = goals.filter(
+      (goal) => goal.Quarter === quarter.label,
+    );
+    const carriedGoals = new Map(
+      carryForwardHistory
+        .filter((entry) => entry.FromQuarter === quarter.label)
+        .map((entry) => [String(entry.GoalID), entry]),
+    );
+    const quarterGoalsById = new Map(
+      currentQuarterGoals.map((goal) => [String(goal.GoalID), goal]),
+    );
+    for (const [goalId, entry] of carriedGoals) {
+      if (!quarterGoalsById.has(goalId)) {
+        quarterGoalsById.set(goalId, {
+          ...entry,
+          SubGoalCompletionPercentage: entry.ProgressAtCarryForward,
+        });
+      }
+    }
+    const quarterGoals = [...quarterGoalsById.values()];
+    const allocated = quarterGoals.filter(
+      (goal) => !isExcludedFromAllocation(goal),
+    );
+    return {
+      quarter: quarter.label,
+      allocatedPercentage: allocated.reduce(
+        (total, goal) => total + weightageOf(goal),
+        0,
+      ),
+      achievedPercentage: allocated.reduce(
+        (total, goal) =>
+          total + (weightageOf(goal) * completionOf(goal)) / 100,
+        0,
+      ),
+      completedGoals: quarterGoals.filter(
+        (goal) => statusOf(goal) === "completed",
+      ).length,
+      carriedForwardGoals: carriedGoals.size,
+    };
+  });
+
+  const rejectedGoals = goals
+    .filter((goal) => statusOf(goal) === "rejected")
+    .map((goal) => ({ ...goal, AttentionReason: "Rejected" }));
+  const overdueGoals = goals
+    .filter((goal) => {
+      const timeline = parseDate(goal.Timeline);
+      return (
+        statusOf(goal) !== "rejected" &&
+        !["completed", "cancelled"].includes(statusOf(goal)) &&
+        timeline &&
+        timeline < today
+      );
+    })
+    .map((goal) => ({ ...goal, AttentionReason: "Overdue" }));
+  const draftGoals = goals
+    .filter((goal) => {
+      const timeline = parseDate(goal.Timeline);
+      return (
+        statusOf(goal) === "draft" &&
+        (!timeline || timeline >= today)
+      );
+    })
+    .map((goal) => ({ ...goal, AttentionReason: "Draft" }));
+  const needsAttention = [
+    ...rejectedGoals,
+    ...overdueGoals,
+    ...draftGoals,
+  ].slice(0, 5);
+
+  const upcomingDeadlines = goals
+    .map((goal) => {
+      const timeline = parseDate(goal.Timeline);
+      return timeline
+        ? { goal, daysUntilDeadline: dayDifference(timeline) }
+        : null;
+    })
+    .filter(
+      (entry) =>
+        entry &&
+        entry.daysUntilDeadline >= 0 &&
+        entry.daysUntilDeadline <= 14 &&
+        !["completed", "cancelled"].includes(statusOf(entry.goal)),
+    )
+    .sort((a, b) => a.daysUntilDeadline - b.daysUntilDeadline)
+    .slice(0, 5)
+    .map(({ goal, daysUntilDeadline }) => ({
+      ...goal,
+      DaysUntilDeadline: daysUntilDeadline,
+    }));
+
+  const currentQuarterStart = getQuarterStartDate(
+    currentQuarter.quarterEndDate,
+  );
+  const previousQuarterEnd = new Date(currentQuarterStart);
+  previousQuarterEnd.setDate(previousQuarterEnd.getDate() - 1);
+  const carryForwardWindowOpen = [
+    currentQuarter.quarterEndDate,
+    previousQuarterEnd,
+  ].some(isWithinCarryForwardWindow);
+  const carryForwardStatuses = [
+    "hod approved",
+    "manager approved",
+    "business head approved",
+    "reviewed by hod",
+    "review by business head",
+    "approved",
+  ];
+  const eligibleCarryForwardGoals = carryForwardWindowOpen
+    ? goals.filter((goal) => {
+        const quarterEnd = parseDate(goal.QuarterEndDate);
+        const timeline = parseDate(goal.Timeline);
+        return (
+          carryForwardStatuses.includes(statusOf(goal)) &&
+          Number(goal.CarryForwardCount || 0) === 0 &&
+          timeline &&
+          timeline < today &&
+          quarterEnd &&
+          isWithinCarryForwardWindow(quarterEnd)
+        );
+      }).length
+    : 0;
+
+  return {
+    currentQuarterWeightage: {
+      quarter: currentQuarter.label,
+      goalCount: allocatedGoals.length,
+      quarterGoalCount: currentQuarterGoals.length,
+      allocatedPercentage,
+      achievedPercentage,
+      remainingPercentage: Math.max(0, 100 - allocatedPercentage),
+    },
+    goalStatusCounts,
+    subGoalStatusCounts: {
+      completed: currentQuarterGoals.reduce(
+        (total, goal) => total + Number(goal.CompletedSubGoalCount || 0),
+        0,
+      ),
+      inProgress: currentQuarterGoals.reduce(
+        (total, goal) => total + Number(goal.InProgressSubGoalCount || 0),
+        0,
+      ),
+      pending: currentQuarterGoals.reduce(
+        (total, goal) => total + Number(goal.PendingSubGoalCount || 0),
+        0,
+      ),
+    },
+    needsAttention,
+    upcomingDeadlines,
+    quarterHistory,
+    carryForward: {
+      windowOpen: carryForwardWindowOpen,
+      eligibleGoalCount: eligibleCarryForwardGoals,
+    },
+  };
+};
+
 const getGoals = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
   const { quarter, status } = req.query;
@@ -347,7 +590,10 @@ const getGoals = async (req, res) => {
               SELECT ISNULL(
                 SUM(CASE WHEN sg.Status = 'Completed' THEN sg.Weightage ELSE 0 END),
                 0
-              ) AS SubGoalCompletionPercentage
+              ) AS SubGoalCompletionPercentage,
+                SUM(CASE WHEN sg.Status = 'Completed' THEN 1 ELSE 0 END) AS CompletedSubGoalCount,
+                SUM(CASE WHEN sg.Status = 'In Progress' THEN 1 ELSE 0 END) AS InProgressSubGoalCount,
+                SUM(CASE WHEN sg.Status = 'Pending' THEN 1 ELSE 0 END) AS PendingSubGoalCount
               FROM dbo.GoalSubGoals sg
               WHERE sg.GoalID = g.GoalID
             ) progress
@@ -378,9 +624,26 @@ const getGoals = async (req, res) => {
     query += ` ORDER BY g.CreatedDate DESC`;
 
     const result = await request.query(query);
+    const carryForwardResult = await pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .query(`
+        SELECT history.GoalID, history.FromQuarter,
+               history.ProgressAtCarryForward, goal.Weightage
+        FROM dbo.GoalCarryForwardHistory history
+        INNER JOIN dbo.Goals goal ON goal.GoalID = history.GoalID
+        WHERE goal.UserID = @UserID
+      `);
 
     res.set("Cache-Control", "no-store");
-    return res.status(200).json({ success: true, data: result.recordset });
+    return res.status(200).json({
+      success: true,
+      data: result.recordset,
+      summary: getEmployeeDashboardSummary(
+        result.recordset,
+        carryForwardResult.recordset,
+      ),
+    });
   } catch (error) {
     console.error("Get Goals Error:", error);
     return res.status(500).json({
@@ -449,7 +712,8 @@ const getAllEmployeeGoals = async (req, res) => {
                    ) THEN 1 ELSE 0 END AS InApprovalScope
             FROM dbo.Users u
             JOIN dbo.Goals g ON g.UserID = u.UserID
-            WHERE g.GoalStatus IN (
+            WHERE u.IsActive = 1
+              AND g.GoalStatus IN (
               'HOD Approved',
               'Manager Approved',
               'Reviewed By HOD',
@@ -517,7 +781,8 @@ const getTeamGoals = async (req, res) => {
             SELECT g.*, u.FirstName, u.LastName, u.Designation, u.Role AS EmployeeRole
             FROM dbo.Goals g
             JOIN dbo.Users u ON g.UserID = u.UserID
-            WHERE ${scopeCondition}
+            WHERE u.IsActive = 1
+              AND ${scopeCondition}
               AND u.UserID <> @RequesterID
     `;
 

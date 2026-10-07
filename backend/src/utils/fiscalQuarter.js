@@ -59,11 +59,7 @@ function isWithinCarryForwardWindow(quarterEndDate) {
   const windowStart = new Date(qEnd);
   windowStart.setDate(windowStart.getDate() - 10);
 
-  // Next quarter start = day after this quarter ends
-  const nextQuarterStart = new Date(qEnd);
-  nextQuarterStart.setDate(nextQuarterStart.getDate() + 1);
-
-  const windowEnd = new Date(nextQuarterStart);
+  const windowEnd = new Date(qEnd);
   windowEnd.setDate(windowEnd.getDate() + 15);
 
   return today >= windowStart && today <= windowEnd;

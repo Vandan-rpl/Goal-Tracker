@@ -2,10 +2,8 @@ import api from "./api"; // src/services/api.js — baseURL already includes /ap
 
 // ---------------------------------------------------------------------------
 // Goal Dashboard API calls — mapped to routes in goalRoutes.js
-// getGoals controller returns: { success, data: [...] } — a FLAT array of
-// dbo.Goals rows with a computed SubGoalCompletionPercentage, joined with
-// Users for name/username, ORDER BY CreatedDate DESC. Every function below
-// unwraps res.data.data to hand components a plain array/object, not the envelope.
+// getGoals returns the employee's goal rows and their dashboard summary in
+// one response. Other goal functions unwrap their own data envelopes below.
 // ---------------------------------------------------------------------------
 
 const BASE = "/goals";
@@ -19,7 +17,10 @@ export async function getEmployeeGoals() {
   const res = await api.get(BASE, {
     headers: { "Cache-Control": "no-cache" },
   });
-  return res.data.data;
+  return {
+    goals: res.data.data,
+    summary: res.data.summary,
+  };
 }
 
 /**

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   ChevronDown,
   Calendar,
@@ -16,6 +17,19 @@ import { getEmployeeGoals } from "../../services/dashboardService";
 import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 
 const MAX_GOALS_PER_QUARTER = 8;
+const STATUS_GROUPS = {
+  Draft: ["draft"],
+  "Pending approval": [
+    "submitted",
+    "manager approved",
+    "hod approved",
+    "reviewed by hod",
+    "review by business head",
+  ],
+  Approved: ["approved", "business head approved", "running"],
+  Rejected: ["rejected"],
+  Completed: ["completed"],
+};
 
 // ---------------------------------------------------------------------------
 // STATUS STYLING — mapped to the real GoalStatus enum values.
@@ -229,6 +243,7 @@ export default function GoalDashboard() {
   const isAuthReady = !!user;
 
   const [goals, setGoals] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState("All");
@@ -238,8 +253,9 @@ export default function GoalDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getEmployeeGoals();
-      setGoals(data || []);
+      const dashboard = await getEmployeeGoals();
+      setGoals(dashboard.goals || []);
+      setDashboardSummary(dashboard.summary || null);
     } catch (err) {
       setError(
         err?.response?.status === 404
@@ -284,6 +300,9 @@ export default function GoalDashboard() {
   }, [goals]);
 
   const currentQuarterAllocation = useMemo(() => {
+    if (dashboardSummary?.currentQuarterWeightage) {
+      return dashboardSummary.currentQuarterWeightage;
+    }
     const quarter = getCurrentFiscalQuarterValue();
     const quarterGoals = goals.filter(
       (goal) =>
@@ -294,16 +313,48 @@ export default function GoalDashboard() {
       (total, goal) => total + Math.round(Number(goal.Weightage || 0) * 100),
       0,
     );
+    const achievedPercentage = quarterGoals.reduce(
+      (total, goal) =>
+        total +
+        (Number(goal.Weightage || 0) *
+          Math.max(0, Math.min(100, progressFromGoal(goal)))) /
+          100,
+      0,
+    );
 
     return {
       quarter,
       goalCount: quarterGoals.length,
       allocatedPercentage: allocatedHundredths / 100,
+      achievedPercentage,
       remainingPercentage: Math.max(0, 10000 - allocatedHundredths) / 100,
     };
-  }, [goals]);
+  }, [dashboardSummary, goals]);
 
-  const filtered = statusFilter === "All" ? goals : goals.filter((g) => g.GoalStatus === statusFilter);
+  const goalStatusCounts =
+    dashboardSummary?.goalStatusCounts ||
+    Object.fromEntries(
+      Object.entries(STATUS_GROUPS).map(([group, statuses]) => [
+        group,
+        goals.filter((goal) =>
+          statuses.includes(normalizeGoalStatus(goal.GoalStatus)),
+        ).length,
+      ]),
+    );
+  const subGoalStatusCounts = dashboardSummary?.subGoalStatusCounts || {
+    completed: 0,
+    inProgress: 0,
+    pending: 0,
+  };
+  const filtered =
+    statusFilter === "All"
+      ? goals
+      : goals.filter((goal) => {
+          const groupStatuses = STATUS_GROUPS[statusFilter];
+          return groupStatuses
+            ? groupStatuses.includes(normalizeGoalStatus(goal.GoalStatus))
+            : goal.GoalStatus === statusFilter;
+        });
 
   if (loading) {
     return (
@@ -384,11 +435,18 @@ export default function GoalDashboard() {
               className="w-full sm:w-auto px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-indigo-500"
             >
               <option value="All">All statuses ({goals.length})</option>
-              {Object.entries(statusCounts).map(([status, count]) => (
-                <option key={status} value={status}>
-                  {status} ({count})
+              {["Pending approval", "Approved"].map((group) => (
+                <option key={group} value={group}>
+                  {group} ({goalStatusCounts[group] || 0})
                 </option>
               ))}
+              {Object.entries(statusCounts)
+                .filter(([status]) => status !== "Approved")
+                .map(([status, count]) => (
+                  <option key={status} value={status}>
+                    {status} ({count})
+                  </option>
+                ))}
             </select>
           </div>
         </div>
@@ -403,7 +461,8 @@ export default function GoalDashboard() {
                 {currentQuarterAllocation.quarter} goal weightage
               </p>
               <p className="mt-1 text-xs text-gray-500">
-                {currentQuarterAllocation.allocatedPercentage.toFixed(2)}% added
+                Allocated {currentQuarterAllocation.allocatedPercentage.toFixed(2)}%
+                {" · "}Achieved {currentQuarterAllocation.achievedPercentage.toFixed(2)}%
                 {" · "}
                 {currentQuarterAllocation.remainingPercentage.toFixed(2)}% remaining
               </p>
@@ -422,18 +481,224 @@ export default function GoalDashboard() {
               100,
               currentQuarterAllocation.allocatedPercentage,
             )}
+            aria-valuetext={`Allocated ${currentQuarterAllocation.allocatedPercentage.toFixed(2)}%, achieved ${currentQuarterAllocation.achievedPercentage.toFixed(2)}%`}
           >
             <div
-              className="h-full rounded-full bg-indigo-600 transition-all"
+              className="relative h-full rounded-full bg-indigo-200 transition-all"
               style={{
                 width: `${Math.min(100, currentQuarterAllocation.allocatedPercentage)}%`,
               }}
-            />
+            >
+              <div
+                className="absolute inset-y-0 left-0 rounded-full bg-indigo-600 transition-all"
+                style={{
+                  width: `${currentQuarterAllocation.allocatedPercentage
+                    ? Math.min(
+                        100,
+                        (currentQuarterAllocation.achievedPercentage /
+                          currentQuarterAllocation.allocatedPercentage) *
+                          100,
+                      )
+                    : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-indigo-200" />
+              Allocated
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-indigo-600" />
+              Achieved
+            </span>
           </div>
         </section>
 
+        {dashboardSummary?.carryForward?.windowOpen && (
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-semibold">Carry-forward window is open</p>
+              <p className="mt-1 text-xs text-amber-800">
+                {dashboardSummary.carryForward.eligibleGoalCount} eligible{" "}
+                {dashboardSummary.carryForward.eligibleGoalCount === 1
+                  ? "goal is"
+                  : "goals are"}{" "}
+                available to carry forward.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-800">Goal status</h2>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {Object.entries(STATUS_GROUPS).map(([group]) => (
+                <a
+                  key={group}
+                  href="#goal-list"
+                  onClick={() => setStatusFilter(group)}
+                  className="rounded-xl border border-gray-100 bg-gray-50 p-3 transition hover:border-indigo-200 hover:bg-indigo-50"
+                >
+                  <span className="block text-xs text-gray-500">{group}</span>
+                  <span className="mt-1 block text-xl font-bold text-gray-900">
+                    {goalStatusCounts[group] || 0}
+                  </span>
+                </a>
+              ))}
+            </div>
+            {goals.length === 0 && (
+              <p className="mt-3 text-xs text-gray-400">No goals to summarize yet.</p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-800">
+              Sub-goal progress · {currentQuarterAllocation.quarter}
+            </h2>
+            {currentQuarterAllocation.quarterGoalCount === 0 ? (
+              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+                No goals in this quarter yet.
+              </p>
+            ) : (
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                {[
+                  ["Completed", subGoalStatusCounts.completed, "text-emerald-700"],
+                  ["In Progress", subGoalStatusCounts.inProgress, "text-indigo-700"],
+                  ["Pending", subGoalStatusCounts.pending, "text-gray-600"],
+                ].map(([label, count, color]) => (
+                  <div key={label} className="rounded-xl bg-gray-50 p-3">
+                    <span className="block text-xs text-gray-500">{label}</span>
+                    <span className={`mt-1 block text-xl font-bold ${color}`}>
+                      {count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-800">Needs attention</h2>
+            {dashboardSummary?.needsAttention?.length ? (
+              <ul className="mt-3 divide-y divide-gray-100">
+                {dashboardSummary.needsAttention.map((goal) => (
+                  <li key={goal.GoalID} className="py-2.5 first:pt-0 last:pb-0">
+                    <Link
+                      to={`/goals/view/${goal.GoalID}`}
+                      className="flex items-center justify-between gap-3 text-sm hover:text-indigo-700"
+                    >
+                      <span className="truncate font-medium text-gray-800">
+                        {goal.GoalTitle}
+                      </span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                        goal.AttentionReason === "Rejected"
+                          ? "bg-red-50 text-red-700"
+                          : goal.AttentionReason === "Overdue"
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {goal.AttentionReason}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+                No goals need attention.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-800">Upcoming deadlines</h2>
+            {dashboardSummary?.upcomingDeadlines?.length ? (
+              <ul className="mt-3 divide-y divide-gray-100">
+                {dashboardSummary.upcomingDeadlines.map((goal) => (
+                  <li key={goal.GoalID} className="py-2.5 first:pt-0 last:pb-0">
+                    <Link
+                      to={`/goals/view/${goal.GoalID}`}
+                      className="flex items-center justify-between gap-3 text-sm hover:text-indigo-700"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-gray-800">
+                          {goal.GoalTitle}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-gray-400">
+                          {formatDate(goal.Timeline)} · {goal.DaysUntilDeadline === 0
+                            ? "Due today"
+                            : `${goal.DaysUntilDeadline}d left`}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-xs font-semibold text-indigo-700">
+                        {progressFromGoal(goal)}%
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+                No deadlines in the next 14 days.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:col-span-2">
+            <h2 className="text-sm font-semibold text-gray-800">Quarter history</h2>
+            {dashboardSummary?.quarterHistory?.some(
+              (quarter) =>
+                quarter.allocatedPercentage > 0 ||
+                quarter.achievedPercentage > 0 ||
+                quarter.completedGoals > 0 ||
+                quarter.carriedForwardGoals > 0,
+            ) ? (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-gray-100 text-xs text-gray-400">
+                    <tr>
+                      <th className="pb-2 pr-4 font-medium">Quarter</th>
+                      <th className="pb-2 px-3 font-medium">Allocated</th>
+                      <th className="pb-2 px-3 font-medium">Achieved</th>
+                      <th className="pb-2 px-3 font-medium">Completed</th>
+                      <th className="pb-2 pl-3 font-medium">Carried forward</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {dashboardSummary.quarterHistory.map((quarter) => (
+                      <tr key={quarter.quarter}>
+                        <th className="py-3 pr-4 font-medium text-gray-700">
+                          {quarter.quarter}
+                        </th>
+                        <td className="px-3 py-3 text-gray-600">
+                          {Number(quarter.allocatedPercentage).toFixed(2)}%
+                        </td>
+                        <td className="px-3 py-3 text-gray-600">
+                          {Number(quarter.achievedPercentage).toFixed(2)}%
+                        </td>
+                        <td className="px-3 py-3 text-gray-600">{quarter.completedGoals}</td>
+                        <td className="py-3 pl-3 text-gray-600">
+                          {quarter.carriedForwardGoals}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+                Quarter history will appear when you have goals.
+              </p>
+            )}
+          </section>
+        </div>
+
         {/* Goal list */}
-        <div className="space-y-4">
+        <div id="goal-list" className="space-y-4 scroll-mt-6">
           {filtered.map((goal) => (
             <GoalCard key={goal.GoalID} goal={goal} />
           ))}
