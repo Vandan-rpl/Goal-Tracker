@@ -79,9 +79,15 @@ const getUserGoals = async (req, res) => {
     request.input("UserID", sql.Int, userId);
 
     const result = await request.query(`
-            SELECT * FROM dbo.Goals 
-            WHERE UserID = @UserID AND GoalStatus <> 'Draft' 
-            ORDER BY CreatedDate DESC
+            SELECT g.*,
+              COALESCE((
+                SELECT SUM(CASE WHEN sg.Status = 'Completed' THEN sg.Weightage ELSE 0 END)
+                FROM dbo.GoalSubGoals sg
+                WHERE sg.GoalID = g.GoalID
+              ), 0) AS CompletionPercentage
+            FROM dbo.Goals g
+            WHERE g.UserID = @UserID AND g.GoalStatus <> 'Draft'
+            ORDER BY g.CreatedDate DESC
         `);
 
     return res.status(200).json({ success: true, data: result.recordset });

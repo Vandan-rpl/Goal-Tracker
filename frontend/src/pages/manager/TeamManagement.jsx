@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
+import React, { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
+import { isGoalReviewWindowOpen } from "../../utils/goalReviewWindow";
 
 const MAX_GOALS_PER_QUARTER = 8;
 
@@ -20,15 +21,15 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
           `${import.meta.env.VITE_API_URL}/teams/members/${user.UserID}`,
           {
             headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
-          }
+          },
         );
 
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error('Server returned non-JSON response.');
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("Server returned non-JSON response.");
         }
 
         const result = await response.json();
@@ -37,7 +38,7 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
         }
         setFetchedOnce(true);
       } catch (error) {
-        console.error('Error fetching sub-team:', error);
+        console.error("Error fetching sub-team:", error);
       } finally {
         setLoadingChildren(false);
       }
@@ -57,7 +58,7 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
               onClick={toggleExpand}
               className="mr-2 w-4 inline-block text-gray-500 hover:text-gray-800"
             >
-              {expanded ? '▾' : '▸'}
+              {expanded ? "▾" : "▸"}
             </button>
           ) : (
             <span className="mr-2 w-4 inline-block"></span>
@@ -74,7 +75,9 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
           <button
-            onClick={() => onViewGoals(user.UserID, `${user.FirstName} ${user.LastName}`)}
+            onClick={() =>
+              onViewGoals(user.UserID, `${user.FirstName} ${user.LastName}`)
+            }
             className="text-indigo-600 hover:text-indigo-900 font-semibold bg-indigo-50 px-3 py-1.5 rounded-md transition hover:bg-indigo-100 cursor-pointer"
           >
             View Goals
@@ -84,7 +87,10 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
 
       {loadingChildren && (
         <tr>
-          <td colSpan="4" className="px-6 py-2 text-center text-xs text-gray-400">
+          <td
+            colSpan="4"
+            className="px-6 py-2 text-center text-xs text-gray-400"
+          >
             Loading team...
           </td>
         </tr>
@@ -92,7 +98,12 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
 
       {expanded &&
         children.map((child) => (
-          <TeamRow key={child.UserID} user={child} depth={depth + 1} onViewGoals={onViewGoals} />
+          <TeamRow
+            key={child.UserID}
+            user={child}
+            depth={depth + 1}
+            onViewGoals={onViewGoals}
+          />
         ))}
     </>
   );
@@ -103,18 +114,20 @@ const TeamManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
 
   const quarterGoalSummary = useMemo(() => {
     const quarter = getCurrentFiscalQuarterValue();
     const activeQuarterGoals = goals.filter(
       (goal) =>
         goal.Quarter === quarter &&
-        !['Rejected', 'Cancelled'].includes(goal.GoalStatus),
+        !["Rejected", "Cancelled"].includes(goal.GoalStatus),
     );
     const allocatedHundredths = activeQuarterGoals.reduce((total, goal) => {
       const weightage = Number(goal.Weightage);
-      return total + (Number.isFinite(weightage) ? Math.round(weightage * 100) : 0);
+      return (
+        total + (Number.isFinite(weightage) ? Math.round(weightage * 100) : 0)
+      );
     }, 0);
 
     return {
@@ -132,26 +145,31 @@ const TeamManagement = () => {
   const fetchTeamUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/teams/members`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/teams/members`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         },
-      });
+      );
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned non-JSON response (HTML page). Check backend route or URL.');
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(
+          "Server returned non-JSON response (HTML page). Check backend route or URL.",
+        );
       }
 
       const result = await response.json();
       if (result.success) {
         setUsers(result.data);
       } else {
-        setErrorMsg(result.message || 'Failed to fetch team members');
+        setErrorMsg(result.message || "Failed to fetch team members");
       }
     } catch (error) {
-      console.error('Error fetching team users:', error);
+      console.error("Error fetching team users:", error);
       setErrorMsg(error.message);
     } finally {
       setLoading(false);
@@ -163,16 +181,19 @@ const TeamManagement = () => {
     setGoals([]);
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/teams/user-goals/${userId}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/teams/user-goals/${userId}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         },
-      });
+      );
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned non-JSON response for user goals.');
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON response for user goals.");
       }
 
       const result = await response.json();
@@ -183,7 +204,7 @@ const TeamManagement = () => {
         setGoals([]);
       }
     } catch (error) {
-      console.error('Error fetching user goals:', error);
+      console.error("Error fetching user goals:", error);
     } finally {
       setLoading(false);
     }
@@ -192,11 +213,15 @@ const TeamManagement = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Team Management & Goals Review</h2>
+        <h2 className="text-2xl font-bold text-gray-800">
+          Team Management & Goals Review
+        </h2>
       </div>
 
       {errorMsg && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md text-sm">{errorMsg}</div>
+        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md text-sm">
+          {errorMsg}
+        </div>
       )}
 
       {!selectedUser ? (
@@ -222,17 +247,28 @@ const TeamManagement = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-12 text-center text-sm text-gray-500">
+                    <td
+                      colSpan="4"
+                      className="px-6 py-12 text-center text-sm text-gray-500"
+                    >
                       Loading team members...
                     </td>
                   </tr>
                 ) : users.length > 0 ? (
                   users.map((user) => (
-                    <TeamRow key={user.UserID} user={user} depth={0} onViewGoals={handleViewGoals} />
+                    <TeamRow
+                      key={user.UserID}
+                      user={user}
+                      depth={0}
+                      onViewGoals={handleViewGoals}
+                    />
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="4" className="px-6 py-12 text-center text-sm text-gray-500">
+                    <td
+                      colSpan="4"
+                      className="px-6 py-12 text-center text-sm text-gray-500"
+                    >
                       No team members found under your management.
                     </td>
                   </tr>
@@ -245,9 +281,13 @@ const TeamManagement = () => {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-700">
-              Goals for: <span className="text-indigo-600">{selectedUser.name}</span>
+              Goals for:{" "}
+              <span className="text-indigo-600">{selectedUser.name}</span>
               <span className="ml-2 text-xs font-normal text-gray-500">
-                {quarterGoalSummary.quarter}: {quarterGoalSummary.allocatedPercentage.toFixed(2)}% allocated, {quarterGoalSummary.remainingPercentage.toFixed(2)}% remaining · {quarterGoalSummary.goalCount}/{MAX_GOALS_PER_QUARTER} goals
+                {quarterGoalSummary.quarter}:{" "}
+                {quarterGoalSummary.allocatedPercentage.toFixed(2)}% allocated,{" "}
+                {quarterGoalSummary.remainingPercentage.toFixed(2)}% remaining ·{" "}
+                {quarterGoalSummary.goalCount}/{MAX_GOALS_PER_QUARTER} goals
               </span>
             </h3>
             <div className="flex items-center gap-3">
@@ -297,23 +337,32 @@ const TeamManagement = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {loading ? (
                     <tr>
-                      <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-500">
+                      <td
+                        colSpan="6"
+                        className="px-6 py-12 text-center text-sm text-gray-500"
+                      >
                         Loading goals...
                       </td>
                     </tr>
                   ) : goals.length > 0 ? (
                     goals.map((goal) => (
-                      <tr key={goal.GoalID} className="hover:bg-gray-50/50 transition">
+                      <tr
+                        key={goal.GoalID}
+                        className="hover:bg-gray-50/50 transition"
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-bold text-gray-900">
                             #{goal.GoalNumber} - {goal.GoalTitle}
                           </div>
                           <div className="text-xs text-gray-400">
-                            Timeline: {goal.Timeline ? new Date(goal.Timeline).toLocaleDateString() : 'N/A'}
+                            Timeline:{" "}
+                            {goal.Timeline
+                              ? new Date(goal.Timeline).toLocaleDateString()
+                              : "N/A"}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {goal.GoalCategory || 'General'}
+                          {goal.GoalCategory || "General"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">
                           {goal.Weightage}%
@@ -321,11 +370,11 @@ const TeamManagement = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              goal.Priority === 'High'
-                                ? 'bg-orange-100 text-orange-800'
-                                : goal.Priority === 'Medium'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-800'
+                              goal.Priority === "High"
+                                ? "bg-orange-100 text-orange-800"
+                                : goal.Priority === "Medium"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-gray-100 text-gray-800"
                             }`}
                           >
                             {goal.Priority}
@@ -334,32 +383,39 @@ const TeamManagement = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              goal.GoalStatus === 'Rejected'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-emerald-100 text-emerald-800'
+                              goal.GoalStatus === "Rejected"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-emerald-100 text-emerald-800"
                             }`}
                           >
                             {goal.GoalStatus}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                          <Link to={`/goals/view/${goal.GoalID}`} className="text-indigo-600 hover:text-indigo-900 font-semibold">
+                          <Link
+                            to={`/goals/view/${goal.GoalID}`}
+                            className="text-indigo-600 hover:text-indigo-900 font-semibold"
+                          >
                             View
                           </Link>
-                          {goal.GoalStatus !== 'Rejected' && (
-                            <Link
-                              to={`/goals/review?goalId=${goal.GoalID}`}
-                              className="text-emerald-600 hover:text-emerald-900 font-semibold bg-emerald-50 px-3 py-1.5 rounded-md transition hover:bg-emerald-100"
-                            >
-                              Review
-                            </Link>
-                          )}
+                          {goal.GoalStatus !== "Rejected" &&
+                            isGoalReviewWindowOpen(goal) && (
+                              <Link
+                                to={`/goals/review?goalId=${goal.GoalID}`}
+                                className="text-emerald-600 hover:text-emerald-900 font-semibold bg-emerald-50 px-3 py-1.5 rounded-md transition hover:bg-emerald-100"
+                              >
+                                Review
+                              </Link>
+                            )}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-500">
+                      <td
+                        colSpan="6"
+                        className="px-6 py-12 text-center text-sm text-gray-500"
+                      >
                         No active goals found for this user.
                       </td>
                     </tr>
