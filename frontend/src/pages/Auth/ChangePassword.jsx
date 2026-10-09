@@ -52,7 +52,7 @@ const ChangePassword = () => {
             setMessage({ type: "success", text: response.message || "Password changed successfully." });
             
             setTimeout(() => {
-                navigate("/profile");
+                navigate("/login");
             }, 1500);
 
         } catch (error) {

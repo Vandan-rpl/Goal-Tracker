@@ -1,157 +1,217 @@
 import React, { useState } from "react";
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Grid,
-  Divider,
-  Switch,
-  FormControlLabel,
-  Button,
-  Stack,
-  Avatar,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-} from "@mui/material";
-
-import PersonIcon from "@mui/icons-material/Person";
-import LockIcon from "@mui/icons-material/Lock";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
-import LogoutIcon from "@mui/icons-material/Logout";
-import ComputerIcon from "@mui/icons-material/Computer";
-import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
-
 import { useNavigate } from "react-router-dom";
+import {
+  User,
+  Lock,
+  Bell,
+  Globe,
+  ChevronRight,
+  LogOut,
+  Shield,
+  Sliders,
+} from "lucide-react";
 
 const Settings = () => {
   const navigate = useNavigate();
 
-  const [darkMode, setDarkMode] = useState(false);
-
   const [emailNotification, setEmailNotification] = useState(true);
-
   const [browserNotification, setBrowserNotification] = useState(true);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-
     navigate("/login");
   };
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" fontWeight="bold" mb={3}>
-        Settings
-      </Typography>
+    <div className="min-h-screen bg-slate-50/50 p-4 sm:p-6 lg:p-8 text-slate-800">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-200 gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              Settings
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Manage your account settings and preferences.
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 w-fit"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Log out</span>
+          </button>
+        </div>
 
-      <Grid container spacing={3}>
-        {/* Account */}
+        {/* Main Grid Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Account Settings Section */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+              <div
+                className="p-2.5 rounded-xl bg-[#1976d2]/10 text-[#1976d2]"
+                style={{ color: "#1976d2" }}
+              >
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Account Settings
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Personal details and security options
+                </p>
+              </div>
+            </div>
 
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Account
-              </Typography>
+            <div className="divide-y divide-slate-100">
+              {/* Profile Item */}
+              <button
+                onClick={() => navigate("/profile")}
+                className="w-full p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors text-left group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600 group-hover:bg-[#1976d2]/10 group-hover:text-[#1976d2] transition-colors">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-900 block text-sm sm:text-base">
+                      Profile
+                    </span>
+                    <span className="text-xs sm:text-sm text-slate-500 block">
+                      View and update your profile information
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-0.5 group-hover:text-[#1976d2] transition-all" />
+              </button>
 
-              <Divider sx={{ mb: 2 }} />
+              {/* Change Password Item */}
+              <button
+                onClick={() => navigate("/change-password")}
+                className="w-full p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors text-left group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600 group-hover:bg-[#1976d2]/10 group-hover:text-[#1976d2] transition-colors">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-900 block text-sm sm:text-base">
+                      Change Password
+                    </span>
+                    <span className="text-xs sm:text-sm text-slate-500 block">
+                      Update your account security password
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-0.5 group-hover:text-[#1976d2] transition-all" />
+              </button>
+            </div>
+          </div>
 
-              <List>
-                <ListItem button onClick={() => navigate("/profile")}>
-                  <ListItemIcon>
-                    <PersonIcon />
-                  </ListItemIcon>
+          {/* Preferences Section */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-[#1976d2]/10 text-[#1976d2]">
+                <Sliders className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900"> 
+                  Preferences
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Manage your notification channels
+                </p>
+              </div>
+            </div>
 
-                  <ListItemText
-                    primary="Profile"
-                    secondary="View and update your profile"
-                  />
-
-                  <ArrowForwardIosIcon fontSize="small" />
-                </ListItem>
-
-                <ListItem button onClick={() => navigate("/change-password")}>
-                  <ListItemIcon>
-                    <LockIcon />
-                  </ListItemIcon>
-
-                  <ListItemText
-                    primary="Change Password"
-                    secondary="Update your account password"
-                  />
-
-                  <ArrowForwardIosIcon fontSize="small" />
-                </ListItem>
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Preferences */}
-
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Preferences
-              </Typography>
-
-              <Divider sx={{ mb: 2 }} />
-
-              <Stack spacing={2}>
-                {/* Theme toggle button */}
-                {/* <FormControlLabel
-                  control={
-                    <Switch
-                      checked={darkMode}
-                      onChange={() => setDarkMode(!darkMode)}
-                    />
-                  }
-                  label={
-                    <Box display="flex" alignItems="center">
-                      <DarkModeIcon sx={{ mr: 1 }} />
-                      Dark Mode
-                    </Box>
-                  }
-                /> */}
-
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={emailNotification}
-                      onChange={() => setEmailNotification(!emailNotification)}
-                    />
-                  }
-                  label={
-                    <Box display="flex" alignItems="center">
-                      <NotificationsIcon sx={{ mr: 1 }} />
+            <div className="p-4 sm:p-6 space-y-6">
+              {/* Email Notifications Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="email-toggle"
+                      className="font-medium text-slate-900 text-sm sm:text-base cursor-pointer block"
+                    >
                       Email Notifications
-                    </Box>
-                  }
-                />
+                    </label>
+                    <span className="text-xs sm:text-sm text-slate-500 block">
+                      Receive updates via your registered email
+                    </span>
+                  </div>
+                </div>
 
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={browserNotification}
-                      onChange={() =>
-                        setBrowserNotification(!browserNotification)
-                      }
-                    />
+                {/* Custom Styled Switch */}
+                <button
+                  id="email-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={emailNotification}
+                  onClick={() => setEmailNotification(!emailNotification)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1976d2]/20 ${
+                    emailNotification ? "bg-[#1976d2]" : "bg-slate-200"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      emailNotification ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="border-t border-slate-100" />
+
+              {/* Browser Notifications Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="browser-toggle"
+                      className="font-medium text-slate-900 text-sm sm:text-base cursor-pointer block"
+                    >
+                      Browser Notifications
+                    </label>
+                    <span className="text-xs sm:text-sm text-slate-500 block">
+                      Receive instant push notifications in your browser
+                    </span>
+                  </div>
+                </div>
+
+                {/* Custom Styled Switch */}
+                <button
+                  id="browser-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={browserNotification}
+                  onClick={() =>
+                    setBrowserNotification(!browserNotification)
                   }
-                  label="Browser Notifications"
-                />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    </Box>
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1976d2]/20 ${
+                    browserNotification ? "bg-[#1976d2]" : "bg-slate-200"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      browserNotification ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

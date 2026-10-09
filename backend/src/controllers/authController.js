@@ -236,7 +236,7 @@ const forgotPassword = async (req, res) => {
       .request()
       .input("Email", sql.VarChar, email)
       .query(
-        "SELECT TOP 1 UserID, Username, Email FROM Users WHERE Email = @Email AND IsActive = 1",
+        "SELECT TOP 1 UserID, Username, Email, PasswordChangedDate FROM Users WHERE Email = @Email AND IsActive = 1",
       );
 
     if (userResult.recordset.length === 0) {
@@ -249,9 +249,12 @@ const forgotPassword = async (req, res) => {
     }
 
     const user = userResult.recordset[0];
+    const passwordChangedAt = user.PasswordChangedDate
+      ? new Date(user.PasswordChangedDate).toISOString()
+      : null;
 
     const resetToken = jwt.sign(
-      { userId: user.UserID, email: user.Email },
+      { userId: user.UserID, email: user.Email, passwordChangedAt },
       process.env.JWT_SECRET || "default_jwt_secret",
       { expiresIn: "15m" },
     );
@@ -312,24 +315,60 @@ const resetPasswordWithToken = async (req, res) => {
       token,
       process.env.JWT_SECRET || "default_jwt_secret",
     );
+    if (
+      !decoded ||
+      !Object.prototype.hasOwnProperty.call(decoded, "passwordChangedAt") ||
+      (decoded.passwordChangedAt !== null &&
+        (typeof decoded.passwordChangedAt !== "string" ||
+          Number.isNaN(new Date(decoded.passwordChangedAt).getTime())))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid, expired, or already used password reset link.",
+      });
+    }
+
     const userId = decoded.userId;
+    const passwordChangedAt =
+      decoded.passwordChangedAt === null
+        ? null
+        : new Date(decoded.passwordChangedAt);
 
     const salt = await bcrypt.genSalt(10);
     const newPasswordHash = await bcrypt.hash(newPassword, salt);
 
     const pool = await poolPromise;
-    await pool
+    const updateResult = await pool
       .request()
       .input("UserID", sql.Int, userId)
-      .input("PasswordHash", sql.NVarChar, newPasswordHash).query(`
+      .input("PasswordHash", sql.NVarChar, newPasswordHash)
+      .input("PasswordChangedAt", sql.DateTime, passwordChangedAt).query(`
                 UPDATE Users 
                 SET PasswordHash = @PasswordHash, 
                     IsPasswordChanged = 1, 
                     DefaultPasswordFlag = 0,
-                    PasswordChangedDate = GETDATE(),
+                    PasswordChangedDate = CASE
+                      WHEN @PasswordChangedAt IS NOT NULL
+                        AND GETDATE() <= @PasswordChangedAt
+                      THEN DATEADD(millisecond, 10, @PasswordChangedAt)
+                      ELSE GETDATE()
+                    END,
                     ModifiedDate = GETDATE() 
+                OUTPUT INSERTED.UserID
                 WHERE UserID = @UserID
+                  AND IsActive = 1
+                  AND (
+                    (@PasswordChangedAt IS NULL AND PasswordChangedDate IS NULL)
+                    OR PasswordChangedDate = @PasswordChangedAt
+                  )
             `);
+
+    if (updateResult.recordset.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid, expired, or already used password reset link.",
+      });
+    }
 
     return res.status(200).json({
       success: true,

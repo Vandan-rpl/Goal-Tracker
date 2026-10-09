@@ -10,6 +10,8 @@ const ResetPassword = () => {
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [resetSucceeded, setResetSucceeded] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,6 +23,7 @@ const ResetPassword = () => {
       return;
     }
 
+    setSubmitting(true);
     try {
       // અહી '/auth/reset-password' ના બદલે નવા બનાવેલા Route નો ઉપયોગ કરો
       const response = await api.post('/auth/reset-password-token', {
@@ -29,9 +32,12 @@ const ResetPassword = () => {
       });
 
       setMessage(response.data.message || 'Password reset successfully!');
+      setResetSucceeded(true);
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to reset password.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -49,13 +55,18 @@ const ResetPassword = () => {
               type="password" 
               required
               minLength={6}
+              disabled={submitting || resetSucceeded}
               value={newPassword} 
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md">
-            Update Password
+          <button
+            type="submit"
+            disabled={submitting || resetSucceeded}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md disabled:opacity-50"
+          >
+            {submitting ? 'Updating...' : resetSucceeded ? 'Password Updated' : 'Update Password'}
           </button>
         </form>
       </div>
