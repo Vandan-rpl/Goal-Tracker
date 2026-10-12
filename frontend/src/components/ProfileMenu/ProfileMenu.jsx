@@ -195,7 +195,7 @@ const ProfileMenu = () => {
         {/* Settings */}
         <MenuItem
           onClick={() =>
-            handleNavigate("/settings")
+            handleNavigate("/setting")
           }
         >
           <ListItemIcon>
