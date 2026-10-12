@@ -112,7 +112,7 @@ const Settings = () => {
           </div>
 
           {/* Preferences Section */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          {/* <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-[#1976d2]/10 text-[#1976d2]">
                 <Sliders className="w-5 h-5" />
@@ -121,15 +121,15 @@ const Settings = () => {
                 <h2 className="text-lg font-semibold text-slate-900"> 
                   Preferences
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500"> 
                   Manage your notification channels
                 </p>
               </div>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6"> */}
               {/* Email Notifications Toggle */}
-              <div className="flex items-center justify-between gap-4">
+              {/* <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
                   <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600">
                     <Bell className="w-5 h-5" />
@@ -145,10 +145,10 @@ const Settings = () => {
                       Receive updates via your registered email
                     </span>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Custom Styled Switch */}
-                <button
+                {/* <button
                   id="email-toggle"
                   type="button"
                   role="switch"
@@ -166,10 +166,10 @@ const Settings = () => {
                 </button>
               </div>
 
-              <div className="border-t border-slate-100" />
+              <div className="border-t border-slate-100" /> */}
 
               {/* Browser Notifications Toggle */}
-              <div className="flex items-center justify-between gap-4">
+              {/* <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
                   <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600">
                     <Globe className="w-5 h-5" />
@@ -185,10 +185,10 @@ const Settings = () => {
                       Receive instant push notifications in your browser
                     </span>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Custom Styled Switch */}
-                <button
+                {/* <button
                   id="browser-toggle"
                   type="button"
                   role="switch"
@@ -208,7 +208,7 @@ const Settings = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>
