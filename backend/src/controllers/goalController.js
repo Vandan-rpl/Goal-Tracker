@@ -8,6 +8,7 @@ const { calculateGoalProgress } = require("../utils/goalProgress");
 const {
   getFiscalQuarter,
   getQuarterStartDate,
+  getGoalCreationWindow,
   isWithinCarryForwardWindow,
 } = require("../utils/fiscalQuarter");
 
@@ -1042,6 +1043,14 @@ const createGoal = async (req, res) => {
   } = req.body;
 
   const userId = req.user?.UserID || req.user?.userId;
+
+  const goalCreationWindow = getGoalCreationWindow();
+  if (!goalCreationWindow.isOpen) {
+    return res.status(403).json({
+      success: false,
+      message: `Goal creation is available only during the first 7 days of each quarter. The current window was ${goalCreationWindow.startDate.toLocaleDateString()} through ${goalCreationWindow.endDate.toLocaleDateString()}.`,
+    });
+  }
 
   if (!GoalTitle || !Weightage || !Priority || !Timeline) {
     return res

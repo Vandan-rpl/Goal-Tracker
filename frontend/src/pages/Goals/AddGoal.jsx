@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import api from "../../services/api";
-import { getFiscalQuarterValue } from "../../utils/fiscalQuarter";
+import {
+  getFiscalQuarterValue,
+  getGoalCreationWindow,
+} from "../../utils/fiscalQuarter";
 
 const MAX_SUB_GOALS = 5;
 const MAX_GOALS_PER_QUARTER = 8;
@@ -23,6 +26,7 @@ const getSubGoalWeightageTotal = (subGoals) =>
 const AddGoal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const goalCreationWindow = getGoalCreationWindow();
   const [goals, setGoals] = useState([]);
   const [goalAllocationLoading, setGoalAllocationLoading] = useState(true);
   const [goalAllocationError, setGoalAllocationError] = useState("");
@@ -209,6 +213,13 @@ const AddGoal = () => {
     setError("");
     setFieldErrors({});
 
+    if (!goalCreationWindow.isOpen) {
+      setError(
+        "Goal creation is available only during the first 7 days of each quarter.",
+      );
+      return;
+    }
+
     if (goalAllocationLoading || goalAllocationError) {
       setError(
         goalAllocationError ||
@@ -367,7 +378,23 @@ return (
             </div>
           )}
 
+          <div
+            className={`mb-6 rounded-2xl border p-4 text-sm font-medium ${
+              goalCreationWindow.isOpen
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+            role="status"
+          >
+            {goalCreationWindow.isOpen
+              ? "The goal-entry window is open from "
+              : "The goal-entry window is closed. It is open only for the first 7 calendar days of each quarter. This quarter's window ran from "}
+            {goalCreationWindow.startDate.toLocaleDateString()} through{" "}
+            {goalCreationWindow.endDate.toLocaleDateString()}.
+          </div>
+
           <form
+            hidden={!goalCreationWindow.isOpen}
             onSubmit={(e) => handleSubmit(e, "Draft")}
             className="space-y-8"
           >

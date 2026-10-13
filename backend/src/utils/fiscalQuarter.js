@@ -16,6 +16,23 @@ function getQuarterStartDate(quarterEndDate) {
   return start;
 }
 
+//Goal creation window
+function getGoalCreationWindow(date = new Date()) {
+  const { quarterEndDate } = getFiscalQuarter(date);
+  const startDate = getQuarterStartDate(quarterEndDate);
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + 6);
+
+  const today = new Date(toDate(date));
+  today.setHours(0, 0, 0, 0);
+
+  return {
+    startDate,
+    endDate,
+    isOpen: today >= startDate && today <= endDate,
+  };
+}
+
 function getFiscalQuarter(date = new Date()) {
   const localDate = toDate(date);
   if (Number.isNaN(localDate.getTime())) {
@@ -66,4 +83,10 @@ function isWithinCarryForwardWindow(quarterEndDate) {
 }
 
 
-module.exports = { getFiscalQuarter, getNextFiscalQuarter, getQuarterStartDate,isWithinCarryForwardWindow };
+module.exports = {
+  getFiscalQuarter,
+  getNextFiscalQuarter,
+  getQuarterStartDate,
+  getGoalCreationWindow,
+  isWithinCarryForwardWindow,
+};
