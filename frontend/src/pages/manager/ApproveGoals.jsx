@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import { getTeamMembers, getUserGoalsByManager, updateGoalStatus } from '../../services/teamService';
 import { canEditGoal } from '../../utils/goalEditability';
+import {
+  getCfoApprovalWindow,
+  getManagerHodApprovalWindow,
+} from '../../utils/fiscalQuarter';
 
 const ApproveGoals = () => {
   const { user } = useAuth();
@@ -14,6 +18,11 @@ const ApproveGoals = () => {
   const [loading, setLoading] = useState(true);
   const [goalsLoading, setGoalsLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const role = String(user?.Role || user?.role || '').toUpperCase();
+  const isCfo = ['BUSINESSHEAD', 'CFO'].includes(role);
+  const approvalWindow = isCfo
+    ? getCfoApprovalWindow()
+    : getManagerHodApprovalWindow();
 
   useEffect(() => {
     const fetchTeam = async () => {
@@ -67,7 +76,7 @@ const ApproveGoals = () => {
     return <div className="flex-1 bg-gray-50 min-h-screen flex items-center justify-center text-gray-500">Loading team hierarchy...</div>;
   }
 
-  const roleTitle = user?.Role === 'BusinessHead' || user?.role === 'BusinessHead' ? 'Managers Team View' : 'Team Members Goal Review';
+  const roleTitle = isCfo ? 'Managers Team View' : 'Team Members Goal Review';
 
   return (
     <div className="flex-1 bg-gray-50 min-h-screen overflow-y-auto p-4 sm:p-8">
@@ -84,6 +93,21 @@ const ApproveGoals = () => {
             {message.text}
           </div>
         )}
+
+        <div
+          className={`p-4 rounded-xl text-sm font-medium ${
+            approvalWindow.isOpen
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              : 'bg-amber-50 text-amber-900 border border-amber-200'
+          }`}
+          role="status"
+        >
+          {approvalWindow.isOpen
+            ? `${isCfo ? 'CFO' : 'Manager/HOD'} approvals are open through `
+            : `${isCfo ? 'CFO approvals are open only on quarter days 16-30.' : 'Manager/HOD approvals are open only on quarter days 8-15.'} This quarter's window is `}
+          {approvalWindow.startDate.toLocaleDateString()} through{' '}
+          {approvalWindow.endDate.toLocaleDateString()}.
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
@@ -160,19 +184,23 @@ const ApproveGoals = () => {
                     {/* Approval / Rejection Action Buttons */}
                     <div className="flex space-x-3 pt-3 border-t border-gray-200">
                       <button 
+                        disabled={!approvalWindow.isOpen}
                         onClick={() => handleStatusChange(
                           goal.GoalID,
-                          user?.Role === 'Manager' || user?.role === 'Manager'
+                          role === 'MANAGER'
                             ? 'Manager Approved'
-                            : 'HOD Approved',
+                            : isCfo
+                              ? 'Approved'
+                              : 'HOD Approved',
                         )}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Approve Goal
                       </button>
                       <button 
+                        disabled={!approvalWindow.isOpen}
                         onClick={() => handleStatusChange(goal.GoalID, 'Rejected')}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition"
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Reject Goal
                       </button>

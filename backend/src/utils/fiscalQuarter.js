@@ -16,21 +16,35 @@ function getQuarterStartDate(quarterEndDate) {
   return start;
 }
 
-//Goal creation window
-function getGoalCreationWindow(date = new Date()) {
+// Quarter-day windows use inclusive offsets from the fiscal quarter start.
+function getQuarterDayWindow(startDay, endDay, date = new Date()) {
   const { quarterEndDate } = getFiscalQuarter(date);
   const startDate = getQuarterStartDate(quarterEndDate);
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 6);
+  const windowStartDate = new Date(startDate);
+  windowStartDate.setDate(windowStartDate.getDate() + startDay - 1);
+  const windowEndDate = new Date(startDate);
+  windowEndDate.setDate(windowEndDate.getDate() + endDay - 1);
 
   const today = new Date(toDate(date));
   today.setHours(0, 0, 0, 0);
 
   return {
-    startDate,
-    endDate,
-    isOpen: today >= startDate && today <= endDate,
+    startDate: windowStartDate,
+    endDate: windowEndDate,
+    isOpen: today >= windowStartDate && today <= windowEndDate,
   };
+}
+
+function getGoalCreationWindow(date = new Date()) {
+  return getQuarterDayWindow(1, 7, date);
+}
+
+function getManagerHodApprovalWindow(date = new Date()) {
+  return getQuarterDayWindow(8, 15, date);
+}
+
+function getCfoApprovalWindow(date = new Date()) {
+  return getQuarterDayWindow(16, 30, date);
 }
 
 function getFiscalQuarter(date = new Date()) {
@@ -87,6 +101,9 @@ module.exports = {
   getFiscalQuarter,
   getNextFiscalQuarter,
   getQuarterStartDate,
+  getQuarterDayWindow,
   getGoalCreationWindow,
+  getManagerHodApprovalWindow,
+  getCfoApprovalWindow,
   isWithinCarryForwardWindow,
 };

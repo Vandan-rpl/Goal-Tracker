@@ -6,6 +6,10 @@ import GoalStatusStepper from "../../components/GoalStatusStepper/GoalStatusStep
 import GoalHistory from "./Goalhistory";
 import { canEditGoal as isGoalEditable } from "../../utils/goalEditability";
 import { isGoalReviewWindowOpen } from "../../utils/goalReviewWindow";
+import {
+  getCfoApprovalWindow,
+  getManagerHodApprovalWindow,
+} from "../../utils/fiscalQuarter";
 
 const ViewGoal = () => {
   const { id } = useParams();
@@ -76,6 +80,13 @@ const ViewGoal = () => {
   const canCfoApprove = ["cfo", "businesshead", "business head"].includes(
     normalizedRole,
   );
+  const isManagerHodApprover = ["manager", "hod"].includes(normalizedRole);
+  const approvalWindow = canCfoApprove
+    ? getCfoApprovalWindow()
+    : isManagerHodApprover
+      ? getManagerHodApprovalWindow()
+      : null;
+  const isApprovalWindowOpen = approvalWindow?.isOpen === true;
 
   const reviewableStatuses = ["HOD Approved", "Reviewed By HOD"];
   let loggedInUserId = null;
@@ -96,7 +107,7 @@ const ViewGoal = () => {
         Number(goal.UserID) === Number(loggedInUserId)));
   const canEditCurrentGoal = isGoalEditable(
     goal,
-    isAuthorizedApprover && !isGoalOwner,
+    isAuthorizedApprover && !isGoalOwner && isApprovalWindowOpen,
   );
   const isJointParticipant = goal?.IsJointParticipant === true && !isGoalOwner;
   const isReviewer =
@@ -110,6 +121,7 @@ const ViewGoal = () => {
   const canShowApproveReject =
     goal &&
     !isJointParticipant &&
+    isApprovalWindowOpen &&
     ((canCfoApprove &&
       [
         "HOD Approved",
@@ -123,6 +135,7 @@ const ViewGoal = () => {
   const canShowCfoActions =
     !isJointParticipant &&
     canCfoApprove &&
+    isApprovalWindowOpen &&
     [
       "HOD Approved",
       "Manager Approved",
@@ -177,6 +190,15 @@ const ViewGoal = () => {
   };
 
   const handleGoalAction = async (newStatus) => {
+    if (!isApprovalWindowOpen) {
+      alert(
+        canCfoApprove
+          ? "CFO approvals are available only on quarter days 16-30."
+          : "Manager/HOD approvals are available only on quarter days 8-15.",
+      );
+      return;
+    }
+
     try {
       setActionLoading(true);
       const response = await api.put(`/goals/status/${id}`, {
@@ -333,6 +355,27 @@ const ViewGoal = () => {
             </span>
           </div>
         </div>
+
+        {approvalWindow && !isGoalOwner && (
+          <div
+            className={`rounded-xl border p-4 text-sm font-medium ${
+              approvalWindow.isOpen
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+            role="status"
+          >
+            {canCfoApprove
+              ? approvalWindow.isOpen
+                ? "CFO approval and goal editing are open through "
+                : "CFO approval and goal editing are available only on quarter days 16-30. This quarter's window is "
+              : approvalWindow.isOpen
+                ? "Manager/HOD approval and goal editing are open through "
+                : "Manager/HOD approval and goal editing are available only on quarter days 8-15. This quarter's window is "}
+            {approvalWindow.startDate.toLocaleDateString()} through{" "}
+            {approvalWindow.endDate.toLocaleDateString()}.
+          </div>
+        )}
 
         {isJointParticipant && (
           <section className="bg-sky-50 border border-sky-200 rounded-2xl p-5 sm:p-6 space-y-4">

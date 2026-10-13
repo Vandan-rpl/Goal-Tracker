@@ -13,11 +13,14 @@ export const getCurrentFiscalQuarterValue = (date = new Date()) => {
   return `Q${quarter}-${getFiscalYearStart(date) + 1}`;
 };
 
-export const getGoalCreationWindow = (date = new Date()) => {
+export const getQuarterDayWindow = (startDay, endDay, date = new Date()) => {
   const quarterIndex = Math.floor(((date.getMonth() + 9) % 12) / 3);
   const startMonth = (quarterIndex * 3 + 3) % 12;
-  const startDate = new Date(date.getFullYear(), startMonth, 1);
-  const endDate = new Date(date.getFullYear(), startMonth, 7);
+  const quarterStart = new Date(date.getFullYear(), startMonth, 1);
+  const startDate = new Date(quarterStart);
+  startDate.setDate(startDate.getDate() + startDay - 1);
+  const endDate = new Date(quarterStart);
+  endDate.setDate(endDate.getDate() + endDay - 1);
   const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   return {
@@ -26,6 +29,15 @@ export const getGoalCreationWindow = (date = new Date()) => {
     isOpen: today >= startDate && today <= endDate,
   };
 };
+
+export const getGoalCreationWindow = (date = new Date()) =>
+  getQuarterDayWindow(1, 7, date);
+
+export const getManagerHodApprovalWindow = (date = new Date()) =>
+  getQuarterDayWindow(8, 15, date);
+
+export const getCfoApprovalWindow = (date = new Date()) =>
+  getQuarterDayWindow(16, 30, date);
 
 export const getFiscalQuarterValue = (dateValue) => {
   if (!dateValue) return "";

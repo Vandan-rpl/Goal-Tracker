@@ -9,6 +9,8 @@ const {
   getFiscalQuarter,
   getQuarterStartDate,
   getGoalCreationWindow,
+  getManagerHodApprovalWindow,
+  getCfoApprovalWindow,
   isWithinCarryForwardWindow,
 } = require("../utils/fiscalQuarter");
 
@@ -2088,13 +2090,14 @@ const changeGoalStatus = async (req, res) => {
 
     // NEW: Business Head is "final" either after Manager/HOD already approved,
     // OR when this employee reports directly to Business Head (no Manager/HOD stage exists).
+    const isCfoRole = ["BUSINESSHEAD", "CFO"].includes(role);
     const isDirectReport =
-      role === "BUSINESSHEAD"
+      isCfoRole
         ? await isDirectBusinessHeadReport(goalOwnerId, userId)
         : false;
 
     const isFinalBusinessHeadAction =
-      role === "BUSINESSHEAD" && (oldStatus !== "Submitted" || isDirectReport);
+      isCfoRole && (oldStatus !== "Submitted" || isDirectReport);
 
     const isAuthorizedApprover =
       role === "ADMIN" ||
@@ -2111,7 +2114,7 @@ const changeGoalStatus = async (req, res) => {
 
     const isFinalApproval = isFinalBusinessHeadAction;
     const isFirstStageApproval =
-      !isFinalApproval && role !== "ADMIN" && isAuthorizedApprover;
+      ["MANAGER", "HOD"].includes(role) && isAuthorizedApprover;
     const firstStageApprovalStatus =
       role === "MANAGER" ? "Manager Approved" : "HOD Approved";
 
@@ -2139,6 +2142,21 @@ const changeGoalStatus = async (req, res) => {
           ? "Final approval is available only after manager/HOD approval."
           : "This goal is not awaiting your approval stage.",
       });
+    }
+
+    if (role !== "ADMIN") {
+      const approvalWindow = isFinalApproval
+        ? getCfoApprovalWindow()
+        : getManagerHodApprovalWindow();
+      if (!approvalWindow.isOpen) {
+        await transaction.rollback();
+        return res.status(403).json({
+          success: false,
+          message: isFinalApproval
+            ? `CFO approval is available only on quarter days 16-30. The current window is ${approvalWindow.startDate.toLocaleDateString()} through ${approvalWindow.endDate.toLocaleDateString()}.`
+            : `Manager/HOD approval is available only on quarter days 8-15. The current window is ${approvalWindow.startDate.toLocaleDateString()} through ${approvalWindow.endDate.toLocaleDateString()}.`,
+        });
+      }
     }
 
     const updateReq = new sql.Request(transaction);

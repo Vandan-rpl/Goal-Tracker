@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
-import { getFiscalQuarterOptions } from "../../utils/fiscalQuarter";
+import {
+  getCfoApprovalWindow,
+  getFiscalQuarterOptions,
+} from "../../utils/fiscalQuarter";
 import { canEditGoal } from "../../utils/goalEditability";
 
 const statusBadgeClass = (status) => {
@@ -33,6 +36,7 @@ const CFOAllUsersGoals = () => {
   const [actingOn, setActingOn] = useState(null);
   const [quarter, setQuarter] = useState("");
   const [status, setStatus] = useState("");
+  const approvalWindow = getCfoApprovalWindow();
 
   const fetchAllGoals = useCallback(async () => {
     try {
@@ -77,6 +81,21 @@ const CFOAllUsersGoals = () => {
       <h2 className="text-2xl font-semibold text-gray-800 mb-6">
         Enterprise-Wide Goals Overview (CFO Access)
       </h2>
+
+      <div
+        className={`mb-6 rounded-lg border p-4 text-sm font-medium ${
+          approvalWindow.isOpen
+            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+            : "border-amber-200 bg-amber-50 text-amber-900"
+        }`}
+        role="status"
+      >
+        {approvalWindow.isOpen
+          ? "CFO approvals are open through "
+          : "CFO approvals are open only on quarter days 16-30. This quarter's window is "}
+        {approvalWindow.startDate.toLocaleDateString()} through{" "}
+        {approvalWindow.endDate.toLocaleDateString()}.
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 bg-white shadow rounded-lg p-4 mb-6">
@@ -168,16 +187,16 @@ const CFOAllUsersGoals = () => {
                         ].includes(normalizedStatus(goal.GoalStatus)) && (
                           <div className="flex gap-2">
                             <button
-                              disabled={actingOn === goal.GoalID}
+                              disabled={actingOn === goal.GoalID || !approvalWindow.isOpen}
                               onClick={() => handleStatusUpdate(goal.GoalID, "Approved")}
-                              className="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                              className="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Approve
                             </button>
                             <button
-                              disabled={actingOn === goal.GoalID}
+                              disabled={actingOn === goal.GoalID || !approvalWindow.isOpen}
                               onClick={() => handleStatusUpdate(goal.GoalID, "Rejected")}
-                              className="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                              className="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Reject
                             </button>
