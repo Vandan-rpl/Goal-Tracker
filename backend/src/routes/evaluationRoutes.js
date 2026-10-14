@@ -3,10 +3,9 @@ const router = express.Router();
 const { verifyToken } = require('../middleware/authMiddleware');
 const evaluationController = require('../controllers/evaluationController');
 
-// GET /api/v1/evaluation/:userId?cycle=YYYY — self, HOD, reporting manager,
-// or Business Head of the target employee may view. Access rule enforced
-// inside the controller (canAccessEvaluation), not here, since it depends
-// on the specific target employee's hierarchy, not just a static role.
+// GET /api/v1/evaluation/:userId?fiscalYear=YYYY — self, CFO,
+// HOD, reporting manager, or Business Head may view. Access is enforced in
+// the controller because it depends on the target employee's hierarchy.
 router.get('/:userId', verifyToken, evaluationController.viewFinalEvaluation);
 
 // POST /api/v1/evaluation/:userId/finalize — HOD/reporting manager/Business

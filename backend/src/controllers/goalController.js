@@ -6,6 +6,9 @@ const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const { calculateGoalProgress } = require("../utils/goalProgress");
 const {
+  calculateQuarterAllocationAndAchievement,
+} = require("../utils/quarterPerformance");
+const {
   getFiscalQuarter,
   getQuarterStartDate,
   getGoalCreationWindow,
@@ -338,37 +341,34 @@ const getEmployeeDashboardSummary = (
       ? null
       : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
   };
+  const firstCarryForwardByGoal = new Map();
+  for (const entry of carryForwardHistory) {
+    if (!firstCarryForwardByGoal.has(String(entry.GoalID))) {
+      firstCarryForwardByGoal.set(String(entry.GoalID), entry);
+    }
+  }
+  const originalQuarterOf = (goal) => {
+    const createdDate = parseDate(goal.CreatedDate);
+    return createdDate
+      ? getFiscalQuarter(createdDate).label
+      : firstCarryForwardByGoal.get(String(goal.GoalID))?.FromQuarter ||
+          goal.Quarter;
+  };
   const dayDifference = (date) =>
     Math.round((date.getTime() - today.getTime()) / 86400000);
   const statusOf = (goal) => String(goal.GoalStatus || "").trim().toLowerCase();
-  const isCancelled = (goal) => statusOf(goal) === "cancelled";
-  const weightageOf = (goal) => {
-    const weightage = Number(goal.Weightage);
-    return Number.isFinite(weightage) ? weightage : 0;
-  };
-  const completionOf = (goal) => {
-    const completion = Number(goal.SubGoalCompletionPercentage);
-    return Number.isFinite(completion)
-      ? Math.max(0, Math.min(100, completion))
-      : 0;
-  };
 
   const currentQuarter = getFiscalQuarter(now);
   const currentQuarterGoals = goals.filter(
-    (goal) => goal.Quarter === currentQuarter.label,
+    (goal) => originalQuarterOf(goal) === currentQuarter.label,
   );
   const allocatedGoals = currentQuarterGoals.filter(
-    (goal) => !isCancelled(goal),
+    (goal) => !["rejected", "cancelled"].includes(statusOf(goal)),
   );
-  const allocatedPercentage = allocatedGoals.reduce(
-    (total, goal) => total + weightageOf(goal),
-    0,
-  );
-  const achievedPercentage = allocatedGoals.reduce(
-    (total, goal) =>
-      total + (weightageOf(goal) * completionOf(goal)) / 100,
-    0,
-  );
+  const currentQuarterPerformance =
+    calculateQuarterAllocationAndAchievement(allocatedGoals);
+  const { allocatedPercentage, achievedPercentage, performancePercentage } =
+    currentQuarterPerformance;
 
   const statusGroups = {
     Draft: ["draft"],
@@ -399,44 +399,41 @@ const getEmployeeDashboardSummary = (
     period = getFiscalQuarter(quarterStart);
   }
   const quarterHistory = quarterPeriods.map((quarter) => {
-    const currentQuarterGoals = goals.filter(
-      (goal) => goal.Quarter === quarter.label,
+    const quarterGoals = goals.filter(
+      (goal) => originalQuarterOf(goal) === quarter.label,
     );
-    const carriedGoals = new Map(
-      carryForwardHistory
-        .filter((entry) => entry.FromQuarter === quarter.label)
-        .map((entry) => [String(entry.GoalID), entry]),
-    );
-    const quarterGoalsById = new Map(
-      currentQuarterGoals.map((goal) => [String(goal.GoalID), goal]),
-    );
-    for (const [goalId, entry] of carriedGoals) {
-      if (!quarterGoalsById.has(goalId)) {
-        quarterGoalsById.set(goalId, {
-          ...entry,
-          SubGoalCompletionPercentage: entry.ProgressAtCarryForward,
-        });
-      }
-    }
-    const quarterGoals = [...quarterGoalsById.values()];
+    const quarterProgressGoals = quarterGoals.map((goal) => {
+      const firstCarryForward = firstCarryForwardByGoal.get(
+        String(goal.GoalID),
+      );
+      return firstCarryForward
+        ? {
+            ...goal,
+            SubGoalCompletionPercentage:
+              firstCarryForward.ProgressAtCarryForward,
+          }
+        : goal;
+    });
     const allocated = quarterGoals.filter(
       (goal) => !["rejected", "cancelled"].includes(statusOf(goal)),
     );
+    const allocatedIds = new Set(
+      allocated.map((goal) => String(goal.GoalID)),
+    );
+    const performance = calculateQuarterAllocationAndAchievement(
+      quarterProgressGoals.filter((goal) =>
+        allocatedIds.has(String(goal.GoalID)),
+      ),
+    );
     return {
       quarter: quarter.label,
-      allocatedPercentage: allocated.reduce(
-        (total, goal) => total + weightageOf(goal),
-        0,
-      ),
-      achievedPercentage: allocated.reduce(
-        (total, goal) =>
-          total + (weightageOf(goal) * completionOf(goal)) / 100,
-        0,
-      ),
+      ...performance,
       completedGoals: quarterGoals.filter(
         (goal) => statusOf(goal) === "completed",
       ).length,
-      carriedForwardGoals: carriedGoals.size,
+      carriedForwardGoals: quarterGoals.filter((goal) =>
+        firstCarryForwardByGoal.has(String(goal.GoalID)),
+      ).length,
     };
   });
 
@@ -529,6 +526,7 @@ const getEmployeeDashboardSummary = (
       quarterGoalCount: allocatedGoals.length,
       allocated: allocatedPercentage,
       achieved: achievedPercentage,
+      performancePercentage,
       unallocated: Math.max(0, 100 - allocatedPercentage),
       allocatedPercentage,
       achievedPercentage,
@@ -634,10 +632,12 @@ const getGoals = async (req, res) => {
       .input("UserID", sql.Int, userId)
       .query(`
         SELECT history.GoalID, history.FromQuarter,
-               history.ProgressAtCarryForward, goal.Weightage
+               history.ProgressAtCarryForward,
+               history.CarriedForwardDate, history.HistoryID
         FROM dbo.GoalCarryForwardHistory history
         INNER JOIN dbo.Goals goal ON goal.GoalID = history.GoalID
         WHERE goal.UserID = @UserID
+        ORDER BY history.CarriedForwardDate, history.HistoryID
       `);
 
     res.set("Cache-Control", "no-store");
@@ -1188,14 +1188,14 @@ const createGoal = async (req, res) => {
     const goalInsertResult = await request.query(`
             INSERT INTO dbo.Goals (
                 UserID, GoalNumber, GoalTitle, GoalDescription, Measurability, 
-                JointAccountability, Weightage, Priority, Timeline, Quarter, QuarterEndDate, MeetPerformance, 
+                JointAccountability, Weightage, Priority, Timeline, Quarter, QuarterEndDate, MeetPerformance,
                 ExceedPerformance, ValidationSource, CrossFunctionalGoal, GoalCategory, 
                 GoalStatus, DraftVersion, SubmittedDate, CreatedDate
             )
             OUTPUT INSERTED.GoalID
             VALUES (
                 @UserID, @GoalNumber, @GoalTitle, @GoalDescription, @Measurability, 
-                @JointAccountability, @Weightage, @Priority, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance, 
+                @JointAccountability, @Weightage, @Priority, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance,
                 @ExceedPerformance, @ValidationSource, @CrossFunctionalGoal, @GoalCategory, 
                 @GoalStatus, 1, @SubmittedDate, GETDATE()
             )

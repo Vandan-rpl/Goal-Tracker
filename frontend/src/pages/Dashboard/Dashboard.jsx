@@ -303,6 +303,7 @@ export default function GoalDashboard() {
       goalCount: 0,
       allocated: 0,
       achieved: 0,
+      performancePercentage: null,
       unallocated: 100,
     };
   }, [dashboardSummary]);
@@ -447,6 +448,17 @@ export default function GoalDashboard() {
                   <span className="h-2 w-2 rounded-full bg-indigo-600" />
                   Achieved {currentQuarterAchieved}%
                 </span>
+                {currentQuarterAllocation.performancePercentage != null && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      Completion{" "}
+                      {Number(
+                        currentQuarterAllocation.performancePercentage,
+                      ).toFixed(2)}%
+                    </span>
+                  </>
+                )}
                 <span aria-hidden="true">·</span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-gray-100 ring-1 ring-gray-200" />
@@ -589,6 +601,8 @@ export default function GoalDashboard() {
             )}
           </section>
 
+          {/* Completion = Achieved weightage ÷ Allocated weightage × 100 */}
+          {/* Achieved = Goal weightage × goal completion percentage ÷ 100 */}
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:col-span-2">
             <h2 className="text-sm font-semibold text-gray-800">Quarter history</h2>
             {dashboardSummary?.quarterHistory?.some(
@@ -605,6 +619,7 @@ export default function GoalDashboard() {
                       <th className="pb-2 pr-4 font-medium">Quarter</th>
                       <th className="pb-2 px-3 font-medium">Allocated</th>
                       <th className="pb-2 px-3 font-medium">Achieved</th>
+                      <th className="pb-2 px-3 font-medium">Completion</th>
                       <th className="pb-2 px-3 font-medium">Completed</th>
                       <th className="pb-2 pl-3 font-medium">Carried forward</th>
                     </tr>
@@ -620,6 +635,11 @@ export default function GoalDashboard() {
                         </td>
                         <td className="px-3 py-3 text-gray-600">
                           {Number(quarter.achievedPercentage).toFixed(2)}%
+                        </td>
+                        <td className="px-3 py-3 font-medium text-indigo-700">
+                          {quarter.performancePercentage == null
+                            ? "—"
+                            : `${Number(quarter.performancePercentage).toFixed(2)}%`}
                         </td>
                         <td className="px-3 py-3 text-gray-600">{quarter.completedGoals}</td>
                         <td className="py-3 pl-3 text-gray-600">

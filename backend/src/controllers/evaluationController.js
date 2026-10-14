@@ -1,68 +1,119 @@
 const { poolPromise, sql } = require('../config/db');
 const { notifyUser } = require('../services/notifyService');
+const { getFiscalQuarter } = require('../utils/fiscalQuarter');
+const {
+    calculateQuarterAllocationAndAchievement
+} = require('../utils/quarterPerformance');
 
-/**
- * ============================================================
- * IMPORTANT — READ THIS BEFORE TRUSTING WeightedScore
- * ============================================================
- * You asked me to flag it clearly if rating data isn't in one consistent
- * place after the earlier prompts. It isn't. There are TWO separate,
- * disconnected places a goal's rating can end up:
- *
- *   Ratings are stored in the `HODRatings` table. The old goal-level
- *   ManagerRating columns are not part of the database schema.
- *
- * ALSO FLAGGING: there is no "review cycle" / period / year concept
- * anywhere in this schema — I searched, nothing like ReviewCycle,
- * AppraisalPeriod, or similar exists on dbo.Goals or anywhere else. The
- * `cycle` parameter below is therefore a best-effort stand-in: if
- * provided, it's treated as a calendar year and used to filter goals by
- * YEAR(Timeline). If you actually need discrete review cycles (e.g.
- * "H1 2026", "Annual 2026"), that needs a real column added to dbo.Goals
- * — flagged, not guessed.
- */
+const getFiscalYearEndYear = (date = new Date()) => {
+    const fiscalQuarter = getFiscalQuarter(date).label;
+    return Number(fiscalQuarter.slice(fiscalQuarter.indexOf('-') + 1));
+};
 
-// Access rule: a user can view an evaluation if it's their own, or if
-// they are the target employee's HOD, reporting manager, or Business Head.
+const parseFiscalYear = (value) => {
+    if (value == null) {
+        return getFiscalYearEndYear();
+    }
+
+    if (!/^\d{4}$/.test(String(value))) {
+        return null;
+    }
+
+    const year = Number(value);
+    return year >= 1900 && year <= 9998 ? year : null;
+};
+
+// BusinessHead is the CFO role in this application and can see everyone.
+// Managers and HODs may see employees in their reporting hierarchy.
 const canAccessEvaluation = async (pool, requesterId, targetUserId) => {
-    if (requesterId === targetUserId) {
+    const normalizedRequesterId = Number(requesterId);
+    if (normalizedRequesterId === Number(targetUserId)) {
         return true;
     }
 
     const result = await pool.request()
-        .input('UserID', sql.Int, targetUserId)
-        .query('SELECT ReportingManagerID, HODID, BusinessHeadID FROM dbo.Users WHERE UserID = @UserID');
+        .input('TargetUserID', sql.Int, targetUserId)
+        .input('RequesterID', sql.Int, normalizedRequesterId)
+        .query(`
+            SELECT
+                target.ReportingManagerID,
+                target.HODID,
+                target.BusinessHeadID,
+                requester.Role AS RequesterRole
+            FROM dbo.Users target
+            CROSS JOIN dbo.Users requester
+            WHERE target.UserID = @TargetUserID
+              AND requester.UserID = @RequesterID
+        `);
 
     const target = result.recordset[0];
     if (!target) {
         return false;
     }
 
-    return (
-        target.HODID === requesterId ||
-        target.ReportingManagerID === requesterId ||
-        target.BusinessHeadID === requesterId
-    );
+    if (String(target.RequesterRole).toUpperCase() === 'BUSINESSHEAD') {
+        return true;
+    }
+
+    if (
+        target.HODID === normalizedRequesterId ||
+        target.ReportingManagerID === normalizedRequesterId ||
+        target.BusinessHeadID === normalizedRequesterId
+    ) {
+        return true;
+    }
+
+    if (!['MANAGER', 'HOD'].includes(String(target.RequesterRole).toUpperCase())) {
+        return false;
+    }
+
+    const teamResult = await pool.request()
+        .input('TargetUserID', sql.Int, targetUserId)
+        .input('RequesterID', sql.Int, normalizedRequesterId)
+        .query(`
+            WITH TeamMembers AS (
+                SELECT
+                    UserID,
+                    CAST('/' + CONVERT(VARCHAR(20), UserID) + '/' AS VARCHAR(MAX)) AS VisitedUsers
+                FROM dbo.Users
+                WHERE UserID = @RequesterID
+
+                UNION ALL
+
+                SELECT
+                    employee.UserID,
+                    CAST(manager.VisitedUsers + CONVERT(VARCHAR(20), employee.UserID) + '/' AS VARCHAR(MAX))
+                FROM dbo.Users employee
+                INNER JOIN TeamMembers manager
+                    ON employee.ReportingManagerID = manager.UserID
+                    OR employee.HODID = manager.UserID
+                WHERE CHARINDEX(
+                    '/' + CONVERT(VARCHAR(20), employee.UserID) + '/',
+                    manager.VisitedUsers
+                ) = 0
+            )
+            SELECT TOP 1 UserID
+            FROM TeamMembers
+            WHERE UserID = @TargetUserID
+            OPTION (MAXRECURSION 100)
+        `);
+
+    return teamResult.recordset.length > 0;
 };
 
 // Read the latest HOD rating for each goal.
-const getGoalsWithRatings = async (pool, userId, cycle) => {
+const getGoalsWithRatings = async (pool, userId) => {
     const goalsRequest = pool.request().input('UserID', sql.Int, userId);
 
-    let goalsQuery = `
+    const goalsQuery = `
         SELECT GoalID, GoalNumber, GoalTitle, GoalStatus, Weightage, Timeline
         FROM dbo.Goals
         WHERE UserID = @UserID
     `;
 
-    if (cycle) {
-        goalsRequest.input('Cycle', sql.Int, Number(cycle));
-        goalsQuery += ` AND YEAR(Timeline) = @Cycle`;
-    }
+    const orderedGoalsQuery = `${goalsQuery} ORDER BY GoalNumber ASC`;
 
-    goalsQuery += ` ORDER BY GoalNumber ASC`;
-
-    const goalsResult = await goalsRequest.query(goalsQuery);
+    const goalsResult = await goalsRequest.query(orderedGoalsQuery);
     const goals = goalsResult.recordset;
 
     if (goals.length === 0) {
@@ -120,14 +171,105 @@ const getGoalsWithRatings = async (pool, userId, cycle) => {
     });
 };
 
+const getYearlyPerformance = async (pool, userId, fiscalYear) => {
+    const request = pool.request().input('UserID', sql.Int, userId);
+    const fiscalYearStart = new Date(fiscalYear - 1, 3, 1);
+    const fiscalYearEnd = new Date(fiscalYear, 3, 1);
+    request.input('FiscalYearStart', sql.Date, fiscalYearStart);
+    request.input('FiscalYearEnd', sql.Date, fiscalYearEnd);
+    const result = await request
+        .query(`
+            SELECT
+                goal.GoalID,
+                goal.Weightage,
+                goal.GoalStatus,
+                CASE
+                    WHEN MONTH(goal.CreatedDate) BETWEEN 4 AND 6 THEN CONCAT('Q1-', YEAR(goal.CreatedDate) + 1)
+                    WHEN MONTH(goal.CreatedDate) BETWEEN 7 AND 9 THEN CONCAT('Q2-', YEAR(goal.CreatedDate) + 1)
+                    WHEN MONTH(goal.CreatedDate) BETWEEN 10 AND 12 THEN CONCAT('Q3-', YEAR(goal.CreatedDate) + 1)
+                    ELSE CONCAT('Q4-', YEAR(goal.CreatedDate))
+                END AS OriginalQuarter,
+                progress.SubGoalCompletionPercentage,
+                firstCarryForward.ProgressAtCarryForward
+            FROM dbo.Goals goal
+            OUTER APPLY (
+                SELECT ISNULL(
+                    SUM(CASE WHEN subGoal.Status = 'Completed' THEN subGoal.Weightage ELSE 0 END),
+                    0
+                ) AS SubGoalCompletionPercentage
+                FROM dbo.GoalSubGoals subGoal
+                WHERE subGoal.GoalID = goal.GoalID
+            ) progress
+            OUTER APPLY (
+                SELECT TOP 1
+                    history.FromQuarter,
+                    history.ProgressAtCarryForward,
+                    history.CarriedForwardDate,
+                    history.HistoryID
+                FROM dbo.GoalCarryForwardHistory history
+                WHERE history.GoalID = goal.GoalID
+                ORDER BY history.CarriedForwardDate ASC, history.HistoryID ASC
+            ) firstCarryForward
+            WHERE goal.UserID = @UserID
+              AND goal.CreatedDate >= @FiscalYearStart
+              AND goal.CreatedDate < @FiscalYearEnd
+              AND goal.GoalStatus NOT IN ('Rejected', 'Cancelled')
+            ORDER BY goal.GoalID
+        `);
+
+    const quarters = [1, 2, 3, 4].map((quarterNumber) => {
+        const quarter = `Q${quarterNumber}`;
+        const quarterGoals = result.recordset
+            .filter((goal) => goal.OriginalQuarter === `${quarter}-${fiscalYear}`)
+            .map((goal) => ({
+                ...goal,
+                SubGoalCompletionPercentage:
+                    goal.ProgressAtCarryForward ??
+                    goal.SubGoalCompletionPercentage
+            }));
+        const performance =
+            calculateQuarterAllocationAndAchievement(quarterGoals);
+
+        return {
+            Quarter: quarter,
+            Percentage: quarterGoals.length === 0
+                ? null
+                : Math.round(performance.achievedPercentage * 100) / 100,
+            AllocatedPercentage: performance.allocatedPercentage,
+            AchievedPercentage: performance.achievedPercentage,
+            GoalCount: quarterGoals.length
+        };
+    });
+
+    const availableQuarters = quarters.filter(
+        (quarter) => quarter.Percentage != null,
+    );
+
+    return {
+        FiscalYear: fiscalYear,
+        Quarters: quarters,
+        AveragePercentage: availableQuarters.length > 0
+            ? Math.round(
+                (availableQuarters.reduce(
+                    (total, quarter) => total + quarter.Percentage,
+                    0,
+                ) / availableQuarters.length) * 100,
+            ) / 100
+            : null
+    };
+};
+
 /**
- * Core, reusable data function — matches the literal signature requested:
- * getFinalEvaluation(userId, cycle). Not an Express handler; the route
+ * Core, reusable data function. Not an Express handler; the route
  * handlers below (viewFinalEvaluation / finalizeFinalEvaluation) wrap this
  * with auth + req/res plumbing.
  */
-const getFinalEvaluation = async (userId, cycle) => {
+const getFinalEvaluation = async (userId, fiscalYear) => {
     const pool = await poolPromise;
+    const reportYear = parseFiscalYear(fiscalYear);
+    if (reportYear == null) {
+        throw new RangeError('Fiscal year must be a valid four-digit year.');
+    }
 
     const userResult = await pool.request()
         .input('UserID', sql.Int, userId)
@@ -138,7 +280,10 @@ const getFinalEvaluation = async (userId, cycle) => {
         return null;
     }
 
-    const goalBreakdown = await getGoalsWithRatings(pool, userId, cycle);
+    const [goalBreakdown, yearlyPerformance] = await Promise.all([
+        getGoalsWithRatings(pool, userId),
+        getYearlyPerformance(pool, userId, reportYear)
+    ]);
 
     // Only rated goals with a positive weightage contribute a number —
     // an un-rated goal has no basis for a numeric contribution yet.
@@ -189,25 +334,30 @@ const getFinalEvaluation = async (userId, cycle) => {
             LastName: user.LastName,
             Email: user.Email
         },
-        Cycle: cycle || null,
         Goals: goalsWithContribution,
         WeightedScore: weightedScore,
         OverallFeedback: overallFeedback,
-        GoalCompletionStatus: goalCompletionStatus
+        GoalCompletionStatus: goalCompletionStatus,
+        YearlyPerformance: yearlyPerformance
     };
 };
 
 /**
- * GET /api/v1/evaluation/:userId?cycle=YYYY
- * Read-only. Self, HOD, reporting manager, or Business Head of the target
- * employee may view. Does NOT notify anyone — this is just viewing/
- * computing on demand and could be called (or refreshed) many times.
+ * GET /api/v1/evaluation/:userId?fiscalYear=YYYY
+ * Read-only. Self, CFO, HOD, reporting manager, or Business Head of the
+ * target employee may view. Does NOT notify anyone.
  */
 const viewFinalEvaluation = async (req, res) => {
     try {
         const targetUserId = Number(req.params.userId);
         const requesterId = req.user?.UserID || req.user?.userId;
-        const { cycle } = req.query;
+        const fiscalYear = parseFiscalYear(req.query.fiscalYear);
+        if (fiscalYear == null) {
+            return res.status(400).json({
+                success: false,
+                message: 'Fiscal year must be a valid four-digit year.'
+            });
+        }
 
         const pool = await poolPromise;
 
@@ -219,7 +369,7 @@ const viewFinalEvaluation = async (req, res) => {
             });
         }
 
-        const evaluation = await getFinalEvaluation(targetUserId, cycle);
+        const evaluation = await getFinalEvaluation(targetUserId, fiscalYear);
         if (!evaluation) {
             return res.status(404).json({ success: false, message: 'User not found.' });
         }
@@ -257,7 +407,13 @@ const finalizeFinalEvaluation = async (req, res) => {
     try {
         const targetUserId = Number(req.params.userId);
         const requesterId = req.user?.UserID || req.user?.userId;
-        const { cycle } = req.body;
+        const fiscalYear = parseFiscalYear(req.body?.fiscalYear);
+        if (fiscalYear == null) {
+            return res.status(400).json({
+                success: false,
+                message: 'Fiscal year must be a valid four-digit year.'
+            });
+        }
 
         const pool = await poolPromise;
 
@@ -282,7 +438,7 @@ const finalizeFinalEvaluation = async (req, res) => {
             });
         }
 
-        const evaluation = await getFinalEvaluation(targetUserId, cycle);
+        const evaluation = await getFinalEvaluation(targetUserId, fiscalYear);
         if (!evaluation) {
             return res.status(404).json({ success: false, message: 'User not found.' });
         }
@@ -293,7 +449,7 @@ const finalizeFinalEvaluation = async (req, res) => {
             await notifyUser(pool, {
                 userId: targetUserId,
                 title: 'Final Evaluation Available',
-                message: `Your final evaluation${evaluation.Cycle ? ` for ${evaluation.Cycle}` : ''} has been generated. Weighted Score: ${evaluation.WeightedScore ?? 'N/A'}.`,
+                message: `Your final evaluation for FY${evaluation.YearlyPerformance.FiscalYear} has been generated. Weighted Score: ${evaluation.WeightedScore ?? 'N/A'}.`,
                 type: 'FINAL_EVALUATION_GENERATED',
                 referenceId: targetUserId,
                 referenceType: 'Evaluation',
@@ -302,7 +458,7 @@ const finalizeFinalEvaluation = async (req, res) => {
                 emailSubject: 'Your Final Evaluation is Available',
                 emailHtml: `
                     <h3>Hello ${evaluation.User.FirstName || 'there'},</h3>
-                    <p>Your final evaluation${evaluation.Cycle ? ` for <strong>${evaluation.Cycle}</strong>` : ''} has been generated.</p>
+                    <p>Your final evaluation for <strong>FY${evaluation.YearlyPerformance.FiscalYear}</strong> has been generated.</p>
                     <p>Weighted Score: <strong>${evaluation.WeightedScore ?? 'N/A'}</strong></p>
                     <p>Status: <strong>${evaluation.GoalCompletionStatus}</strong></p>
                     <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Evaluation</a>

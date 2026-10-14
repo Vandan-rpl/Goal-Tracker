@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../../services/api';
+import { getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
 
 // Simple hand-rolled SVG gauge — no charting library needed, keeps this
 // page consistent with the rest of the (plain Tailwind, zero-extra-deps)
@@ -55,6 +56,9 @@ const statusBadgeClass = (status) => {
   return 'bg-gray-100 text-gray-800';
 };
 
+const isValidFiscalYear = (year) =>
+  /^\d{4}$/.test(year) && Number(year) >= 1900 && Number(year) <= 9998;
+
 const FinalEvaluation = () => {
   const { userId: userIdParam } = useParams();
   const navigate = useNavigate();
@@ -62,7 +66,9 @@ const FinalEvaluation = () => {
   const [evaluation, setEvaluation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [cycle, setCycle] = useState('');
+  const [fiscalYear, setFiscalYear] = useState(
+    () => getCurrentFiscalQuarterValue().split('-')[1],
+  );
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeMessage, setFinalizeMessage] = useState('');
 
@@ -86,6 +92,8 @@ const FinalEvaluation = () => {
   const isSelf = targetUserId != null && loggedInUserId != null && Number(targetUserId) === Number(loggedInUserId);
 
   useEffect(() => {
+    if (!isValidFiscalYear(fiscalYear)) return;
+
     if (targetUserId != null) {
       fetchEvaluation();
     } else {
@@ -93,14 +101,15 @@ const FinalEvaluation = () => {
       setError('Could not determine which user to show — please log in again.');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetUserId, cycle]);
+  }, [targetUserId, fiscalYear]);
 
   const fetchEvaluation = async () => {
     try {
       setLoading(true);
       setError('');
-      const query = cycle ? `?cycle=${encodeURIComponent(cycle)}` : '';
-      const res = await api.get(`/evaluation/${targetUserId}${query}`);
+      const res = await api.get(
+        `/evaluation/${targetUserId}?fiscalYear=${encodeURIComponent(fiscalYear)}`,
+      );
       if (res.data.success) {
         setEvaluation(res.data.data);
       } else {
@@ -115,10 +124,17 @@ const FinalEvaluation = () => {
   };
 
   const handleFinalize = async () => {
+    if (!isValidFiscalYear(fiscalYear)) {
+      setFinalizeMessage('Enter a valid four-digit fiscal year before finalizing.');
+      return;
+    }
+
     try {
       setFinalizing(true);
       setFinalizeMessage('');
-      const res = await api.post(`/evaluation/${targetUserId}/finalize`, { cycle: cycle || undefined });
+      const res = await api.post(`/evaluation/${targetUserId}/finalize`, {
+        fiscalYear,
+      });
       if (res.data.success) {
         setFinalizeMessage(res.data.message || 'Final evaluation generated and employee notified.');
         setEvaluation(res.data.data);
@@ -178,25 +194,83 @@ const FinalEvaluation = () => {
           </button>
         </div>
 
-        {/* Cycle filter — see the note in evaluationController.js: there is
-            no real "review cycle" concept in this schema, so this is a
-            best-effort year filter against each goal's Timeline. */}
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-700">Cycle (year, optional):</label>
-          <input
-            type="number"
-            placeholder="e.g. 2026"
-            value={cycle}
-            onChange={(e) => setCycle(e.target.value)}
-            className="w-32 px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-          />
-          <span className="text-xs text-gray-400">
-            (No formal review-cycle field exists yet — this filters goals by year.)
-          </span>
-        </div>
+        {/* Quarter-by-quarter completion report */}
+        <section className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-5">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">
+                Yearly Performance · FY{fiscalYear}
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                April–March. Goals stay in the quarter they were added, including after carry-forward.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              Fiscal year ending
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength="4"
+                pattern="[0-9]{4}"
+                value={fiscalYear}
+                onChange={(e) => setFiscalYear(e.target.value)}
+                aria-invalid={!isValidFiscalYear(fiscalYear)}
+                aria-describedby="fiscal-year-help"
+                className="w-24 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500"
+              />
+            </label>
+          </div>
+          <p
+            id="fiscal-year-help"
+            className={`mb-3 text-sm ${
+              isValidFiscalYear(fiscalYear) ? 'text-gray-500' : 'text-red-600'
+            }`}
+            role={!isValidFiscalYear(fiscalYear) ? 'alert' : undefined}
+          >
+            {isValidFiscalYear(fiscalYear)
+              ? 'Enter the fiscal year ending year (for example, 2026).'
+              : 'Enter a four-digit year from 1900 to 9998. The report will load once the year is valid.'}
+          </p>
+          <p className="mb-3 text-sm text-gray-600">
+            This is the sum of each goal's achieved weightage, using the same calculation as the employee dashboard. Rejected and cancelled goals are excluded.
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Fiscal quarter</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Achieved weightage</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Goals</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {evaluation.YearlyPerformance.Quarters.map((quarter) => (
+                  <tr key={quarter.Quarter}>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-800">
+                      {quarter.Quarter}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-indigo-700">
+                      {quarter.Percentage == null ? '—' : `${Number(quarter.Percentage).toFixed(2)}%`}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{quarter.GoalCount}</td>
+                  </tr>
+                ))}
+                <tr className="bg-indigo-50/60">
+                  <td className="px-4 py-3 text-sm font-bold text-gray-900">Yearly average achieved</td>
+                  <td className="px-4 py-3 text-sm font-bold text-indigo-800">
+                    {evaluation.YearlyPerformance.AveragePercentage == null
+                      ? '—'
+                      : `${evaluation.YearlyPerformance.AveragePercentage.toFixed(2)}%`}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500">Average of quarters with goals</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         {/* Score + Status */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center bg-gray-50 p-6 rounded-xl border border-gray-100">
+        {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center bg-gray-50 p-6 rounded-xl border border-gray-100">
           <div className="flex justify-center">
             <ScoreGauge score={evaluation.WeightedScore} />
           </div>
@@ -216,7 +290,7 @@ const FinalEvaluation = () => {
               </p>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Goal Breakdown Table */}
         <div>
@@ -258,7 +332,7 @@ const FinalEvaluation = () => {
                 ) : (
                   <tr>
                     <td colSpan="5" className="px-4 py-8 text-center text-sm text-gray-500">
-                      No goals found{cycle ? ` for ${cycle}` : ''}.
+                      No goals found.
                     </td>
                   </tr>
                 )}
