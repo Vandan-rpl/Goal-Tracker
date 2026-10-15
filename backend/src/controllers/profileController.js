@@ -11,7 +11,7 @@ const profileService = require("../services/profileService");
  */
 exports.getProfile = async (req, res) => {
     try {
-        const userId = req.user?.userId || req.user?.id || req.user?.UserId;
+        const userId = req.user?.userId || req.user?.id || req.user?.UserId || req.user?.UserID;
         const profile = await profileService.getProfile(userId);
 
         return res.status(200).json({
@@ -27,6 +27,28 @@ exports.getProfile = async (req, res) => {
             success: false,
             message: error.message
         });
+    }
+};
+
+exports.getDepartmentApprovers = async (req, res) => {
+    try {
+        const userId = req.user?.userId || req.user?.id || req.user?.UserId || req.user?.UserID;
+        const users = await profileService.getDepartmentApprovers(userId);
+        return res.status(200).json({ success: true, data: users });
+    } catch (error) {
+        console.error("Get Department Approvers Error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateHierarchy = async (req, res) => {
+    try {
+        const userId = req.user?.userId || req.user?.id || req.user?.UserId;
+        const profile = await profileService.updateHierarchy(userId, req.body || {});
+        return res.status(200).json({ success: true, message: "Reporting manager and HOD updated successfully.", data: profile });
+    } catch (error) {
+        const status = /invalid|cannot select|department/i.test(error.message) ? 400 : 500;
+        return res.status(status).json({ success: false, message: error.message });
     }
 };
 

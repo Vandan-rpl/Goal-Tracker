@@ -36,6 +36,19 @@ function getQuarterDayWindow(startDay, endDay, date = new Date()) {
 }
 
 function getGoalCreationWindow(date = new Date()) {
+  const reopeningStart = new Date(2026, 9, 14);
+  const reopeningEnd = new Date(2026, 9, 20);
+  const today = new Date(toDate(date));
+  today.setHours(0, 0, 0, 0);
+
+  if (today >= reopeningStart && today <= reopeningEnd) {
+    return {
+      startDate: reopeningStart,
+      endDate: reopeningEnd,
+      isOpen: true,
+    };
+  }
+
   return getQuarterDayWindow(1, 7, date);
 }
 

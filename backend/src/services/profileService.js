@@ -35,6 +35,31 @@ const getProfile = async (userData) => {
     return profile;
 };
 
+const getDepartmentApprovers = async (userData) => {
+    const userId = extractUserId(userData);
+    if (!userId) throw new Error("User Id is required.");
+    return profileModel.getDepartmentApprovers(userId);
+};
+
+const updateHierarchy = async (userData, data) => {
+    const userId = extractUserId(userData);
+    if (!userId) throw new Error("User Id is required.");
+    const parseId = (value, field) => {
+        if (value === "" || value === null || value === undefined) return null;
+        const parsed = Number(value);
+        if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${field} is invalid.`);
+        return parsed;
+    };
+    const managerId = parseId(data.reportingManagerId, "Reporting manager");
+    const hodId = parseId(data.hodId, "HOD");
+    if (managerId === Number(userId) || hodId === Number(userId)) {
+        throw new Error("You cannot select yourself as your manager or HOD.");
+    }
+    const updated = await profileModel.updateHierarchy(userId, managerId, hodId);
+    if (!updated) throw new Error("Select active users from your department.");
+    return profileModel.getProfile(userId);
+};
+
 /**
  * Update User Profile
  */
@@ -179,6 +204,8 @@ const getLoginHistory = async (userData) => {
 
 module.exports = {
     getProfile,
+    getDepartmentApprovers,
+    updateHierarchy,
     updateProfile,
     changePassword,
     uploadAvatar,

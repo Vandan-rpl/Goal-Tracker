@@ -26,6 +26,8 @@ exports.getProfile = async (userId) => {
                     LastName, 
                     MobileNo, 
                     DepartmentID,
+                    ReportingManagerID,
+                    HODID,
                     Designation,
                     Grade,
                     Post,
@@ -40,6 +42,47 @@ exports.getProfile = async (userId) => {
         console.error("Model getProfile Error:", error);
         throw error;
     }
+};
+
+exports.getDepartmentApprovers = async (userId) => {
+    const pool = await poolPromise;
+    const result = await pool.request().input("UserId", sql.Int, userId).query(`
+        SELECT colleague.UserID, colleague.FirstName, colleague.LastName, colleague.Designation
+        FROM dbo.Users owner
+        INNER JOIN dbo.Users colleague ON colleague.DepartmentID = owner.DepartmentID
+        WHERE owner.UserID = @UserId AND colleague.UserID <> @UserId AND colleague.IsActive = 1
+        ORDER BY colleague.FirstName, colleague.LastName
+    `);
+    return result.recordset;
+};
+
+exports.updateHierarchy = async (userId, reportingManagerId, hodId) => {
+    const pool = await poolPromise;
+    const result = await pool.request()
+        .input("UserId", sql.Int, userId)
+        .input("ReportingManagerID", sql.Int, reportingManagerId)
+        .input("HODID", sql.Int, hodId)
+        .query(`
+            UPDATE employee
+            SET ReportingManagerID = @ReportingManagerID,
+                HODID = @HODID,
+                ModifiedDate = GETDATE()
+            FROM dbo.Users employee
+            WHERE employee.UserID = @UserId
+              AND (@ReportingManagerID IS NULL OR EXISTS (
+                  SELECT 1 FROM dbo.Users candidate
+                  WHERE candidate.UserID = @ReportingManagerID
+                    AND candidate.DepartmentID = employee.DepartmentID
+                    AND candidate.IsActive = 1 AND candidate.UserID <> employee.UserID
+              ))
+              AND (@HODID IS NULL OR EXISTS (
+                  SELECT 1 FROM dbo.Users candidate
+                  WHERE candidate.UserID = @HODID
+                    AND candidate.DepartmentID = employee.DepartmentID
+                    AND candidate.IsActive = 1 AND candidate.UserID <> employee.UserID
+              ))
+        `);
+    return result.rowsAffected?.[0] > 0;
 };
 
 /**

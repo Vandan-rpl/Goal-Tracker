@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   User,
@@ -10,12 +10,59 @@ import {
   Shield,
   Sliders,
 } from "lucide-react";
+import api from "../../services/api";
 
 const Settings = () => {
   const navigate = useNavigate();
 
   const [emailNotification, setEmailNotification] = useState(true);
   const [browserNotification, setBrowserNotification] = useState(true);
+  const [approvers, setApprovers] = useState([]);
+  const [hierarchy, setHierarchy] = useState({ reportingManagerId: "", hodId: "" });
+  const [hierarchyLoading, setHierarchyLoading] = useState(true);
+  const [hierarchySaving, setHierarchySaving] = useState(false);
+  const [hierarchyMessage, setHierarchyMessage] = useState("");
+
+  useEffect(() => {
+    const loadHierarchy = async () => {
+      try {
+        const [profileResponse, approversResponse] = await Promise.all([
+          api.get("/profile"),
+          api.get("/profile/department-approvers"),
+        ]);
+        const profile = profileResponse.data?.data || {};
+        setHierarchy({
+          reportingManagerId: profile.ReportingManagerID ?? "",
+          hodId: profile.HODID ?? "",
+        });
+        setApprovers(approversResponse.data?.data || []);
+      } catch (error) {
+        setHierarchyMessage(error.response?.data?.message || "Unable to load reporting details.");
+      } finally {
+        setHierarchyLoading(false);
+      }
+    };
+    loadHierarchy();
+  }, []);
+
+  const saveHierarchy = async (event) => {
+    event.preventDefault();
+    setHierarchySaving(true);
+    setHierarchyMessage("");
+    try {
+      const response = await api.put("/profile/hierarchy", hierarchy);
+      const profile = response.data?.data || {};
+      setHierarchy({
+        reportingManagerId: profile.ReportingManagerID ?? "",
+        hodId: profile.HODID ?? "",
+      });
+      setHierarchyMessage("Reporting details updated successfully.");
+    } catch (error) {
+      setHierarchyMessage(error.response?.data?.message || "Unable to update reporting details.");
+    } finally {
+      setHierarchySaving(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -47,6 +94,33 @@ const Settings = () => {
 
         {/* Main Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h2 className="text-lg font-semibold text-slate-900">Reporting Manager &amp; HOD</h2>
+              <p className="text-xs text-slate-500 mt-1">Choose active users from your department.</p>
+            </div>
+            <form onSubmit={saveHierarchy} className="p-6 space-y-4">
+              <label className="block text-sm font-medium text-slate-700">
+                Reporting Manager
+                <select value={hierarchy.reportingManagerId} onChange={(event) => setHierarchy((current) => ({ ...current, reportingManagerId: event.target.value }))} disabled={hierarchyLoading || hierarchySaving} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                  <option value="">No reporting manager</option>
+                  {approvers.map((person) => <option key={person.UserID} value={person.UserID}>{person.FirstName} {person.LastName}{person.Designation ? ` · ${person.Designation}` : ""}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                HOD
+                <select value={hierarchy.hodId} onChange={(event) => setHierarchy((current) => ({ ...current, hodId: event.target.value }))} disabled={hierarchyLoading || hierarchySaving} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                  <option value="">No HOD</option>
+                  {approvers.map((person) => <option key={person.UserID} value={person.UserID}>{person.FirstName} {person.LastName}{person.Designation ? ` · ${person.Designation}` : ""}</option>)}
+                </select>
+              </label>
+              {hierarchyMessage && <p role="status" className="text-sm text-slate-600">{hierarchyMessage}</p>}
+              <button type="submit" disabled={hierarchyLoading || hierarchySaving} className="rounded-lg bg-[#1976d2] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {hierarchySaving ? "Saving…" : "Save reporting details"}
+              </button>
+            </form>
+          </section>
+
           {/* Account Settings Section */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center gap-3">

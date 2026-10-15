@@ -14,7 +14,10 @@ const statusBadgeClass = (status) => {
   return "bg-gray-100 text-gray-700";
 };
 
-const normalizedStatus = (status) => String(status || "").trim().toLowerCase();
+const normalizedStatus = (status) =>
+  String(status || "")
+    .trim()
+    .toLowerCase();
 
 // This screen only ever returns goals in these statuses (hardcoded
 // server-side in getAllEmployeeGoals), so the filter is scoped to match.
@@ -91,8 +94,8 @@ const CFOAllUsersGoals = () => {
         role="status"
       >
         {approvalWindow.isOpen
-          ? "CFO approvals are open through "
-          : "CFO approvals are open only on quarter days 16-30. This quarter's window is "}
+          ? "Your approvals are open through "
+          : "Your approvals are open only on quarter days 16-30. This quarter's window is "}
         {approvalWindow.startDate.toLocaleDateString()} through{" "}
         {approvalWindow.endDate.toLocaleDateString()}.
       </div>
@@ -110,7 +113,9 @@ const CFOAllUsersGoals = () => {
           >
             <option value="">All Quarters</option>
             {QUARTER_OPTIONS.map(({ value, label }) => (
-              <option key={value} value={value}>{label}</option>
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
           </select>
         </div>
@@ -126,7 +131,9 @@ const CFOAllUsersGoals = () => {
           >
             <option value="">All Pending Statuses</option>
             {PENDING_STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
         </div>
@@ -134,7 +141,10 @@ const CFOAllUsersGoals = () => {
         {(quarter || status) && (
           <div className="flex items-end">
             <button
-              onClick={() => { setQuarter(""); setStatus(""); }}
+              onClick={() => {
+                setQuarter("");
+                setStatus("");
+              }}
               className="text-sm font-medium text-gray-500 hover:text-gray-700 px-3 py-2"
             >
               Clear filters
@@ -152,11 +162,21 @@ const CFOAllUsersGoals = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Goal Title</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  User
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Goal Title
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Created
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -170,12 +190,16 @@ const CFOAllUsersGoals = () => {
                       {goal.GoalTitle}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(goal.GoalStatus)}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(goal.GoalStatus)}`}
+                      >
                         {goal.GoalStatus}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {goal.CreatedDate ? new Date(goal.CreatedDate).toLocaleDateString() : "-"}
+                      {goal.CreatedDate
+                        ? new Date(goal.CreatedDate).toLocaleDateString()
+                        : "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2 items-center">
@@ -187,26 +211,42 @@ const CFOAllUsersGoals = () => {
                         ].includes(normalizedStatus(goal.GoalStatus)) && (
                           <div className="flex gap-2">
                             <button
-                              disabled={actingOn === goal.GoalID || !approvalWindow.isOpen}
-                              onClick={() => handleStatusUpdate(goal.GoalID, "Approved")}
+                              disabled={
+                                actingOn === goal.GoalID ||
+                                !approvalWindow.isOpen
+                              }
+                              onClick={() =>
+                                handleStatusUpdate(goal.GoalID, "Approved")
+                              }
                               className="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Approve
                             </button>
                             <button
-                              disabled={actingOn === goal.GoalID || !approvalWindow.isOpen}
-                              onClick={() => handleStatusUpdate(goal.GoalID, "Rejected")}
+                              disabled={
+                                actingOn === goal.GoalID ||
+                                !approvalWindow.isOpen
+                              }
+                              onClick={() =>
+                                handleStatusUpdate(goal.GoalID, "Rejected")
+                              }
                               className="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Reject
                             </button>
                           </div>
                         )}
-                        <Link to={`/goals/view/${goal.GoalID}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer">
+                        <Link
+                          to={`/goals/view/${goal.GoalID}`}
+                          className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                        >
                           View details
                         </Link>
                         {canEditGoal(goal, true) && (
-                          <Link to={`/goals/edit/${goal.GoalID}`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                          <Link
+                            to={`/goals/edit/${goal.GoalID}`}
+                            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                          >
                             Edit
                           </Link>
                         )}
@@ -216,7 +256,10 @@ const CFOAllUsersGoals = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td
+                    colSpan="5"
+                    className="px-6 py-4 text-center text-sm text-gray-500"
+                  >
                     No goals match the selected filters.
                   </td>
                 </tr>

@@ -360,7 +360,9 @@ const getEmployeeDashboardSummary = (
 
   const currentQuarter = getFiscalQuarter(now);
   const currentQuarterGoals = goals.filter(
-    (goal) => originalQuarterOf(goal) === currentQuarter.label,
+    (goal) =>
+      String(goal.Quarter || originalQuarterOf(goal)).trim() ===
+      currentQuarter.label,
   );
   const allocatedGoals = currentQuarterGoals.filter(
     (goal) => !["rejected", "cancelled"].includes(statusOf(goal)),
