@@ -172,49 +172,52 @@ const getGoalsWithRatings = async (pool, userId) => {
 };
 
 const getYearlyPerformance = async (pool, userId, fiscalYear) => {
-    const request = pool.request().input('UserID', sql.Int, userId);
-    const fiscalYearStart = new Date(fiscalYear - 1, 3, 1);
-    const fiscalYearEnd = new Date(fiscalYear, 3, 1);
-    request.input('FiscalYearStart', sql.Date, fiscalYearStart);
-    request.input('FiscalYearEnd', sql.Date, fiscalYearEnd);
+    const request = pool.request()
+        .input('UserID', sql.Int, userId)
+        .input('FiscalYear', sql.VarChar(4), String(fiscalYear));
     const result = await request
         .query(`
-            SELECT
-                goal.GoalID,
-                goal.Weightage,
-                goal.GoalStatus,
-                CASE
-                    WHEN MONTH(goal.CreatedDate) BETWEEN 4 AND 6 THEN CONCAT('Q1-', YEAR(goal.CreatedDate) + 1)
-                    WHEN MONTH(goal.CreatedDate) BETWEEN 7 AND 9 THEN CONCAT('Q2-', YEAR(goal.CreatedDate) + 1)
-                    WHEN MONTH(goal.CreatedDate) BETWEEN 10 AND 12 THEN CONCAT('Q3-', YEAR(goal.CreatedDate) + 1)
-                    ELSE CONCAT('Q4-', YEAR(goal.CreatedDate))
-                END AS OriginalQuarter,
-                progress.SubGoalCompletionPercentage,
-                firstCarryForward.ProgressAtCarryForward
-            FROM dbo.Goals goal
-            OUTER APPLY (
-                SELECT ISNULL(
-                    SUM(CASE WHEN subGoal.Status = 'Completed' THEN subGoal.Weightage ELSE 0 END),
-                    0
-                ) AS SubGoalCompletionPercentage
-                FROM dbo.GoalSubGoals subGoal
-                WHERE subGoal.GoalID = goal.GoalID
-            ) progress
-            OUTER APPLY (
-                SELECT TOP 1
-                    history.FromQuarter,
-                    history.ProgressAtCarryForward,
-                    history.CarriedForwardDate,
-                    history.HistoryID
-                FROM dbo.GoalCarryForwardHistory history
-                WHERE history.GoalID = goal.GoalID
-                ORDER BY history.CarriedForwardDate ASC, history.HistoryID ASC
-            ) firstCarryForward
-            WHERE goal.UserID = @UserID
-              AND goal.CreatedDate >= @FiscalYearStart
-              AND goal.CreatedDate < @FiscalYearEnd
-              AND goal.GoalStatus NOT IN ('Rejected', 'Cancelled')
-            ORDER BY goal.GoalID
+            WITH GoalQuarters AS (
+                SELECT
+                    goal.GoalID,
+                    goal.Weightage,
+                    goal.GoalStatus,
+                    COALESCE(
+                        firstCarryForward.FromQuarter,
+                        goal.Quarter,
+                        CASE
+                            WHEN MONTH(goal.CreatedDate) BETWEEN 4 AND 6 THEN CONCAT('Q1-', YEAR(goal.CreatedDate) + 1)
+                            WHEN MONTH(goal.CreatedDate) BETWEEN 7 AND 9 THEN CONCAT('Q2-', YEAR(goal.CreatedDate) + 1)
+                            WHEN MONTH(goal.CreatedDate) BETWEEN 10 AND 12 THEN CONCAT('Q3-', YEAR(goal.CreatedDate) + 1)
+                            ELSE CONCAT('Q4-', YEAR(goal.CreatedDate))
+                        END
+                    ) AS OriginalQuarter,
+                    progress.SubGoalCompletionPercentage,
+                    firstCarryForward.ProgressAtCarryForward
+                FROM dbo.Goals goal
+                OUTER APPLY (
+                    SELECT ISNULL(
+                        SUM(CASE WHEN subGoal.Status = 'Completed' THEN subGoal.Weightage ELSE 0 END),
+                        0
+                    ) AS SubGoalCompletionPercentage
+                    FROM dbo.GoalSubGoals subGoal
+                    WHERE subGoal.GoalID = goal.GoalID
+                ) progress
+                OUTER APPLY (
+                    SELECT TOP 1
+                        history.FromQuarter,
+                        history.ProgressAtCarryForward
+                    FROM dbo.GoalCarryForwardHistory history
+                    WHERE history.GoalID = goal.GoalID
+                    ORDER BY history.CarriedForwardDate ASC, history.HistoryID ASC
+                ) firstCarryForward
+                WHERE goal.UserID = @UserID
+                  AND goal.GoalStatus NOT IN ('Rejected', 'Cancelled')
+            )
+            SELECT *
+            FROM GoalQuarters
+            WHERE RIGHT(OriginalQuarter, 4) = @FiscalYear
+            ORDER BY GoalID
         `);
 
     const quarters = [1, 2, 3, 4].map((quarterNumber) => {

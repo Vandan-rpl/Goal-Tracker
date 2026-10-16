@@ -603,11 +603,11 @@ export default function GoalDashboard() {
 
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:col-span-2">
             <h2 className="text-sm font-semibold text-gray-800">Quarter history</h2>
-            <p className="mt-1 text-xs text-gray-500">
+            {/* <p className="mt-1 text-xs text-gray-500">
               Completion = achieved weightage ÷ allocated weightage × 100.
               Achieved weightage sums each goal’s weightage × completion percentage ÷ 100.
               Rejected and cancelled goals are excluded.
-            </p>
+            </p> */}
             {dashboardSummary?.quarterHistory?.some(
               (quarter) =>
                 quarter.allocatedPercentage > 0 ||

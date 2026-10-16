@@ -349,10 +349,11 @@ const getEmployeeDashboardSummary = (
   }
   const originalQuarterOf = (goal) => {
     const createdDate = parseDate(goal.CreatedDate);
-    return createdDate
-      ? getFiscalQuarter(createdDate).label
-      : firstCarryForwardByGoal.get(String(goal.GoalID))?.FromQuarter ||
-          goal.Quarter;
+    return (
+      firstCarryForwardByGoal.get(String(goal.GoalID))?.FromQuarter ||
+      goal.Quarter ||
+      (createdDate ? getFiscalQuarter(createdDate).label : "")
+    );
   };
   const dayDifference = (date) =>
     Math.round((date.getTime() - today.getTime()) / 86400000);
@@ -360,9 +361,7 @@ const getEmployeeDashboardSummary = (
 
   const currentQuarter = getFiscalQuarter(now);
   const currentQuarterGoals = goals.filter(
-    (goal) =>
-      String(goal.Quarter || originalQuarterOf(goal)).trim() ===
-      currentQuarter.label,
+    (goal) => originalQuarterOf(goal) === currentQuarter.label,
   );
   const allocatedGoals = currentQuarterGoals.filter(
     (goal) => !["rejected", "cancelled"].includes(statusOf(goal)),
@@ -400,6 +399,31 @@ const getEmployeeDashboardSummary = (
     quarterStart.setDate(quarterStart.getDate() - 1);
     period = getFiscalQuarter(quarterStart);
   }
+  const includedQuarterLabels = new Set(
+    quarterPeriods.map((quarter) => quarter.label),
+  );
+  for (const goal of goals) {
+    const quarterMatch = /^Q([1-4])-(\d{4})$/.exec(originalQuarterOf(goal));
+    if (!quarterMatch) continue;
+
+    const quarterNumber = Number(quarterMatch[1]);
+    const fiscalYear = Number(quarterMatch[2]);
+    const quarterEndMonth = [5, 8, 11, 2][quarterNumber - 1];
+    const quarterEndYear = fiscalYear - (quarterNumber < 4 ? 1 : 0);
+    const goalQuarter = getFiscalQuarter(
+      new Date(quarterEndYear, quarterEndMonth, 1),
+    );
+    if (
+      goalQuarter.quarterEndDate > currentQuarter.quarterEndDate &&
+      !includedQuarterLabels.has(goalQuarter.label)
+    ) {
+      includedQuarterLabels.add(goalQuarter.label);
+      quarterPeriods.push(goalQuarter);
+    }
+  }
+  quarterPeriods.sort(
+    (left, right) => left.quarterEndDate - right.quarterEndDate,
+  );
   const quarterHistory = quarterPeriods.map((quarter) => {
     const quarterGoals = goals.filter(
       (goal) => originalQuarterOf(goal) === quarter.label,

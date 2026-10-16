@@ -239,7 +239,7 @@ const FinalEvaluation = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Fiscal quarter</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Achieved weightage</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Overall goal completion</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Goals</th>
                 </tr>
               </thead>
