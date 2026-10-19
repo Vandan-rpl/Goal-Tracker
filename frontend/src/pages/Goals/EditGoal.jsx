@@ -8,15 +8,11 @@ import {
   isApproverRole,
   isTimelineOverdue,
 } from "../../utils/goalEditability";
+import { getFiscalQuarterDateRange } from "../../utils/fiscalQuarter";
 
 const MAX_SUB_GOALS = 5;
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 30;
-
-const getSubGoalWeightageTotal = (subGoals) =>
-  subGoals
-    .filter((subGoal) => subGoal.SubGoalTitle.trim())
-    .reduce((total, subGoal) => total + Math.round(Number(subGoal.Weightage || 0) * 100), 0) / 100;
 
 const EditGoal = () => {
   const { id } = useParams();
@@ -30,6 +26,7 @@ const EditGoal = () => {
     JointAccountability: "",
     Weightage: "",
     Priority: "Medium",
+    StartDate: "",
     Timeline: "",
     MeetPerformance: "",
     ExceedPerformance: "",
@@ -83,6 +80,9 @@ const EditGoal = () => {
           UserID: goal.UserID,
           GoalStatus: goal.GoalStatus || "Draft",
           Timeline: goal.Timeline || null,
+          QuarterEndDate: goal.QuarterEndDate
+            ? String(goal.QuarterEndDate).slice(0, 10)
+            : null,
         });
         setFormData({
           GoalNumber: goal.GoalNumber || 1,
@@ -92,6 +92,7 @@ const EditGoal = () => {
           JointAccountability: goal.JointAccountability || "",
           Weightage: goal.Weightage || "",
           Priority: goal.Priority || "Medium",
+          StartDate: goal.StartDate ? goal.StartDate.split("T")[0] : "",
           Timeline: goal.Timeline ? goal.Timeline.split("T")[0] : "",
           MeetPerformance: goal.MeetPerformance || "",
           ExceedPerformance: goal.ExceedPerformance || "",
@@ -113,28 +114,14 @@ const EditGoal = () => {
             LastName: item.LastName,
           })),
         );
-        if (goal.SubGoals && goal.SubGoals.length > 0) {
-          setSubGoals(
-            goal.SubGoals.map((sub) => ({
-              SubGoalID: sub.SubGoalID,
-              SubGoalNo: sub.SubGoalNo,
-              SubGoalTitle: sub.SubGoalTitle || "",
-              SubGoalDescription: sub.SubGoalDescription || "",
-              Weightage: sub.Weightage || "",
-              Target: sub.Target || "",
-            })),
-          );
-        } else {
-          setSubGoals([
-            {
-              SubGoalNo: 1,
-              SubGoalTitle: "",
-              SubGoalDescription: "",
-              Weightage: "",
-              Target: "",
-            },
-          ]);
-        }
+        setSubGoals(
+          (goal.SubGoals || []).map((sub) => ({
+            SubGoalID: sub.SubGoalID,
+            SubGoalNo: sub.SubGoalNo,
+            SubGoalTitle: sub.SubGoalTitle || "",
+            Status: sub.Status === "Completed" ? "Completed" : "Pending",
+          })),
+        );
       }
     } catch (err) {
       console.error("Failed to load goal", err);
@@ -206,20 +193,29 @@ const EditGoal = () => {
       return;
     }
 
+    if (!canEditTimelineOnly) {
+      if (
+        !formData.StartDate ||
+        formData.StartDate < quarterRange.min ||
+        formData.StartDate > quarterRange.max
+      ) {
+        const message = `Start Date must be within ${quarterRange.quarter} (${quarterRange.min} to ${quarterRange.max}).`;
+        setError(message);
+        setFieldErrors({ StartDate: message });
+        return;
+      }
+
+      if (!formData.Timeline || formData.Timeline < formData.StartDate) {
+        const message = "End Date must be on or after Start Date.";
+        setError(message);
+        setFieldErrors({ Timeline: message });
+        return;
+      }
+    }
+
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
-    const invalidSubGoalWeightage = titledSubGoals.some((sub) => {
-      const weightage = Number(sub.Weightage);
-      return sub.Weightage === "" || !Number.isFinite(weightage) || weightage <= 0 || weightage > 100;
-    });
-    const subGoalWeightageTotal = getSubGoalWeightageTotal(titledSubGoals);
-    if (
-      !canEditTimelineOnly &&
-      titledSubGoals.length > 0 &&
-      (invalidSubGoalWeightage || subGoalWeightageTotal !== 100)
-    ) {
-      const message = invalidSubGoalWeightage
-        ? "Each titled sub-goal must have a weightage greater than 0 and no more than 100%."
-        : `Sub-goal weightages must total 100%. Current total: ${subGoalWeightageTotal}%.`;
+    if (titledSubGoals.length > MAX_SUB_GOALS) {
+      const message = `A goal can have no more than ${MAX_SUB_GOALS} sub-goals.`;
       setError(message);
       setFieldErrors({ SubGoals: message });
       return;
@@ -255,7 +251,7 @@ const EditGoal = () => {
             : formData.JointAccountability || null),
         JointAccountabilities: selectedJointAccountabilities,
         GoalStatus: status,
-        SubGoals: subGoals,
+        SubGoals: titledSubGoals,
       };
 
       const res = await api.put(`/goals/${id}`, payload);
@@ -323,6 +319,11 @@ const EditGoal = () => {
     !canEditAllFields && canEditTimelineOnlyGoal(originalGoal);
   const canEdit = canEditGoal(originalGoal, isApprover);
   const isRestrictedEdit = canEditTimelineOnly;
+  // Start Date stays within the goal's stored quarter.
+  const quarterRange =
+    (originalGoal?.QuarterEndDate &&
+      getFiscalQuarterDateRange(originalGoal.QuarterEndDate)) ||
+    getFiscalQuarterDateRange();
 
   if (!canEdit) {
     return (
@@ -351,12 +352,14 @@ const EditGoal = () => {
             {
               SubGoalNo: prev.length + 1,
               SubGoalTitle: "",
-              SubGoalDescription: "",
-              Weightage: "",
-              Target: "",
+              Status: "Pending",
             },
           ],
     );
+  };
+
+  const removeSubGoalRow = (index) => {
+    setSubGoals((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -465,7 +468,7 @@ const EditGoal = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Category
@@ -531,12 +534,43 @@ const EditGoal = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Timeline <span className="text-red-500">*</span>
+                Start Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                name="StartDate"
+                required={!isRestrictedEdit}
+                disabled={isRestrictedEdit}
+                min={quarterRange.min}
+                max={quarterRange.max}
+                value={formData.StartDate}
+                onChange={handleChange}
+                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+                  fieldErrors.StartDate ? "border-red-500" : "border-slate-300"
+                }`}
+              />
+              {fieldErrors.StartDate ? (
+                <p className="text-red-600 text-xs mt-1 font-medium">
+                  {fieldErrors.StartDate}
+                </p>
+              ) : (
+                !isRestrictedEdit && (
+                  <p className="text-slate-400 text-xs mt-1">
+                    Within {quarterRange.quarter}
+                  </p>
+                )
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                End Date <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 name="Timeline"
                 required
+                min={isRestrictedEdit ? undefined : formData.StartDate || quarterRange.min}
                 value={formData.Timeline}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
@@ -811,13 +845,7 @@ const EditGoal = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-2">
             <div className="flex items-center gap-3">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sub-Goals Breakdown</h2>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                getSubGoalWeightageTotal(subGoals) === 100 
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
-                  : "bg-amber-50 text-amber-700 border border-amber-200"
-              }`}>
-                Total: {getSubGoalWeightageTotal(subGoals).toFixed(2)}% / 100%
-              </span>
+              <span className="text-xs text-slate-400">Optional</span>
             </div>
 
             <button
@@ -831,17 +859,31 @@ const EditGoal = () => {
           </div>
 
           <div className="space-y-3">
+            {subGoals.length === 0 && (
+              <p className="text-xs text-slate-400">No sub-goals added.</p>
+            )}
             {subGoals.map((sub, index) => (
               <div
                 key={index}
                 className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2"
               >
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                  Sub-Goal #{index + 1}
-                </span>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                    Sub-Goal #{index + 1}
+                  </span>
+                  {!isRestrictedEdit && (
+                    <button
+                      type="button"
+                      onClick={() => removeSubGoalRow(index)}
+                      className="text-red-500 hover:text-red-700 text-xs font-semibold"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
+                  <div className="sm:col-span-2">
                     <input
                       type="text"
                       name="SubGoalTitle"
@@ -854,29 +896,16 @@ const EditGoal = () => {
                     />
                   </div>
                   <div>
-                    <input
-                      type="text"
-                      name="Target"
-                      placeholder="Target Description"
+                    <select
+                      name="Status"
                       disabled={isRestrictedEdit}
-                      value={sub.Target}
+                      value={sub.Status}
                       onChange={(e) => handleSubGoalChange(index, e)}
                       className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white focus:border-slate-800 focus:outline-none disabled:bg-slate-100"
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      min="0.01"
-                      max="100"
-                      step="0.01"
-                      name="Weightage"
-                      placeholder="Weightage (%)"
-                      disabled={isRestrictedEdit}
-                      value={sub.Weightage}
-                      onChange={(e) => handleSubGoalChange(index, e)}
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white focus:border-slate-800 focus:outline-none disabled:bg-slate-100"
-                    />
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Completed">Completed</option>
+                    </select>
                   </div>
                 </div>
               </div>

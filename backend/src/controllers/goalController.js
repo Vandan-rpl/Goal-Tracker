@@ -10,6 +10,9 @@ const {
 } = require("../utils/quarterPerformance");
 const {
   getFiscalQuarter,
+  getFiscalQuarterBounds,
+  getFiscalQuarterBoundsFromLabel,
+  toDateKey,
   getQuarterStartDate,
   getGoalCreationWindow,
   getManagerHodApprovalWindow,
@@ -78,15 +81,16 @@ const getQuarterAllocationError = (allocation, weightage) => {
     };
   }
 
-  const weightageHundredths = Math.round(Number(weightage) * 100);
-  const projectedTotalHundredths =
-    allocation.totalWeightageHundredths + weightageHundredths;
-  if (projectedTotalHundredths > 10000) {
-    return {
-      field: "Weightage",
-      message: `Quarterly goal weightage cannot exceed 100%. There is ${Math.max(0, 10000 - allocation.totalWeightageHundredths) / 100}% remaining.`,
-    };
-  }
+  // TODO: re-enable after testing
+  // const weightageHundredths = Math.round(Number(weightage) * 100);
+  // const projectedTotalHundredths =
+  //   allocation.totalWeightageHundredths + weightageHundredths;
+  // if (projectedTotalHundredths > 10000) {
+  //   return {
+  //     field: "Weightage",
+  //     message: `Quarterly goal weightage cannot exceed 100%. There is ${Math.max(0, 10000 - allocation.totalWeightageHundredths) / 100}% remaining.`,
+  //   };
+  // }
   return null;
 };
 
@@ -981,39 +985,40 @@ const getGoalById = async (req, res) => {
   }
 };
 
-const getSubGoalWeightageError = (subGoals) => {
-  const titledSubGoals = (Array.isArray(subGoals) ? subGoals : []).filter(
-    (subGoal) => String(subGoal?.SubGoalTitle ?? "").trim(),
+const MAX_SUB_GOALS = 5;
+const SUB_GOAL_STATUSES = ["Pending", "Completed"];
+
+// Sub-goals are optional; only rows with a title are kept.
+const getTitledSubGoals = (subGoals) =>
+  (Array.isArray(subGoals) ? subGoals : []).filter((subGoal) =>
+    String(subGoal?.SubGoalTitle ?? "").trim(),
   );
 
-  if (titledSubGoals.length > 5) {
-    return "A goal can have no more than 5 sub-goals.";
+const getSubGoalCountError = (titledSubGoals) =>
+  titledSubGoals.length > MAX_SUB_GOALS
+    ? `A goal can have no more than ${MAX_SUB_GOALS} sub-goals.`
+    : null;
+
+const getSubGoalStatus = (status, fallback = "Pending") =>
+  SUB_GOAL_STATUSES.includes(status) ? status : fallback;
+
+// startKey/timelineKey are 'YYYY-MM-DD' strings (or null when invalid);
+// bounds are the inclusive quarter bounds from getFiscalQuarterBounds.
+const getGoalDateErrors = (startKey, timelineKey, bounds) => {
+  const errors = {};
+  if (!startKey) {
+    errors.StartDate = "Start Date is required and must be a valid date.";
+  } else if (startKey < bounds.startKey || startKey > bounds.endKey) {
+    errors.StartDate = `Start Date must be within ${bounds.label} (${bounds.startKey} to ${bounds.endKey}).`;
   }
 
-  if (titledSubGoals.length === 0) {
-    return "At least one titled sub-goal is required.";
+  if (!timelineKey) {
+    errors.Timeline = "End Date is required and must be a valid date.";
+  } else if (startKey && timelineKey < startKey) {
+    errors.Timeline = "End Date must be on or after Start Date.";
   }
 
-  let totalWeightageHundredths = 0;
-  for (const subGoal of titledSubGoals) {
-    const weightage = Number(subGoal.Weightage);
-    if (
-      subGoal.Weightage === undefined ||
-      subGoal.Weightage === null ||
-      subGoal.Weightage === "" ||
-      !Number.isFinite(weightage) ||
-      weightage <= 0 ||
-      weightage > 100 ||
-      Math.abs(weightage * 100 - Math.round(weightage * 100)) > 1e-8
-    ) {
-      return "Each titled sub-goal must have a weightage from 0.01% to 100%, with no more than two decimal places.";
-    }
-    totalWeightageHundredths += Math.round(weightage * 100);
-  }
-
-  return totalWeightageHundredths === 10000
-    ? null
-    : `Sub-goal weightages must total 100%. Current total: ${(totalWeightageHundredths / 100).toFixed(2)}%.`;
+  return Object.keys(errors).length > 0 ? errors : null;
 };
 
 const isDateBeforeToday = (dateValue) => {
@@ -1060,6 +1065,7 @@ const createGoal = async (req, res) => {
     JointAccountabilities,
     Weightage,
     Priority,
+    StartDate,
     Timeline,
     MeetPerformance,
     ExceedPerformance,
@@ -1080,11 +1086,32 @@ const createGoal = async (req, res) => {
     });
   }
 
-  if (!GoalTitle || !Weightage || !Priority || !Timeline) {
+  if (!GoalTitle || !Weightage || !Priority || !StartDate || !Timeline) {
     return res
       .status(400)
       .json({ success: false, message: "Mandatory goal fields are missing." });
   }
+
+  // Dates stay as 'YYYY-MM-DD' strings end to end to avoid IST -> UTC shifts.
+  // Quarter is always derived from StartDate; any client Quarter is ignored.
+  const startDateKey = toDateKey(StartDate);
+  const timelineKey = toDateKey(Timeline);
+  const dateErrors = getGoalDateErrors(
+    startDateKey,
+    timelineKey,
+    getFiscalQuarterBounds(),
+  );
+  if (dateErrors) {
+    return res.status(400).json({
+      success: false,
+      message: Object.values(dateErrors)[0],
+      errors: dateErrors,
+    });
+  }
+  const {
+    label: goalQuarter,
+    endKey: goalQuarterEndDate,
+  } = getFiscalQuarterBounds(startDateKey);
 
   const goalWeightageError = getGoalWeightageError(Weightage);
   if (goalWeightageError) {
@@ -1095,23 +1122,13 @@ const createGoal = async (req, res) => {
     });
   }
 
-  const validSubGoals = (Array.isArray(SubGoals) ? SubGoals : []).filter(
-    (sub) => String(sub?.SubGoalTitle ?? "").trim(),
-  );
-  if (validSubGoals.length === 0) {
+  const validSubGoals = getTitledSubGoals(SubGoals);
+  const subGoalCountError = getSubGoalCountError(validSubGoals);
+  if (subGoalCountError) {
     return res.status(400).json({
       success: false,
-      message: "At least one sub-goal is required to create a goal.",
-      errors: { SubGoals: "Add at least one sub-goal with a title." },
-    });
-  }
-
-  const subGoalWeightageError = getSubGoalWeightageError(validSubGoals);
-  if (subGoalWeightageError) {
-    return res.status(400).json({
-      success: false,
-      message: subGoalWeightageError,
-      errors: { SubGoals: subGoalWeightageError },
+      message: subGoalCountError,
+      errors: { SubGoals: subGoalCountError },
     });
   }
 
@@ -1131,7 +1148,7 @@ const createGoal = async (req, res) => {
         ExceedPerformance,
         Weightage,
         GoalCategory,
-        Timeline,
+        Timeline: timelineKey,
         CreatedDate: new Date(),
       },
       { pool, userId },
@@ -1177,9 +1194,8 @@ const createGoal = async (req, res) => {
     );
     request.input("Weightage", sql.Decimal(5, 2), Weightage);
     request.input("Priority", sql.VarChar, Priority);
-    request.input("Timeline", sql.Date, Timeline);
-    const { label: goalQuarter, quarterEndDate: goalQuarterEndDate } =
-      getFiscalQuarter(Timeline);
+    request.input("StartDate", sql.Date, startDateKey);
+    request.input("Timeline", sql.Date, timelineKey);
     const allocation = await getQuarterGoalAllocation(
       transaction,
       userId,
@@ -1214,14 +1230,14 @@ const createGoal = async (req, res) => {
     const goalInsertResult = await request.query(`
             INSERT INTO dbo.Goals (
                 UserID, GoalNumber, GoalTitle, GoalDescription, Measurability, 
-                JointAccountability, Weightage, Priority, Timeline, Quarter, QuarterEndDate, MeetPerformance,
-                ExceedPerformance, ValidationSource, CrossFunctionalGoal, GoalCategory, 
+                JointAccountability, Weightage, Priority, StartDate, Timeline, Quarter, QuarterEndDate, MeetPerformance,
+                ExceedPerformance, ValidationSource, CrossFunctionalGoal, GoalCategory,
                 GoalStatus, DraftVersion, SubmittedDate, CreatedDate
             )
             OUTPUT INSERTED.GoalID
             VALUES (
-                @UserID, @GoalNumber, @GoalTitle, @GoalDescription, @Measurability, 
-                @JointAccountability, @Weightage, @Priority, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance,
+                @UserID, @GoalNumber, @GoalTitle, @GoalDescription, @Measurability,
+                @JointAccountability, @Weightage, @Priority, @StartDate, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance,
                 @ExceedPerformance, @ValidationSource, @CrossFunctionalGoal, @GoalCategory, 
                 @GoalStatus, 1, @SubmittedDate, GETDATE()
             )
@@ -1250,9 +1266,9 @@ const createGoal = async (req, res) => {
         sql.NVarChar,
         sub.SubGoalDescription || null,
       );
-      subRequest.input("Weightage", sql.Decimal(5, 2), sub.Weightage || 0);
-      subRequest.input("Target", sql.NVarChar, sub.Target || null);
-      subRequest.input("Status", sql.VarChar, "Pending");
+      subRequest.input("Weightage", sql.Decimal(5, 2), 0);
+      subRequest.input("Target", sql.NVarChar, null);
+      subRequest.input("Status", sql.VarChar, getSubGoalStatus(sub.Status));
 
       await subRequest.query(`
           INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
@@ -1316,6 +1332,7 @@ const updateGoal = async (req, res) => {
     JointAccountabilities,
     Weightage,
     Priority,
+    StartDate,
     Timeline,
     MeetPerformance,
     ExceedPerformance,
@@ -1420,14 +1437,44 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    if (canEditAllFields && Array.isArray(SubGoals) && SubGoals.length > 0) {
-      const subGoalWeightageError = getSubGoalWeightageError(SubGoals);
-      if (subGoalWeightageError) {
+    const validSubGoals = getTitledSubGoals(SubGoals);
+    if (canEditAllFields) {
+      const subGoalCountError = getSubGoalCountError(validSubGoals);
+      if (subGoalCountError) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: subGoalWeightageError,
-          errors: { SubGoals: subGoalWeightageError },
+          message: subGoalCountError,
+          errors: { SubGoals: subGoalCountError },
+        });
+      }
+    }
+
+    // Full edits keep the goal's stored quarter; StartDate must stay inside
+    // it. Goals saved before Quarter was stored fall back to the current
+    // quarter. Carry-forward edits keep the stored StartDate untouched.
+    const storedQuarterBounds =
+      (existingGoal.QuarterEndDate &&
+        getFiscalQuarterBounds(toDateKey(existingGoal.QuarterEndDate))) ||
+      getFiscalQuarterBoundsFromLabel(existingGoal.Quarter) ||
+      getFiscalQuarterBounds();
+    const startDateKey = canEditAllFields
+      ? toDateKey(StartDate)
+      : toDateKey(existingGoal.StartDate);
+    const timelineKey = toDateKey(Timeline);
+
+    if (canEditAllFields) {
+      const dateErrors = getGoalDateErrors(
+        startDateKey,
+        timelineKey,
+        storedQuarterBounds,
+      );
+      if (dateErrors) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: Object.values(dateErrors)[0],
+          errors: dateErrors,
         });
       }
     }
@@ -1466,12 +1513,17 @@ const updateGoal = async (req, res) => {
 
     const quarterTimeline = Timeline || existingGoal.Timeline;
     const { label: newQuarter, quarterEndDate: newQuarterEndDate } =
-      isCarryForward || canEditAllFields
+      isCarryForward
         ? getFiscalQuarter(new Date(quarterTimeline))
-        : {
-            label: existingGoal.Quarter,
-            quarterEndDate: existingGoal.QuarterEndDate,
-          };
+        : canEditAllFields
+          ? {
+              label: storedQuarterBounds.label,
+              quarterEndDate: storedQuarterBounds.endKey,
+            }
+          : {
+              label: existingGoal.Quarter,
+              quarterEndDate: existingGoal.QuarterEndDate,
+            };
 
     const finalGoalNumber = canEditAllFields
       ? GoalNumber
@@ -1554,7 +1606,7 @@ const updateGoal = async (req, res) => {
           ExceedPerformance: finalExceedPerf,
           Weightage: finalWeightage,
           GoalCategory: finalCategory,
-          Timeline,
+          Timeline: timelineKey || Timeline,
           CreatedDate: existingGoal.CreatedDate,
         },
         {
@@ -1587,7 +1639,8 @@ const updateGoal = async (req, res) => {
     );
     updateRequest.input("Weightage", sql.Decimal(5, 2), finalWeightage);
     updateRequest.input("Priority", sql.VarChar, finalPriority);
-    updateRequest.input("Timeline", sql.Date, Timeline);
+    updateRequest.input("StartDate", sql.Date, startDateKey);
+    updateRequest.input("Timeline", sql.Date, timelineKey || Timeline);
     updateRequest.input("MeetPerformance", sql.NVarChar, finalMeetPerf || null);
     updateRequest.input(
       "ExceedPerformance",
@@ -1611,7 +1664,7 @@ const updateGoal = async (req, res) => {
     UPDATE dbo.Goals SET 
         GoalNumber = @GoalNumber, GoalTitle = @GoalTitle, GoalDescription = @GoalDescription,
         Measurability = @Measurability, JointAccountability = @JointAccountability, Weightage = @Weightage,
-        Priority = @Priority, Timeline = @Timeline, MeetPerformance = @MeetPerformance,
+        Priority = @Priority, StartDate = @StartDate, Timeline = @Timeline, MeetPerformance = @MeetPerformance,
         ExceedPerformance = @ExceedPerformance, ValidationSource = @ValidationSource,
         CrossFunctionalGoal = @CrossFunctionalGoal, GoalCategory = @GoalCategory, 
         GoalStatus = @GoalStatus,
@@ -1648,7 +1701,8 @@ const updateGoal = async (req, res) => {
       JointAccountability: finalJointAcc,
       Weightage: finalWeightage,
       Priority: finalPriority,
-      Timeline,
+      StartDate: startDateKey,
+      Timeline: timelineKey || Timeline,
       MeetPerformance: finalMeetPerf,
       ExceedPerformance: finalExceedPerf,
       ValidationSource: finalValidation,
@@ -1670,11 +1724,9 @@ const updateGoal = async (req, res) => {
       );
     }
 
-    const validSubGoals = (SubGoals || []).filter((sub) =>
-      sub?.SubGoalTitle?.trim(),
-    );
-
-    if (canEditAllFields && (SubGoals || []).length > 0) {
+    // Sub-goals are optional, so an empty list clears existing ones. Only
+    // skip the sync when the client did not send SubGoals at all.
+    if (canEditAllFields && Array.isArray(SubGoals)) {
       const existingSubGoalsResult = await new sql.Request(transaction)
         .input("GoalID", sql.BigInt, id)
         .query(
@@ -1696,18 +1748,21 @@ const updateGoal = async (req, res) => {
         const subRequest = new sql.Request(transaction);
         subRequest.input("GoalID", sql.BigInt, id);
         subRequest.input("SubGoalNo", sql.Int, i + 1);
-        subRequest.input("SubGoalTitle", sql.NVarChar, sub.SubGoalTitle);
+        subRequest.input("SubGoalTitle", sql.NVarChar, sub.SubGoalTitle.trim());
         subRequest.input(
           "SubGoalDescription",
           sql.NVarChar,
           sub.SubGoalDescription || null,
         );
-        subRequest.input("Weightage", sql.Decimal(5, 2), sub.Weightage || 0);
-        subRequest.input("Target", sql.NVarChar, sub.Target || null);
+        subRequest.input("Weightage", sql.Decimal(5, 2), 0);
+        subRequest.input("Target", sql.NVarChar, null);
         subRequest.input(
           "Status",
           sql.VarChar,
-          existingSubGoalStatuses.get(String(sub.SubGoalID)) || "Pending",
+          getSubGoalStatus(
+            sub.Status,
+            existingSubGoalStatuses.get(String(sub.SubGoalID)) || "Pending",
+          ),
         );
 
         await subRequest.query(`

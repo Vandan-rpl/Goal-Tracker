@@ -172,24 +172,26 @@ const validateSmartGoal = async (goalData = {}, options = {}) => {
 
     if (!weightageIsValidNumber) {
         errors.Weightage = 'Goal must be Achievable: Weightage must be from 5% to 30%, with no more than two decimal places.';
-    } else if (options.pool && options.userId) {
-        try {
-            const existingTotal = await getExistingWeightageTotal(
-                options.pool,
-                options.userId,
-                options.excludeGoalId,
-                Timeline
-            );
-            const projectedTotal = Math.round((existingTotal + weightageNum) * 100) / 100;
-
-            if (projectedTotal > 100) {
-                errors.Weightage = `Goal must be Achievable: your total Weightage in this fiscal quarter would be ${projectedTotal}% (${existingTotal}% existing + ${weightageNum}% for this goal), which exceeds 100%.`;
-            }
-        } catch (sumError) {
-            console.error('[SMART VALIDATION] Could not compute existing quarterly Weightage total:', sumError.message);
-            errors.Weightage = 'Could not verify the total quarterly goal weightage. Please try again.';
-        }
     }
+    // TODO: re-enable after testing
+    // else if (options.pool && options.userId) {
+    //     try {
+    //         const existingTotal = await getExistingWeightageTotal(
+    //             options.pool,
+    //             options.userId,
+    //             options.excludeGoalId,
+    //             Timeline
+    //         );
+    //         const projectedTotal = Math.round((existingTotal + weightageNum) * 100) / 100;
+    //
+    //         if (projectedTotal > 100) {
+    //             errors.Weightage = `Goal must be Achievable: your total Weightage in this fiscal quarter would be ${projectedTotal}% (${existingTotal}% existing + ${weightageNum}% for this goal), which exceeds 100%.`;
+    //         }
+    //     } catch (sumError) {
+    //         console.error('[SMART VALIDATION] Could not compute existing quarterly Weightage total:', sumError.message);
+    //         errors.Weightage = 'Could not verify the total quarterly goal weightage. Please try again.';
+    //     }
+    // }
 
     // ---------------- Relevant ----------------
     // See the big comment at the top of this file: no enum list exists

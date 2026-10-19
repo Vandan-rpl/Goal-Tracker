@@ -61,6 +61,30 @@ export const getFiscalQuarterValue = (dateValue) => {
   return Number.isNaN(date.getTime()) ? "" : getCurrentFiscalQuarterValue(date);
 };
 
+const toLocalDateKey = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+// Inclusive 'YYYY-MM-DD' bounds of the fiscal quarter containing `dateValue`
+// (a Date or 'YYYY-MM-DD' string), for date input min/max.
+export const getFiscalQuarterDateRange = (dateValue = new Date()) => {
+  const date =
+    dateValue instanceof Date
+      ? dateValue
+      : new Date(`${String(dateValue).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const startMonth = (Math.floor(((date.getMonth() + 9) % 12) / 3) * 3 + 3) % 12;
+  const startYear =
+    startMonth === 0 ? date.getFullYear() : getFiscalYearStart(date);
+  const start = new Date(startYear, startMonth, 1);
+  const end = new Date(startYear, startMonth + 3, 0);
+  return {
+    quarter: getCurrentFiscalQuarterValue(date),
+    min: toLocalDateKey(start),
+    max: toLocalDateKey(end),
+  };
+};
+
 export const getFiscalQuarterOptions = () => {
   return FISCAL_YEAR_ENDS.flatMap((endYear) => {
     const fiscalYear = getFiscalYearLabel(endYear);

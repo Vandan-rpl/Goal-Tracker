@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CalendarDays } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import api from "../../services/api";
 import {
+  getFiscalQuarterDateRange,
   getFiscalQuarterValue,
   getGoalCreationWindow,
 } from "../../utils/fiscalQuarter";
@@ -18,15 +20,31 @@ const isQuarterGoalActive = (goal) =>
 const getWeightageHundredths = (weightage) =>
   Math.round(Number(weightage || 0) * 100);
 
-const getSubGoalWeightageTotal = (subGoals) =>
-  subGoals
-    .filter((subGoal) => subGoal.SubGoalTitle.trim())
-    .reduce((total, subGoal) => total + Math.round(Number(subGoal.Weightage || 0) * 100), 0) / 100;
+const parseDateInput = (value) => {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return "";
+
+  const [, day, month, year] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  if (
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() !== Number(month) - 1 ||
+    date.getDate() !== Number(day)
+  ) {
+    return "";
+  }
+
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateForDisplay = (value) =>
+  value ? value.split("-").reverse().join("/") : "";
 
 const AddGoal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const goalCreationWindow = getGoalCreationWindow();
+  const currentQuarterRange = getFiscalQuarterDateRange();
   const [goals, setGoals] = useState([]);
   const [goalAllocationLoading, setGoalAllocationLoading] = useState(true);
   const [goalAllocationError, setGoalAllocationError] = useState("");
@@ -65,6 +83,7 @@ const AddGoal = () => {
     JointAccountability: "",
     Weightage: "",
     Priority: "Medium",
+    StartDate: "",
     Timeline: "",
     MeetPerformance: "",
     ExceedPerformance: "",
@@ -73,16 +92,8 @@ const AddGoal = () => {
     GoalCategory: "",
   });
 
-  // Dynamic Sub-Goals state matching GoalSubGoals table columns
-  const [subGoals, setSubGoals] = useState([
-    {
-      SubGoalNo: 1,
-      SubGoalTitle: "",
-      SubGoalDescription: "",
-      Weightage: "",
-      Target: "",
-    },
-  ]);
+  // Optional sub-goals (0-5): title + status only.
+  const [subGoals, setSubGoals] = useState([]);
 
   const [error, setError] = useState("");
   const [jointAccountabilityUsers, setJointAccountabilityUsers] = useState([]);
@@ -138,12 +149,7 @@ const AddGoal = () => {
     loadJointAccountabilityUsers();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+  const clearFieldError = (name) => {
     // Clear that field's error the moment the employee edits it, rather
     // than making them re-submit to see it disappear.
     if (fieldErrors[name]) {
@@ -153,6 +159,24 @@ const AddGoal = () => {
         return next;
       });
     }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+    clearFieldError(name);
+  };
+
+  const handleDatePickerChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: formatDateForDisplay(value),
+    }));
+    clearFieldError(name);
   };
 
   const handleSubGoalChange = (index, e) => {
@@ -171,9 +195,7 @@ const AddGoal = () => {
             {
               SubGoalNo: prev.length + 1,
               SubGoalTitle: "",
-              SubGoalDescription: "",
-              Weightage: "",
-              Target: "",
+              Status: "Pending",
             },
           ],
     );
@@ -183,7 +205,9 @@ const AddGoal = () => {
     setSubGoals((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const selectedQuarter = getFiscalQuarterValue(formData.Timeline);
+  const selectedQuarter = getFiscalQuarterValue(
+    parseDateInput(formData.StartDate),
+  );
   const selectedQuarterGoals = goals.filter(
     (goal) =>
       goal.Quarter === selectedQuarter && isQuarterGoalActive(goal),
@@ -248,37 +272,38 @@ const AddGoal = () => {
       return;
     }
 
-    if (getWeightageHundredths(goalWeightage) > remainingWeightageHundredths) {
-      const message = `Quarterly goal weightage cannot exceed 100%. There is ${(remainingWeightageHundredths / 100).toFixed(2)}% remaining.`;
+    // TODO: re-enable after testing
+    // if (getWeightageHundredths(goalWeightage) > remainingWeightageHundredths) {
+    //   const message = `Quarterly goal weightage cannot exceed 100%. There is ${(remainingWeightageHundredths / 100).toFixed(2)}% remaining.`;
+    //   setError(message);
+    //   setFieldErrors({ Weightage: message });
+    //   return;
+    // }
+
+    const startDate = parseDateInput(formData.StartDate);
+    const endDate = parseDateInput(formData.Timeline);
+
+    if (
+      !startDate ||
+      startDate < currentQuarterRange.min ||
+      startDate > currentQuarterRange.max
+    ) {
+      const message = `Enter a valid Start Date as DD/MM/YYYY within ${currentQuarterRange.quarter} (${formatDateForDisplay(currentQuarterRange.min)} to ${formatDateForDisplay(currentQuarterRange.max)}).`;
       setError(message);
-      setFieldErrors({ Weightage: message });
+      setFieldErrors({ StartDate: message });
       return;
     }
 
-    const hasTitledSubGoal = subGoals.some((sub) => sub.SubGoalTitle.trim());
-    if (!hasTitledSubGoal) {
-      setError("Add at least one sub-goal with a title before saving this goal.");
-      setFieldErrors({ SubGoals: "At least one titled sub-goal is required." });
+    if (!endDate || endDate < startDate) {
+      const message = "Enter a valid End Date as DD/MM/YYYY on or after Start Date.";
+      setError(message);
+      setFieldErrors({ Timeline: message });
       return;
     }
 
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
     if (titledSubGoals.length > MAX_SUB_GOALS) {
       const message = `A goal can have no more than ${MAX_SUB_GOALS} sub-goals.`;
-      setError(message);
-      setFieldErrors({ SubGoals: message });
-      return;
-    }
-
-    const invalidWeightage = titledSubGoals.some((sub) => {
-      const weightage = Number(sub.Weightage);
-      return sub.Weightage === "" || !Number.isFinite(weightage) || weightage <= 0 || weightage > 100;
-    });
-    const subGoalWeightageTotal = getSubGoalWeightageTotal(titledSubGoals);
-    if (invalidWeightage || subGoalWeightageTotal !== 100) {
-      const message = invalidWeightage
-        ? "Each titled sub-goal must have a weightage greater than 0 and no more than 100%."
-        : `Sub-goal weightages must total 100%. Current total: ${subGoalWeightageTotal}%.`;
       setError(message);
       setFieldErrors({ SubGoals: message });
       return;
@@ -312,10 +337,12 @@ const AddGoal = () => {
 
       const payload = {
         ...formData,
+        StartDate: startDate,
+        Timeline: endDate,
         JointAccountability: jointAccountabilityNames || null,
         UserID: user?.userId || user?.UserID,
         GoalStatus: status,
-        SubGoals: subGoals,
+        SubGoals: titledSubGoals,
         JointAccountabilities: selectedJointAccountabilities,
       };
 
@@ -442,8 +469,8 @@ return (
                 </div>
               </div>
 
-              {/* Row 2: Category, Priority, Weightage, Timeline */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              {/* Row 2: Category, Priority, Weightage, Start Date, End Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Category
@@ -509,23 +536,91 @@ return (
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Timeline <span className="text-red-500">*</span>
+                    Start Date <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="date"
-                    name="Timeline"
-                    required
-                    value={formData.Timeline}
-                    onChange={handleChange}
-                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition ${
-                      fieldErrors.Timeline
-                        ? "border-red-300 bg-red-50/40"
-                        : "border-slate-200"
-                    }`}
-                  />
-                  {fieldErrors.Timeline && (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="StartDate"
+                      required
+                      maxLength={10}
+                      placeholder="DD/MM/YYYY"
+                      value={formData.StartDate}
+                      onChange={handleChange}
+                      className={`w-full px-3.5 py-2.5 pr-11 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition ${
+                        fieldErrors.StartDate
+                          ? "border-red-300 bg-red-50/40"
+                          : "border-slate-200"
+                      }`}
+                    />
+                    <span className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-indigo-600">
+                      <CalendarDays size={18} aria-hidden="true" />
+                      <input
+                        type="date"
+                        aria-label="Choose Start Date from calendar"
+                        title="Choose Start Date from calendar"
+                        name="StartDate"
+                        min={currentQuarterRange.min}
+                        max={currentQuarterRange.max}
+                        value={parseDateInput(formData.StartDate)}
+                        onChange={handleDatePickerChange}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      />
+                    </span>
+                  </div>
+                  {fieldErrors.StartDate ? (
+                    <p className="text-red-600 text-xs mt-1.5 font-medium">
+                      {fieldErrors.StartDate}
+                    </p>
+                  ) : (
+                    <p className="text-slate-400 text-xs mt-1.5">
+                      Enter as DD/MM/YYYY within {currentQuarterRange.quarter}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    End Date <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="Timeline"
+                      required
+                      maxLength={10}
+                      placeholder="DD/MM/YYYY"
+                      value={formData.Timeline}
+                      onChange={handleChange}
+                      className={`w-full px-3.5 py-2.5 pr-11 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition ${
+                        fieldErrors.Timeline
+                          ? "border-red-300 bg-red-50/40"
+                          : "border-slate-200"
+                      }`}
+                    />
+                    <span className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-indigo-600">
+                      <CalendarDays size={18} aria-hidden="true" />
+                      <input
+                        type="date"
+                        aria-label="Choose End Date from calendar"
+                        title="Choose End Date from calendar"
+                        name="Timeline"
+                        min={
+                          parseDateInput(formData.StartDate) ||
+                          currentQuarterRange.min
+                        }
+                        value={parseDateInput(formData.Timeline)}
+                        onChange={handleDatePickerChange}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      />
+                    </span>
+                  </div>
+                  {fieldErrors.Timeline ? (
                     <p className="text-red-600 text-xs mt-1.5 font-medium">
                       {fieldErrors.Timeline}
+                    </p>
+                  ) : (
+                    <p className="text-slate-400 text-xs mt-1.5">
+                      Enter as DD/MM/YYYY
                     </p>
                   )}
                 </div>
@@ -554,7 +649,7 @@ return (
                   </>
                 ) : (
                   <p className="text-xs text-indigo-800">
-                    Choose a timeline to see the quarter's remaining goal slots and weightage.
+                    Choose a start date to see the quarter's remaining goal slots and weightage.
                   </p>
                 )}
               </div>
@@ -780,10 +875,10 @@ return (
               <div className="flex justify-between items-center mb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-800">
-                    Sub-Goals <span className="text-red-500">*</span>
+                    Sub-Goals
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Add up to {MAX_SUB_GOALS} sub-goals with weightages totaling 100% to track this goal's progress
+                    Optional: add up to {MAX_SUB_GOALS} sub-goals to track this goal's progress
                   </p>
                 </div>
                 <button
@@ -795,11 +890,14 @@ return (
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
-                  Add Sub-Goal
+                  Add Sub-Goal ({subGoals.length}/{MAX_SUB_GOALS})
                 </button>
               </div>
 
               <div className="space-y-3">
+                {subGoals.length === 0 && (
+                  <p className="text-sm text-slate-400">No sub-goals added.</p>
+                )}
                 {subGoals.map((sub, index) => (
                   <div
                     key={index}
@@ -809,15 +907,13 @@ return (
                       <span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">
                         Sub-Goal #{index + 1}
                       </span>
-                      {subGoals.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeSubGoalRow(index)}
-                          className="text-red-500 hover:text-red-700 text-xs font-semibold cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeSubGoalRow(index)}
+                        className="text-red-500 hover:text-red-700 text-xs font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <input
@@ -827,34 +923,21 @@ return (
                         required
                         value={sub.SubGoalTitle}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                        className="sm:col-span-2 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
                       />
-                      <input
-                        type="text"
-                        name="Target"
-                        placeholder="Target Description"
-                        value={sub.Target}
+                      <select
+                        name="Status"
+                        value={sub.Status}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
-                      />
-                      <input
-                        type="number"
-                        min="0.01"
-                        max="100"
-                        step="0.01"
-                        name="Weightage"
-                        placeholder="Weightage (%)"
-                        value={sub.Weightage}
-                        onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
-                      />
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Completed">Completed</option>
+                      </select>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className={`text-sm font-semibold mt-3 ${getSubGoalWeightageTotal(subGoals) === 100 ? "text-emerald-700" : "text-slate-600"}`}>
-                Total sub-goal weightage: {getSubGoalWeightageTotal(subGoals).toFixed(2)}% / 100%
-              </p>
               {fieldErrors.SubGoals && (
                 <p className="text-red-600 text-xs mt-2 font-medium" role="alert">
                   {fieldErrors.SubGoals}

@@ -87,6 +87,63 @@ function getFiscalQuarter(date = new Date()) {
   return { label: `Q${quarter}-${fyStartYear + 1}`, quarterEndDate };
 }
 
+const pad2 = (value) => String(value).padStart(2, "0");
+
+// Local calendar date -> 'YYYY-MM-DD' without any UTC conversion.
+function formatLocalDateKey(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+// Normalises a 'YYYY-MM-DD' string, or a Date read from a SQL DATE column
+// (mssql returns those as UTC midnight), to 'YYYY-MM-DD'. Returns null when
+// the value is missing or not a real calendar date.
+function toDateKey(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return `${value.getUTCFullYear()}-${pad2(value.getUTCMonth() + 1)}-${pad2(value.getUTCDate())}`;
+  }
+
+  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+
+  const [year, month, day] = match.slice(1).map(Number);
+  const check = new Date(year, month - 1, day);
+  if (
+    check.getFullYear() !== year ||
+    check.getMonth() !== month - 1 ||
+    check.getDate() !== day
+  ) {
+    return null;
+  }
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+// Inclusive 'YYYY-MM-DD' bounds of the fiscal quarter containing `date`.
+function getFiscalQuarterBounds(date = new Date()) {
+  const { label, quarterEndDate } = getFiscalQuarter(date);
+  return {
+    label,
+    startKey: formatLocalDateKey(getQuarterStartDate(quarterEndDate)),
+    endKey: formatLocalDateKey(quarterEndDate),
+  };
+}
+
+// Bounds for a stored quarter label such as "Q3-2027" (year = FY end year).
+function getFiscalQuarterBoundsFromLabel(label) {
+  const match = /^Q([1-4])-(\d{4})$/.exec(String(label || "").trim());
+  if (!match) return null;
+
+  const quarter = Number(match[1]);
+  const fyEndYear = Number(match[2]);
+  const firstDayOfQuarter =
+    quarter === 4
+      ? `${fyEndYear}-01-01`
+      : `${fyEndYear - 1}-${pad2(quarter * 3 + 1)}-01`;
+  return getFiscalQuarterBounds(firstDayOfQuarter);
+}
+
 function getNextFiscalQuarter(fromQuarterEndDate) {
   const nextStart = new Date(fromQuarterEndDate);
   nextStart.setDate(nextStart.getDate() + 1);
@@ -112,6 +169,9 @@ function isWithinCarryForwardWindow(quarterEndDate) {
 
 module.exports = {
   getFiscalQuarter,
+  getFiscalQuarterBounds,
+  getFiscalQuarterBoundsFromLabel,
+  toDateKey,
   getNextFiscalQuarter,
   getQuarterStartDate,
   getQuarterDayWindow,
