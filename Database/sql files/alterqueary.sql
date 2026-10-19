@@ -1,3 +1,4 @@
+-- User table changes
 ALTER TABLE Users
 ADD
 
@@ -41,3 +42,30 @@ ActionStatus VARCHAR(20) NULL,
 
 Remarks NVARCHAR(500) NULL;
 GO
+
+-- Goal Table changes
+
+ALTER TABLE dbo.Goals ADD
+    StartDate               DATE           NULL,
+    CompletionRequestedDate DATETIME       NULL,
+    CompletionApprovedBy    INT            NULL,
+    AchievedWeightage       DECIMAL(5,2)   NULL,
+    CompletionRemark        NVARCHAR(500)  NULL;
+
+-- Goal status changes to include Completion Submitted
+DECLARE @c sysname, @sql nvarchar(400);
+SELECT @c = name FROM sys.check_constraints
+WHERE parent_object_id = OBJECT_ID('dbo.Goals') AND definition LIKE '%GoalStatus%';
+IF @c IS NOT NULL
+BEGIN
+    SET @sql = N'ALTER TABLE dbo.Goals DROP CONSTRAINT ' + QUOTENAME(@c);
+    EXEC (@sql);
+END
+
+ALTER TABLE dbo.Goals ADD CONSTRAINT CK_Goals_GoalStatus CHECK (GoalStatus IN (
+  'Draft','Submitted','Manager Approved','HOD Approved','Reviewed By HOD',
+  'Business Head Approved','Review By Business Head','Rejected',
+  'Approved','Completion Submitted','Completed','Cancelled'));
+
+SELECT definition FROM sys.check_constraints
+WHERE parent_object_id = OBJECT_ID('dbo.Goals') AND definition LIKE '%GoalStatus%';
