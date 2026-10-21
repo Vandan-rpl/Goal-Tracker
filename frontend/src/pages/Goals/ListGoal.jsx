@@ -7,6 +7,7 @@ import { Button } from "@mui/material";
 import api from "../../services/api";
 import { getFiscalQuarterOptions } from "../../utils/fiscalQuarter";
 import { canEditGoal } from "../../utils/goalEditability";
+import { getGoalStatusLabel } from "../../utils/goalStatus";
 
 const STATUS_OPTIONS = [
   "Draft",
@@ -16,6 +17,7 @@ const STATUS_OPTIONS = [
   "Business Head Approved",
   "Review By Business Head",
   "Rejected",
+  "Completion Submitted",
   "Completed",
   "Approved",
 ];
@@ -117,7 +119,7 @@ const ListGoal = () => {
               <option value="">All Statuses</option>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {getGoalStatusLabel(s)}
                 </option>
               ))}
             </select>
@@ -221,16 +223,19 @@ const ListGoal = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            goal.GoalStatus === "Approved"
+                            goal.GoalStatus === "Approved" ||
+                            goal.GoalStatus === "Completed"
                               ? "bg-emerald-100 text-emerald-800"
-                              : goal.GoalStatus === "Submitted"
-                                ? "bg-indigo-100 text-indigo-800"
-                                : goal.GoalStatus === "Rejected"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-amber-100 text-amber-800"
+                              : goal.GoalStatus === "Completion Submitted"
+                                ? "bg-sky-100 text-sky-800"
+                                : goal.GoalStatus === "Submitted"
+                                  ? "bg-indigo-100 text-indigo-800"
+                                  : goal.GoalStatus === "Rejected"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-amber-100 text-amber-800"
                           }`}
                         >
-                          {goal.GoalStatus || "Draft"}
+                          {getGoalStatusLabel(goal.GoalStatus)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">

@@ -16,6 +16,12 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { getEmployeeGoals } from "../../services/dashboardService";
 import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
+import {
+  getCompletionRejectionRemark,
+  getGoalStatusLabel,
+  isGoalActiveForOwner,
+} from "../../utils/goalStatus";
+import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 
 const MAX_GOALS_PER_QUARTER = 8;
 const STATUS_GROUPS = {
@@ -28,6 +34,7 @@ const STATUS_GROUPS = {
     "review by business head",
   ],
   Approved: ["approved", "business head approved", "running"],
+  "Pending completion": ["completion submitted"],
   Rejected: ["rejected"],
   Completed: ["completed"],
 };
@@ -45,6 +52,7 @@ const STATUS_STYLES = {
   "Business Head Approved": { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", bar: "bg-emerald-500", icon: CheckCircle2 },
   "Review By Business Head": { bg: "bg-teal-50", text: "text-teal-700", ring: "ring-teal-200", bar: "bg-teal-500", icon: Clock },
   "Approved": { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", bar: "bg-emerald-500", icon: CheckCircle2 },
+  "Completion Submitted": { bg: "bg-sky-50", text: "text-sky-700", ring: "ring-sky-200", bar: "bg-sky-500", icon: Clock },
   "Completed": { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", bar: "bg-emerald-500", icon: CheckCircle2 },
   "Rejected": { bg: "bg-red-50", text: "text-red-700", ring: "ring-red-200", bar: "bg-red-500", icon: XCircle },
   "Cancelled": { bg: "bg-gray-100", text: "text-gray-500", ring: "ring-gray-200", bar: "bg-gray-400", icon: XCircle },
@@ -60,17 +68,6 @@ const PRIORITY_STYLES = {
 
 function normalizeGoalStatus(status) {
   return String(status || "Draft").trim().toLowerCase();
-}
-
-function progressFromStatus(status) {
-  return normalizeGoalStatus(status) === "completed" ? 100 : 0;
-}
-
-function progressFromGoal(goal) {
-  const completion = Number(goal.SubGoalCompletionPercentage);
-  return Number.isFinite(completion)
-    ? Math.max(0, Math.min(100, completion))
-    : progressFromStatus(goal.GoalStatus);
 }
 
 function getDateOnly(dateStr) {
@@ -121,14 +118,18 @@ function formatDate(dateStr) {
 // ---------------------------------------------------------------------------
 // GOAL CARD
 // ---------------------------------------------------------------------------
-function GoalCard({ goal }) {
+function GoalCard({ goal, onGoalChanged }) {
   const [open, setOpen] = useState(false);
   const isCompleted = normalizeGoalStatus(goal.GoalStatus) === "completed";
   const style = isCompleted
     ? STATUS_STYLES.Completed
     : STATUS_STYLES[goal.GoalStatus] || DEFAULT_STATUS_STYLE;
   const StatusIcon = style.icon;
-  const progress = progressFromGoal(goal);
+  const totalSubGoals = Number(goal.TotalSubGoalCount || 0);
+  const completedSubGoals = Number(goal.CompletedSubGoalCount || 0);
+  const completionRejectionRemark = getCompletionRejectionRemark(goal);
+  // My Goals lists only the user's own goals, so the owner check is implicit.
+  const canMarkComplete = goal.IsGoalOwner !== false && isGoalActiveForOwner(goal);
   const displayedTimeline = goal.DashboardTimeline || goal.Timeline;
   const days = daysUntil(displayedTimeline);
   const normalizedStatus = normalizeGoalStatus(goal.GoalStatus);
@@ -172,23 +173,27 @@ function GoalCard({ goal }) {
             )}
             {goal.Weightage != null && <span>Weight {goal.Weightage}%</span>}
           </div>
+          {completionRejectionRemark && (
+            <p className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5">
+              <span className="font-semibold">Completion rejected: </span>
+              {completionRejectionRemark}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-4 sm:w-64">
-          <div className="flex-1">
-            <div className="flex justify-between text-xs mb-1">
-              <span className={`font-medium ${style.text} flex items-center gap-1`}>
-                <StatusIcon size={13} />
-                {goal.GoalStatus}
+          <div className="flex-1 flex flex-col items-start sm:items-end gap-1 text-xs">
+            <span
+              className={`font-medium px-2 py-0.5 rounded-full ${style.bg} ${style.text} flex items-center gap-1`}
+            >
+              <StatusIcon size={13} />
+              {getGoalStatusLabel(goal.GoalStatus)}
+            </span>
+            {totalSubGoals > 0 && (
+              <span className="text-gray-500">
+                {completedSubGoals}/{totalSubGoals} steps done
               </span>
-              <span className="text-gray-500">{progress}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-              <div
-                className={`h-full rounded-full ${style.bar} transition-all`}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+            )}
           </div>
           <ChevronDown
             size={18}
@@ -230,6 +235,21 @@ function GoalCard({ goal }) {
             </p>
           )}
 
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              to={`/goals/view/${goal.GoalID}`}
+              className="inline-flex items-center justify-center px-4 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold transition"
+            >
+              {canMarkComplete && totalSubGoals > 0 ? "Update sub-goals" : "View goal"}
+            </Link>
+            {canMarkComplete && (
+              <MarkCompleteButton
+                goalId={goal.GoalID}
+                goalTitle={goal.GoalTitle}
+                onCompleted={onGoalChanged}
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -588,7 +608,7 @@ export default function GoalDashboard() {
                         </span>
                       </span>
                       <span className="shrink-0 text-xs font-semibold text-indigo-700">
-                        {progressFromGoal(goal)}%
+                        {getGoalStatusLabel(goal.GoalStatus)}
                       </span>
                     </Link>
                   </li>
@@ -701,7 +721,7 @@ export default function GoalDashboard() {
             </div>
           </div>
           {filtered.map((goal) => (
-            <GoalCard key={goal.GoalID} goal={goal} />
+            <GoalCard key={goal.GoalID} goal={goal} onGoalChanged={fetchGoals} />
           ))}
           {filtered.length === 0 && (
             <div className="text-center py-16 text-gray-400 text-sm">No goals match this filter.</div>

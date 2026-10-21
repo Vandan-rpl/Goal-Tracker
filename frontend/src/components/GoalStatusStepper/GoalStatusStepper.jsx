@@ -1,4 +1,5 @@
 import React from 'react';
+import { getGoalStatusLabel } from '../../utils/goalStatus';
 
 export const WORKFLOW_STEPS = [
   'Created',
@@ -20,6 +21,7 @@ const STATUS_TO_STEP = {
   running: 3,
   postpone: 3,
   cancelled: 3,
+  'completion submitted': 3,
   completed: 4,
   rejected: 2,
 };
@@ -36,7 +38,7 @@ export default function GoalStatusStepper({ status, className = '' }) {
   const isCompleted = normalizedStatus === 'completed';
   const exceptionalStatus = EXCEPTIONAL_STATUSES[normalizedStatus];
   const statusColor = exceptionalStatus?.color;
-  const statusText = exceptionalStatus?.label || status || 'Draft';
+  const statusText = exceptionalStatus?.label || getGoalStatusLabel(status);
 
   return (
     <section

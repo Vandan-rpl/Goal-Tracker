@@ -72,7 +72,7 @@ const FinalEvaluation = () => {
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeMessage, setFinalizeMessage] = useState('');
 
-  // Same jwt-decode approach used in ViewGoal.jsx / QuarterlyUpdate.jsx —
+  // Same jwt-decode approach used in ViewGoal.jsx —
   // the stored `user` object in localStorage has no numeric id, so we
   // decode the JWT itself when we need "who am I" reliably.
   let loggedInUserId = null;

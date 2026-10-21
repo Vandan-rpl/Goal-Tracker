@@ -31,10 +31,6 @@ const GoalSubmission = lazy(() =>
   import("../pages/Goals/GoalSubmission")
 );
 
-const QuarterlyUpdate = lazy(() =>
-  import("../pages/Goals/QuarterlyUpdate")
-);
-
 const HODApproval = lazy(() =>
   import("../pages/Approvals/HODApproval")
 );
@@ -129,18 +125,6 @@ const routeConfig = [
     component: GoalSubmission,
     icon: "AssignmentTurnedIn",
     permission: PERMISSIONS.VIEW_GOAL_SUBMISSION,
-    layout: "dashboard",
-    showInMenu: true,
-    breadcrumb: true,
-  },
-
-  {
-    id: 6,
-    title: "Quarterly Update",
-    path: ROUTES.QUARTERLY_UPDATE,
-    component: QuarterlyUpdate,
-    icon: "Update",
-    permission: PERMISSIONS.VIEW_QUARTERLY_UPDATE,
     layout: "dashboard",
     showInMenu: true,
     breadcrumb: true,

@@ -132,61 +132,6 @@ const updateSubGoalStatus = async (goalId, subGoalId, status) => {
     return result.recordset[0].AffectedRows > 0;
 };
 
-const carryForwardGoal = async (goalId) => {
-    const pool = await poolPromise;
-
-    const goal = await getGoalById(goalId);
-    if (!goal) {
-        return { success: false, message: "Goal not found.", errors: [] };
-    }
-
-    const subGoals = await getSubGoalsByGoalId(goalId);
-    const completedWeightage = subGoals
-        .filter(sg => sg.Status === "Completed")
-        .reduce((sum, sg) => sum + Number(sg.Weightage), 0);
-
-    if (subGoals.length > 0 && completedWeightage === 100) {
-        return { success: false, message: "All sub-goals are complete — mark the goal Completed instead of carrying it forward.", errors: [] };
-    }
-
-    const { getNextFiscalQuarter } = require("../utils/fiscalQuarter");
-    const { label: nextQuarter, quarterEndDate: nextQuarterEnd } = getNextFiscalQuarter(goal.QuarterEndDate);
-
-    const request = pool.request();
-    request.input("GoalID", sql.BigInt, goalId);
-    request.input("FromQuarter", sql.VarChar, goal.Quarter);
-    request.input("ToQuarter", sql.VarChar, nextQuarter);
-    request.input("Progress", sql.Decimal(5, 2), completedWeightage);
-
-    await request.query(`
-        INSERT INTO dbo.GoalCarryForwardHistory (GoalID, FromQuarter, ToQuarter, ProgressAtCarryForward)
-        VALUES (@GoalID, @FromQuarter, @ToQuarter, @Progress)
-    `);
-
-    const updateRequest = pool.request();
-    updateRequest.input("GoalID", sql.BigInt, goalId);
-    updateRequest.input("Quarter", sql.VarChar, nextQuarter);
-    updateRequest.input("QuarterEndDate", sql.Date, nextQuarterEnd);
-    updateRequest.input("Timeline", sql.Date, nextQuarterEnd);
-
-    await updateRequest.query(`
-        UPDATE dbo.Goals SET
-            Quarter = @Quarter,
-            QuarterEndDate = @QuarterEndDate,
-            Timeline = @Timeline,
-            GoalStatus = 'Submitted',
-            SubmittedDate = GETDATE(),
-            ApprovedDate = NULL,
-            BusinessHeadApprovedBy = NULL,
-            BusinessHeadApprovedDate = NULL,
-            CarryForwardCount = CarryForwardCount + 1,
-            ModifiedDate = GETDATE()
-        WHERE GoalID = @GoalID
-    `);
-
-    return { success: true, message: `Goal carried forward to ${nextQuarter} and resubmitted for approval.`, errors: [] };
-};
-
 module.exports = {
     getGoalsByUserId,
     getTeamGoalsByManagerId,
@@ -196,5 +141,4 @@ module.exports = {
     getActiveWeightageSumForQuarter,
     getSubGoalsByGoalId,
     updateSubGoalStatus,
-    carryForwardGoal,
 };

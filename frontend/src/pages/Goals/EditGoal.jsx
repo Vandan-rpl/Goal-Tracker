@@ -211,6 +211,16 @@ const EditGoal = () => {
         setFieldErrors({ Timeline: message });
         return;
       }
+    } else if (
+      !formData.Timeline ||
+      (originalTimelineKey && formData.Timeline <= originalTimelineKey)
+    ) {
+      const message = originalTimelineKey
+        ? `New End Date must be after the current End Date (${originalTimelineKey}).`
+        : "End Date is required.";
+      setError(message);
+      setFieldErrors({ Timeline: message });
+      return;
     }
 
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
@@ -319,6 +329,16 @@ const EditGoal = () => {
     !canEditAllFields && canEditTimelineOnlyGoal(originalGoal);
   const canEdit = canEditGoal(originalGoal, isApprover);
   const isRestrictedEdit = canEditTimelineOnly;
+  // On carry-forward the new Timeline must be after the current one.
+  const originalTimelineKey = originalGoal?.Timeline
+    ? String(originalGoal.Timeline).slice(0, 10)
+    : "";
+  const minCarryForwardTimeline = (() => {
+    if (!originalTimelineKey) return undefined;
+    const [year, month, day] = originalTimelineKey.split("-").map(Number);
+    const next = new Date(year, month - 1, day + 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  })();
   // Start Date stays within the goal's stored quarter.
   const quarterRange =
     (originalGoal?.QuarterEndDate &&
@@ -570,7 +590,11 @@ const EditGoal = () => {
                 type="date"
                 name="Timeline"
                 required
-                min={isRestrictedEdit ? undefined : formData.StartDate || quarterRange.min}
+                min={
+                  isRestrictedEdit
+                    ? minCarryForwardTimeline
+                    : formData.StartDate || quarterRange.min
+                }
                 value={formData.Timeline}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${

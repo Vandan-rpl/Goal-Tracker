@@ -25,6 +25,15 @@ const COMPLETION_STATUSES = ["Completion Submitted", "Completed"];
 const COMPLETION_STATUS_MESSAGE =
   "Goal completion must be requested and approved through the completion workflow.";
 
+// Goals in these statuses can never be carried forward.
+const CARRY_FORWARD_BLOCKED_STATUSES = [
+  "Completion Submitted",
+  "Completed",
+  "Draft",
+  "Rejected",
+  "Cancelled",
+];
+
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 30;
@@ -390,6 +399,7 @@ const getEmployeeDashboardSummary = (
       "review by business head",
     ],
     Approved: ["approved", "business head approved", "running"],
+    "Pending completion": ["completion submitted"],
     Rejected: ["rejected"],
     Completed: ["completed"],
   };
@@ -602,6 +612,10 @@ const getGoals = async (req, res) => {
               SELECT g.*, u.Username, u.FirstName, u.LastName,
                 CAST(CASE WHEN g.UserID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsGoalOwner,
                 progress.SubGoalCompletionPercentage,
+                progress.CompletedSubGoalCount,
+                progress.InProgressSubGoalCount,
+                progress.PendingSubGoalCount,
+                progress.TotalSubGoalCount,
                 timelineForDashboard.DashboardTimeline
             FROM dbo.Goals g
             JOIN dbo.Users u ON g.UserID = u.UserID
@@ -630,6 +644,7 @@ const getGoals = async (req, res) => {
                 0
               ) AS SubGoalCompletionPercentage,
                 SUM(CASE WHEN sg.Status = 'Completed' THEN 1 ELSE 0 END) AS CompletedSubGoalCount,
+                COUNT(sg.SubGoalID) AS TotalSubGoalCount,
                 SUM(CASE WHEN sg.Status = 'In Progress' THEN 1 ELSE 0 END) AS InProgressSubGoalCount,
                 SUM(CASE WHEN sg.Status = 'Pending' THEN 1 ELSE 0 END) AS PendingSubGoalCount
               FROM dbo.GoalSubGoals sg
@@ -1456,6 +1471,18 @@ const updateGoal = async (req, res) => {
       Number(existingGoal.CarryForwardCount || 0) === 0 &&
       isDateBeforeToday(existingGoal.Timeline);
 
+    if (
+      isGoalOwner &&
+      !canEditAllFields &&
+      CARRY_FORWARD_BLOCKED_STATUSES.includes(currentStatus)
+    ) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Goals in '${currentStatus}' status cannot be carried forward.`,
+      });
+    }
+
     if (!canEditAllFields && !isCarryForward) {
       await transaction.rollback();
       return res.status(403).json({
@@ -1507,11 +1534,23 @@ const updateGoal = async (req, res) => {
     }
 
     if (isCarryForward) {
-      if (!Timeline) {
+      if (!timelineKey) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: "Timeline is required to resubmit this goal.",
+          message: "A valid Timeline is required to resubmit this goal.",
+          errors: { Timeline: "A valid Timeline is required." },
+        });
+      }
+
+      const previousTimelineKey = toDateKey(existingGoal.Timeline);
+      if (previousTimelineKey && timelineKey <= previousTimelineKey) {
+        const message = `New Timeline must be after the current Timeline (${previousTimelineKey}).`;
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message,
+          errors: { Timeline: message },
         });
       }
     }
@@ -1538,19 +1577,17 @@ const updateGoal = async (req, res) => {
       ? "Submitted"
       : GoalStatus || currentStatus;
 
-    const quarterTimeline = Timeline || existingGoal.Timeline;
+    // A goal always stays in its start quarter, including on carry-forward.
     const { label: newQuarter, quarterEndDate: newQuarterEndDate } =
-      isCarryForward
-        ? getFiscalQuarter(new Date(quarterTimeline))
-        : canEditAllFields
-          ? {
-              label: storedQuarterBounds.label,
-              quarterEndDate: storedQuarterBounds.endKey,
-            }
-          : {
-              label: existingGoal.Quarter,
-              quarterEndDate: existingGoal.QuarterEndDate,
-            };
+      canEditAllFields
+        ? {
+            label: storedQuarterBounds.label,
+            quarterEndDate: storedQuarterBounds.endKey,
+          }
+        : {
+            label: existingGoal.Quarter,
+            quarterEndDate: existingGoal.QuarterEndDate,
+          };
 
     const finalGoalNumber = canEditAllFields
       ? GoalNumber
@@ -1701,6 +1738,7 @@ const updateGoal = async (req, res) => {
         BusinessHeadApprovedBy = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE BusinessHeadApprovedBy END,
         BusinessHeadApprovedDate = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE BusinessHeadApprovedDate END,
         CarryForwardCount = CASE WHEN @IsCarryForward = 1 THEN ISNULL(CarryForwardCount, 0) + 1 ELSE CarryForwardCount END,
+        CompletionRemark = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE CompletionRemark END,
         SubmittedDate = CASE
           WHEN @GoalStatus = 'Submitted' AND @CurrentStatus <> 'Submitted'
             THEN GETDATE()
@@ -1804,27 +1842,15 @@ const updateGoal = async (req, res) => {
     // stay Completed).
 
     if (isCarryForward) {
-      const subGoalsForProgress = await new sql.Request(transaction)
-        .input("GoalID", sql.BigInt, id)
-        .query(`
-          SELECT Status, Weightage
-          FROM dbo.GoalSubGoals
-          WHERE GoalID = @GoalID
-        `);
-      const progressAtCarryForward = calculateGoalProgress(
-        subGoalsForProgress.recordset,
-      );
-
       await new sql.Request(transaction)
         .input("GoalID", sql.BigInt, id)
         .input(
           "FromQuarter",
           sql.VarChar,
-          existingGoal.Quarter ||
-            getFiscalQuarter(existingGoal.Timeline).label,
+          existingGoal.Quarter || storedQuarterBounds.label,
         )
-        .input("ToQuarter", sql.VarChar, newQuarter)
-        .input("ProgressAtCarryForward", sql.Decimal(5, 2), progressAtCarryForward)
+        .input("ToQuarter", sql.VarChar, getFiscalQuarterBounds().label)
+        .input("ProgressAtCarryForward", sql.Decimal(5, 2), 0)
         .query(`
           INSERT INTO dbo.GoalCarryForwardHistory (
             GoalID, FromQuarter, ToQuarter, ProgressAtCarryForward, CarriedForwardDate
@@ -3149,6 +3175,10 @@ const getPendingCompletionRequests = async (req, res) => {
       .query(`
         SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Weightage, g.Quarter,
                g.CompletionRequestedDate,
+               (SELECT COUNT(*) FROM dbo.GoalSubGoals sg
+                 WHERE sg.GoalID = g.GoalID) AS SubGoalCount,
+               (SELECT COUNT(*) FROM dbo.GoalSubGoals sg
+                 WHERE sg.GoalID = g.GoalID AND sg.Status = 'Completed') AS CompletedSubGoalCount,
                u.UserID AS EmployeeID,
                LTRIM(RTRIM(CONCAT(u.FirstName, ' ', u.LastName))) AS EmployeeName
         FROM dbo.Goals g

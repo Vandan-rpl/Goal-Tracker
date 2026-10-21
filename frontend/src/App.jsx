@@ -13,7 +13,6 @@ import JointGoals from './pages/Goals/JointGoals';
 import AddGoal from './pages/Goals/AddGoal';
 import EditGoal from './pages/Goals/EditGoal';
 import ViewGoal from './pages/Goals/ViewGoal';
-import QuarterlyUpdate from './pages/Goals/QuarterlyUpdate';
 import FinalEvaluation from './pages/Goals/FinalEvaluation';
 import GoalReview from './pages/Goals/GoalReview';
 import AddEmployees from './pages/Admin/AddEmployees';
@@ -53,7 +52,6 @@ function App() {
               <Route path="/goals/add" element={<AddGoal />} />
               <Route path="/goals/edit/:id" element={<EditGoal />} />
               <Route path="/goals/view/:id" element={<ViewGoal />} />
-              <Route path="/goals/quarterly-update/:id" element={<QuarterlyUpdate />} />
               <Route path="/goals/final-evaluation" element={<FinalEvaluation />} />
               <Route path="/goals/final-evaluation/:userId" element={<FinalEvaluation />} />
               <Route path="/admin/add-employees" element={<AddEmployees />} />

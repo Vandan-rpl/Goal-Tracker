@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 import { isGoalReviewWindowOpen } from "../../utils/goalReviewWindow";
+import useAuth from "../../hooks/useAuth";
+import CompletionRequests from "../../components/GoalCompletion/CompletionRequests";
 
 const MAX_GOALS_PER_QUARTER = 8;
 
@@ -110,6 +112,8 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
 };
 
 const TeamManagement = () => {
+  const { user } = useAuth();
+  const role = String(user?.Role || user?.role || "").toUpperCase();
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [goals, setGoals] = useState([]);
@@ -222,6 +226,12 @@ const TeamManagement = () => {
         <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md text-sm">
           {errorMsg}
         </div>
+      )}
+
+      {/* /teams/members returns only people whose Reporting Manager or HOD
+          is the logged-in user (except for the CFO's root view). */}
+      {!selectedUser && role !== "BUSINESSHEAD" && users.length > 0 && (
+        <CompletionRequests />
       )}
 
       {!selectedUser ? (

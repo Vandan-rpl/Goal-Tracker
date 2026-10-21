@@ -8,6 +8,14 @@ const TIMELINE_ONLY_EDIT_STATUSES = new Set([
   "Review By Business Head",
   "Approved",
 ]);
+// Goals in these statuses can never be carried forward.
+const CARRY_FORWARD_BLOCKED_STATUSES = new Set([
+  "Completion Submitted",
+  "Completed",
+  "Draft",
+  "Rejected",
+  "Cancelled",
+]);
 
 const getDateKey = (value) => {
   if (!value) return null;
@@ -41,6 +49,7 @@ export const canEditGoal = (goal, isApprover = false) => {
 export const canEditTimelineOnlyGoal = (goal) =>
   Boolean(
     goal &&
+      !CARRY_FORWARD_BLOCKED_STATUSES.has(goal.GoalStatus) &&
       TIMELINE_ONLY_EDIT_STATUSES.has(goal.GoalStatus) &&
       Number(goal.CarryForwardCount || 0) === 0 &&
       isTimelineOverdue(goal.Timeline),

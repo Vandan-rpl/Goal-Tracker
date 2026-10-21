@@ -4,7 +4,13 @@ import { jwtDecode } from "jwt-decode";
 import api from "../../services/api";
 import GoalStatusStepper from "../../components/GoalStatusStepper/GoalStatusStepper";
 import GoalHistory from "./Goalhistory";
+import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 import { canEditGoal as isGoalEditable } from "../../utils/goalEditability";
+import {
+  getCompletionRejectionRemark,
+  getGoalStatusLabel,
+  isGoalActiveForOwner,
+} from "../../utils/goalStatus";
 import { isGoalReviewWindowOpen } from "../../utils/goalReviewWindow";
 import {
   getCfoApprovalWindow,
@@ -21,10 +27,8 @@ const ViewGoal = () => {
   const [jointActionLoading, setJointActionLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  // Quarterly update history state
-  const [quarterlyUpdates, setQuarterlyUpdates] = useState([]);
-  const [quarterlyUpdatesError, setQuarterlyUpdatesError] = useState("");
-  const [expandedQuarter, setExpandedQuarter] = useState(null);
+  // Sub-goal currently being saved from the checklist
+  const [updatingSubGoalId, setUpdatingSubGoalId] = useState(null);
 
   // Review form state
   const [reviewRating, setReviewRating] = useState(5);
@@ -144,13 +148,8 @@ const ViewGoal = () => {
       // "Business Head Approved",
     ].includes(goal?.GoalStatus);
 
-  const quarterlyUpdateEligibleStatuses = ["Approved", "Running"];
-  const canLogQuarterlyUpdate =
-    isGoalOwner &&
-    goal &&
-    quarterlyUpdateEligibleStatuses.includes(
-      String(goal.GoalStatus || "").trim(),
-    );
+  // Completion Submitted / Completed goals are read-only for the owner.
+  const canWorkOnGoal = isGoalOwner && isGoalActiveForOwner(goal);
 
   useEffect(() => {
     fetchGoalDetails();
@@ -169,23 +168,34 @@ const ViewGoal = () => {
     } finally {
       setLoading(false);
     }
+  };
 
+  const handleSubGoalToggle = async (subGoal) => {
+    const nextStatus = subGoal.Status === "Completed" ? "Pending" : "Completed";
     try {
-      setQuarterlyUpdatesError("");
-      const historyRes = await api.get(`/ratings/quarterly-updates/${id}`);
-      if (historyRes.data.success) {
-        setQuarterlyUpdates(historyRes.data.data || []);
-      } else {
-        setQuarterlyUpdatesError(
-          historyRes.data.message || "Unable to load quarterly progress.",
-        );
-      }
-    } catch (historyErr) {
-      console.error("Error loading quarterly update history", historyErr);
-      setQuarterlyUpdatesError(
-        historyErr.response?.data?.message ||
-          "Unable to load quarterly progress.",
+      setUpdatingSubGoalId(subGoal.SubGoalID);
+      const response = await api.put(
+        `/goals/${goal.GoalID}/subgoals/${subGoal.SubGoalID}/status`,
+        { Status: nextStatus },
       );
+      if (response.data.success) {
+        setGoal((previous) => ({
+          ...previous,
+          SubGoals: (previous.SubGoals || []).map((item) =>
+            item.SubGoalID === subGoal.SubGoalID
+              ? { ...item, Status: nextStatus }
+              : item,
+          ),
+        }));
+      } else {
+        alert(response.data.message || "Failed to update sub-goal.");
+      }
+    } catch (err) {
+      alert(
+        err.response?.data?.message || "Server error while updating sub-goal.",
+      );
+    } finally {
+      setUpdatingSubGoalId(null);
     }
   };
 
@@ -310,7 +320,19 @@ const ViewGoal = () => {
     goal.GoalStatus === "Manager Approved" ||
     goal.GoalStatus === "Business Head Approved";
 
+  const subGoals = (goal.SubGoals || []).filter((subGoal) =>
+    String(subGoal.SubGoalTitle || "").trim(),
+  );
+  const completedSubGoalCount = subGoals.filter(
+    (subGoal) => subGoal.Status === "Completed",
+  ).length;
+  const completionRejectionRemark = getCompletionRejectionRemark(goal);
+
   const getStatusBadgeStyle = (status) => {
+    if (status === "Completed")
+      return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
+    if (status === "Completion Submitted")
+      return "bg-sky-50 text-sky-700 border-sky-200/60";
     if (isApproved)
       return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
     if (status === "Submitted")
@@ -344,10 +366,18 @@ const ViewGoal = () => {
             >
               {showHistory ? "Hide History" : "View History"}
             </button>
+            {canWorkOnGoal && (
+              <MarkCompleteButton
+                goalId={goal.GoalID}
+                goalTitle={goal.GoalTitle}
+                onCompleted={fetchGoalDetails}
+                compact
+              />
+            )}
             <span
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg border shadow-xs ${getStatusBadgeStyle(goal.GoalStatus)}`}
             >
-              {goal.GoalStatus || "Draft"}
+              {getGoalStatusLabel(goal.GoalStatus)}
             </span>
             <span className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 shadow-xs">
               Priority:{" "}
@@ -466,31 +496,28 @@ const ViewGoal = () => {
             </h1>
           </div>
 
-          <div className="space-y-2" aria-label="Overall goal completion">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Overall Completion
-              </span>
-              <span className="text-sm font-bold text-emerald-700">
-                {goal.CompletionPercentage}%
-              </span>
-            </div>
+          {completionRejectionRemark && (
             <div
-              className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={goal.CompletionPercentage}
-              aria-label="Overall goal completion percentage"
+              className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm"
+              role="status"
             >
-              <div
-                className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                style={{
-                  width: `${Math.min(100, goal.CompletionPercentage)}%`,
-                }}
-              />
+              <span className="font-bold">Completion rejected: </span>
+              {completionRejectionRemark}
             </div>
-          </div>
+          )}
+
+          {goal.GoalStatus === "Completion Submitted" && (
+            <div
+              className="bg-sky-50 border border-sky-200 text-sky-800 p-4 rounded-2xl text-sm font-medium"
+              role="status"
+            >
+              Completion requested
+              {goal.CompletionRequestedDate
+                ? ` on ${new Date(goal.CompletionRequestedDate).toLocaleDateString()}`
+                : ""}
+              . Waiting for your manager's approval.
+            </div>
+          )}
 
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -593,106 +620,53 @@ const ViewGoal = () => {
 
           <hr className="border-slate-200" />
 
-          {/* Quarterly Progress Section */}
-          <div className="space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight">
-                Quarterly Progress
-              </h3>
-              {canLogQuarterlyUpdate && (
-                <Link
-                  to={`/goals/quarterly-update/${goal.GoalID}`}
-                  className="inline-flex items-center justify-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-[0.98] cursor-pointer"
-                >
-                  + Log Quarterly Update
-                </Link>
-              )}
-            </div>
-
-            {quarterlyUpdates.length > 0 ? (
-              <div className="space-y-3">
-                {quarterlyUpdates.map((update) => {
-                  const isOpen = expandedQuarter === update.Quarter;
-                  const updateYear = update.CreatedAt
-                    ? new Date(update.CreatedAt).getFullYear()
-                    : null;
+          {/* Sub-goals checklist */}
+          {subGoals.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Sub-goals
+                </h3>
+                <span className="text-xs font-semibold text-slate-500">
+                  {completedSubGoalCount}/{subGoals.length} steps done
+                </span>
+              </div>
+              <ul className="divide-y divide-slate-200 border border-slate-200 rounded-2xl bg-white overflow-hidden">
+                {subGoals.map((subGoal) => {
+                  const isDone = subGoal.Status === "Completed";
                   return (
-                    <div
-                      key={update.Quarter}
-                      className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-xs"
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedQuarter(isOpen ? null : update.Quarter)
-                        }
-                        className="w-full flex justify-between items-center p-4 sm:p-5 hover:bg-slate-50 transition text-left cursor-pointer"
+                    <li key={subGoal.SubGoalID}>
+                      <label
+                        className={`flex items-center gap-3 px-4 py-3 text-sm ${
+                          canWorkOnGoal ? "cursor-pointer hover:bg-slate-50" : ""
+                        }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-md uppercase">
-                            {update.Quarter}
-                            {updateYear ? ` · ${updateYear}` : ""}
-                          </span>
-                          <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full">
-                            {update.ProgressPercentage}% Progress
-                          </span>
-                        </div>
-                        <span className="text-slate-400 text-xs font-mono">
-                          {isOpen ? "▲" : "▼"}
+                        <input
+                          type="checkbox"
+                          checked={isDone}
+                          disabled={
+                            !canWorkOnGoal ||
+                            updatingSubGoalId === subGoal.SubGoalID
+                          }
+                          onChange={() => handleSubGoalToggle(subGoal)}
+                          className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-60"
+                        />
+                        <span
+                          className={
+                            isDone
+                              ? "text-slate-500 line-through"
+                              : "text-slate-800"
+                          }
+                        >
+                          {subGoal.SubGoalTitle}
                         </span>
-                      </button>
-
-                      {isOpen && (
-                        <div className="p-5 border-t border-slate-200 bg-slate-50/50 space-y-4">
-                          <div>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                              Achievements
-                            </span>
-                            <p className="text-sm text-slate-700 mt-1">
-                              {update.Achievements || "None recorded."}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                              Challenges
-                            </span>
-                            <p className="text-sm text-slate-700 mt-1">
-                              {update.Challenges || "None recorded."}
-                            </p>
-                          </div>
-                          {update.EvidenceUrl && (
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                Evidence
-                              </span>
-                              <p className="text-sm mt-1">
-                                <a
-                                  href={update.EvidenceUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-indigo-600 hover:text-indigo-800 font-medium underline break-all"
-                                >
-                                  {update.EvidenceUrl}
-                                </a>
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                      </label>
+                    </li>
                   );
                 })}
-              </div>
-            ) : quarterlyUpdatesError ? (
-              <div className="text-xs text-rose-700 bg-rose-50 p-6 rounded-2xl text-center border border-rose-200 font-medium">
-                {quarterlyUpdatesError}
-              </div>
-            ) : (
-              <div className="text-xs text-slate-500 bg-slate-50 p-8 rounded-2xl text-center border border-dashed border-slate-300 font-medium">
-                No quarterly updates logged yet for this goal.
-              </div>
-            )}
-          </div>
+              </ul>
+            </div>
+          )}
 
           {/* Reviewer Feedback */}
           {goal.ManagerRating && (
@@ -753,14 +727,6 @@ const ViewGoal = () => {
                   Submit Your Review
                 </h3>
                 <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-200 space-y-5">
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-white/70 px-4 py-3">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Completion
-                    </span>
-                    <span className="text-base font-black text-indigo-700">
-                      {goal.CompletionPercentage}%
-                    </span>
-                  </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
                       Rating (1 to 5 Stars)
