@@ -47,7 +47,7 @@ export const getGoalCreationWindow = (date = new Date()) => {
 };
 
 export const getManagerHodApprovalWindow = (date = new Date()) =>
-  getQuarterDayWindow(8, 15, date);
+  getQuarterDayWindow(8, 25, date);
 
 export const getCfoApprovalWindow = (date = new Date()) =>
   getQuarterDayWindow(16, 30, date);

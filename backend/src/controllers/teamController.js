@@ -105,6 +105,15 @@ const updateStatus = async (req, res) => {
     const { goalStatus } = req.body;
     const performedBy = req.user?.UserID || req.user?.userId;
 
+    // Completion statuses are set only by the goal completion endpoints.
+    if (["Completion Submitted", "Completed"].includes(goalStatus)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Goal completion must be requested and approved through the completion workflow.",
+      });
+    }
+
     const pool = await poolPromise;
 
     // Need the goal's owner + title before updating, so we know who to notify.

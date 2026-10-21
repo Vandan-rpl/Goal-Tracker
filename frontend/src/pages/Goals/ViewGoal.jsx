@@ -194,7 +194,7 @@ const ViewGoal = () => {
       alert(
         canCfoApprove
           ? "CFO approvals are available only on quarter days 16-30."
-          : "Manager/HOD approvals are available only on quarter days 8-15.",
+          : "Manager/HOD approvals are available only on quarter days 8-25.",
       );
       return;
     }
@@ -371,7 +371,7 @@ const ViewGoal = () => {
                 : "CFO approval and goal editing are available only on quarter days 16-30. This quarter's window is "
               : approvalWindow.isOpen
                 ? "Manager/HOD approval and goal editing are open through "
-                : "Manager/HOD approval and goal editing are available only on quarter days 8-15. This quarter's window is "}
+                : "Manager/HOD approval and goal editing are available only on quarter days 8-25. This quarter's window is "}
             {approvalWindow.startDate.toLocaleDateString()} through{" "}
             {approvalWindow.endDate.toLocaleDateString()}.
           </div>

@@ -15,6 +15,10 @@ const {
     updateSubGoalStatus,
     getTeamGoals,
     updateJointAccountabilityStatus,
+    requestGoalCompletion,
+    approveGoalCompletion,
+    rejectGoalCompletion,
+    getPendingCompletionRequests,
 } = require('../controllers/goalController');
 
 const { verifyToken } = require('../middleware/authMiddleware');
@@ -33,6 +37,12 @@ router.get('/all-employee-goals', getAllEmployeeGoals);
 
 //Get team goals
 router.get("/team", verifyToken, getTeamGoals);
+
+// Goal completion approval. Keep the GET above router.get('/:id').
+router.get('/completion-requests/pending', getPendingCompletionRequests);
+router.post('/:id/completion/request', requestGoalCompletion);
+router.post('/:id/completion/approve', approveGoalCompletion);
+router.post('/:id/completion/reject', rejectGoalCompletion);
 
 //Get goal history for a particular goal
 router.get("/:id/history", getGoalHistory);

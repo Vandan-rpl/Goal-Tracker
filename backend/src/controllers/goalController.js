@@ -20,6 +20,11 @@ const {
   isWithinCarryForwardWindow,
 } = require("../utils/fiscalQuarter");
 
+// These statuses are set only by the completion request/approve endpoints.
+const COMPLETION_STATUSES = ["Completion Submitted", "Completed"];
+const COMPLETION_STATUS_MESSAGE =
+  "Goal completion must be requested and approved through the completion workflow.";
+
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 30;
@@ -1086,6 +1091,12 @@ const createGoal = async (req, res) => {
     });
   }
 
+  if (COMPLETION_STATUSES.includes(GoalStatus)) {
+    return res
+      .status(400)
+      .json({ success: false, message: COMPLETION_STATUS_MESSAGE });
+  }
+
   if (!GoalTitle || !Weightage || !Priority || !StartDate || !Timeline) {
     return res
       .status(400)
@@ -1347,6 +1358,13 @@ const updateGoal = async (req, res) => {
   const role = (req.user?.Role || req.user?.role || "").toUpperCase();
   const isEnterpriseGoalManager =
     role === "CFO" || role === "BUSINESSHEAD" || role === "ADMIN";
+
+  if (COMPLETION_STATUSES.includes(GoalStatus)) {
+    return res
+      .status(400)
+      .json({ success: false, message: COMPLETION_STATUS_MESSAGE });
+  }
+
   const transaction = new sql.Transaction(await poolPromise);
 
   try {
@@ -1375,6 +1393,15 @@ const updateGoal = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Joint participants can only update their contribution note.",
+      });
+    }
+
+    if (currentStatus === "Completion Submitted") {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message:
+          "This goal is awaiting completion approval and cannot be edited.",
       });
     }
 
@@ -2135,6 +2162,12 @@ const changeGoalStatus = async (req, res) => {
       .json({ success: false, message: "Status is required." });
   }
 
+  if (COMPLETION_STATUSES.includes(goalStatus)) {
+    return res
+      .status(400)
+      .json({ success: false, message: COMPLETION_STATUS_MESSAGE });
+  }
+
   const transaction = new sql.Transaction(await poolPromise);
 
   try {
@@ -2235,7 +2268,7 @@ const changeGoalStatus = async (req, res) => {
           success: false,
           message: isFinalApproval
             ? `CFO approval is available only on quarter days 16-30. The current window is ${approvalWindow.startDate.toLocaleDateString()} through ${approvalWindow.endDate.toLocaleDateString()}.`
-            : `Manager/HOD approval is available only on quarter days 8-15. The current window is ${approvalWindow.startDate.toLocaleDateString()} through ${approvalWindow.endDate.toLocaleDateString()}.`,
+            : `Manager/HOD approval is available only on quarter days 8-25. The current window is ${approvalWindow.startDate.toLocaleDateString()} through ${approvalWindow.endDate.toLocaleDateString()}.`,
         });
       }
     }
@@ -2750,6 +2783,394 @@ const updateSubGoalStatus = async (req, res) => {
   }
 };
 
+// ---------------- Goal completion approval ----------------
+// Owner requests completion of an Approved goal; the owner's direct
+// approver (Reporting Manager, else HOD) approves or rejects it. CFO and
+// Business Head are not part of this flow.
+
+const COMPLETION_REMARK_MAX_LENGTH = 500;
+
+const getCompletionApproverId = async (transaction, ownerUserId) => {
+  const result = await new sql.Request(transaction).input(
+    "OwnerUserID",
+    sql.Int,
+    ownerUserId,
+  ).query(`
+      SELECT COALESCE(ReportingManagerID, HODID) AS ApproverID
+      FROM dbo.Users
+      WHERE UserID = @OwnerUserID
+    `);
+  const approverId = result.recordset[0]?.ApproverID;
+  return approverId === null || approverId === undefined
+    ? null
+    : Number(approverId);
+};
+
+const getGoalForCompletion = async (transaction, goalId) => {
+  const result = await new sql.Request(transaction)
+    .input("GoalID", sql.BigInt, goalId)
+    .query(`
+      SELECT GoalID, UserID, GoalTitle, GoalStatus, Weightage
+      FROM dbo.Goals WITH (UPDLOCK, ROWLOCK)
+      WHERE GoalID = @GoalID
+    `);
+  return result.recordset[0] || null;
+};
+
+const rollbackQuietly = async (transaction) => {
+  if (transaction._aborted === false && transaction._acquiredConnection) {
+    try {
+      await transaction.rollback();
+    } catch (rbErr) {}
+  }
+};
+
+// Shared guard for approve/reject: goal exists, caller is the owner's
+// direct approver, and the goal is awaiting completion approval.
+const loadGoalForCompletionDecision = async (transaction, goalId, userId) => {
+  const goal = await getGoalForCompletion(transaction, goalId);
+  if (!goal) {
+    return { status: 404, message: "Goal not found." };
+  }
+
+  const approverId = await getCompletionApproverId(transaction, goal.UserID);
+  if (approverId === null) {
+    return {
+      status: 403,
+      message:
+        "This goal's owner has no Reporting Manager or HOD to approve completion.",
+    };
+  }
+  if (
+    approverId !== Number(userId) ||
+    Number(goal.UserID) === Number(userId)
+  ) {
+    return {
+      status: 403,
+      message:
+        "Only the goal owner's Reporting Manager (or HOD if none) can approve or reject completion.",
+    };
+  }
+
+  if (goal.GoalStatus !== "Completion Submitted") {
+    return {
+      status: 400,
+      message: `This goal is not awaiting completion approval (current status: ${goal.GoalStatus}).`,
+    };
+  }
+
+  return { goal };
+};
+
+const notifyCompletionEvent = async ({
+  recipientId,
+  goalId,
+  title,
+  message,
+  type,
+  createdBy,
+}) => {
+  try {
+    const pool = await poolPromise;
+    const recipient = await getUserContact(pool, recipientId);
+    if (!recipient) return;
+
+    const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${goalId}`;
+    await notifyUser(pool, {
+      userId: recipient.UserID,
+      title,
+      message,
+      type,
+      referenceId: Number(goalId),
+      referenceType: "Goal",
+      createdBy,
+      emailTo: recipient.Email || undefined,
+      emailSubject: title,
+      emailHtml: `
+        <h3>Hello ${recipient.FirstName || "there"},</h3>
+        <p>${message}</p>
+        <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
+      `,
+    });
+  } catch (notifyErr) {
+    console.error(
+      `[NOTIF FAILED] ${type} notify step. goalId=${goalId} recipientId=${recipientId}:`,
+      notifyErr,
+    );
+  }
+};
+
+// POST /goals/:id/completion/request
+const requestGoalCompletion = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.UserID || req.user?.userId;
+  const transaction = new sql.Transaction(await poolPromise);
+
+  try {
+    await transaction.begin();
+
+    const goal = await getGoalForCompletion(transaction, id);
+    if (!goal) {
+      await transaction.rollback();
+      return res
+        .status(404)
+        .json({ success: false, message: "Goal not found." });
+    }
+
+    if (Number(goal.UserID) !== Number(userId)) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "Only the goal owner can request completion.",
+      });
+    }
+
+    if (goal.GoalStatus !== "Approved") {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Only Approved goals can be submitted for completion (current status: ${goal.GoalStatus}).`,
+      });
+    }
+
+    const approverId = await getCompletionApproverId(transaction, goal.UserID);
+    if (approverId === null) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message:
+          "You have no Reporting Manager or HOD assigned to approve goal completion.",
+      });
+    }
+
+    const updateResult = await new sql.Request(transaction)
+      .input("GoalID", sql.BigInt, id)
+      .query(`
+        UPDATE dbo.Goals
+        SET GoalStatus = 'Completion Submitted',
+            CompletionRequestedDate = GETDATE(),
+            CompletionRemark = NULL,
+            ModifiedDate = GETDATE()
+        WHERE GoalID = @GoalID AND GoalStatus = 'Approved'
+      `);
+    if (updateResult.rowsAffected[0] !== 1) {
+      await transaction.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This goal's status changed. Refresh and try again.",
+      });
+    }
+
+    await transaction.commit();
+
+    await notifyCompletionEvent({
+      recipientId: approverId,
+      goalId: id,
+      title: "Goal Completion Requested",
+      message: `Completion has been requested for the goal "${goal.GoalTitle}" and is awaiting your approval.`,
+      type: "GOAL_COMPLETION_REQUESTED",
+      createdBy: userId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Goal completion submitted for approval.",
+    });
+  } catch (error) {
+    await rollbackQuietly(transaction);
+    console.error("Request Goal Completion Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while requesting goal completion.",
+      errors: error.message,
+    });
+  }
+};
+
+// POST /goals/:id/completion/approve
+const approveGoalCompletion = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.UserID || req.user?.userId;
+  const transaction = new sql.Transaction(await poolPromise);
+
+  try {
+    await transaction.begin();
+
+    const { goal, status, message } = await loadGoalForCompletionDecision(
+      transaction,
+      id,
+      userId,
+    );
+    if (!goal) {
+      await transaction.rollback();
+      return res.status(status).json({ success: false, message });
+    }
+
+    const updateResult = await new sql.Request(transaction)
+      .input("GoalID", sql.BigInt, id)
+      .input("CompletionApprovedBy", sql.Int, userId)
+      .query(`
+        UPDATE dbo.Goals
+        SET GoalStatus = 'Completed',
+            AchievedWeightage = Weightage,
+            CompletionApprovedBy = @CompletionApprovedBy,
+            CompletedDate = GETDATE(),
+            ModifiedDate = GETDATE()
+        WHERE GoalID = @GoalID AND GoalStatus = 'Completion Submitted'
+      `);
+    if (updateResult.rowsAffected[0] !== 1) {
+      await transaction.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This goal's status changed. Refresh and try again.",
+      });
+    }
+
+    await transaction.commit();
+
+    await notifyCompletionEvent({
+      recipientId: goal.UserID,
+      goalId: id,
+      title: "Goal Completion Approved",
+      message: `Completion of your goal "${goal.GoalTitle}" has been approved.`,
+      type: "GOAL_COMPLETION_APPROVED",
+      createdBy: userId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Goal completion approved.",
+      data: { GoalID: Number(id), AchievedWeightage: Number(goal.Weightage) },
+    });
+  } catch (error) {
+    await rollbackQuietly(transaction);
+    console.error("Approve Goal Completion Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while approving goal completion.",
+      errors: error.message,
+    });
+  }
+};
+
+// POST /goals/:id/completion/reject  body: { CompletionRemark }
+const rejectGoalCompletion = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.UserID || req.user?.userId;
+  const remark = String(req.body?.CompletionRemark ?? "").trim();
+
+  if (!remark) {
+    return res.status(400).json({
+      success: false,
+      message: "A remark is required to reject goal completion.",
+      errors: { CompletionRemark: "Remark is required." },
+    });
+  }
+  if (remark.length > COMPLETION_REMARK_MAX_LENGTH) {
+    return res.status(400).json({
+      success: false,
+      message: `Remark cannot exceed ${COMPLETION_REMARK_MAX_LENGTH} characters.`,
+      errors: {
+        CompletionRemark: `Remark cannot exceed ${COMPLETION_REMARK_MAX_LENGTH} characters.`,
+      },
+    });
+  }
+
+  const transaction = new sql.Transaction(await poolPromise);
+
+  try {
+    await transaction.begin();
+
+    const { goal, status, message } = await loadGoalForCompletionDecision(
+      transaction,
+      id,
+      userId,
+    );
+    if (!goal) {
+      await transaction.rollback();
+      return res.status(status).json({ success: false, message });
+    }
+
+    const updateResult = await new sql.Request(transaction)
+      .input("GoalID", sql.BigInt, id)
+      .input(
+        "CompletionRemark",
+        sql.NVarChar(COMPLETION_REMARK_MAX_LENGTH),
+        remark,
+      )
+      .query(`
+        UPDATE dbo.Goals
+        SET GoalStatus = 'Approved',
+            CompletionRemark = @CompletionRemark,
+            ModifiedDate = GETDATE()
+        WHERE GoalID = @GoalID AND GoalStatus = 'Completion Submitted'
+      `);
+    if (updateResult.rowsAffected[0] !== 1) {
+      await transaction.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This goal's status changed. Refresh and try again.",
+      });
+    }
+
+    await transaction.commit();
+
+    await notifyCompletionEvent({
+      recipientId: goal.UserID,
+      goalId: id,
+      title: "Goal Completion Rejected",
+      message: `Completion of your goal "${goal.GoalTitle}" was not approved. Remark: ${remark}`,
+      type: "GOAL_COMPLETION_REJECTED",
+      createdBy: userId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Goal completion rejected. The goal is back in Approved status.",
+    });
+  } catch (error) {
+    await rollbackQuietly(transaction);
+    console.error("Reject Goal Completion Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while rejecting goal completion.",
+      errors: error.message,
+    });
+  }
+};
+
+// GET /goals/completion-requests/pending
+const getPendingCompletionRequests = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().input("ApproverID", sql.Int, userId)
+      .query(`
+        SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Weightage, g.Quarter,
+               g.CompletionRequestedDate,
+               u.UserID AS EmployeeID,
+               LTRIM(RTRIM(CONCAT(u.FirstName, ' ', u.LastName))) AS EmployeeName
+        FROM dbo.Goals g
+        INNER JOIN dbo.Users u ON u.UserID = g.UserID
+        WHERE g.GoalStatus = 'Completion Submitted'
+          AND COALESCE(u.ReportingManagerID, u.HODID) = @ApproverID
+          AND g.UserID <> @ApproverID
+        ORDER BY g.CompletionRequestedDate ASC
+      `);
+
+    return res.status(200).json({ success: true, data: result.recordset });
+  } catch (error) {
+    console.error("Get Pending Completion Requests Error:", error);
+    return res.status(500).json({
+      success: false,
+      message:
+        "Internal server error while fetching pending completion requests.",
+      errors: error.message,
+    });
+  }
+};
+
 module.exports = {
   getGoals,
   getJointAccountabilityUsers,
@@ -2765,4 +3186,8 @@ module.exports = {
   getGoalHistory,
   updateSubGoalStatus,
   getTeamGoals,
+  requestGoalCompletion,
+  approveGoalCompletion,
+  rejectGoalCompletion,
+  getPendingCompletionRequests,
 };
