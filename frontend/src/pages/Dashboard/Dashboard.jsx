@@ -124,7 +124,7 @@ function formatPercent(value) {
 
 // ---------------------------------------------------------------------------
 // QUARTER SUMMARY — Q1–Q4 of the current fiscal year, calculated on the server.
-// Future quarters show "–". Brought forward achieved is display only.
+// Future quarters show only Allocated. Brought forward achieved is display only.
 // ---------------------------------------------------------------------------
 const QUARTER_SUMMARY_COLUMNS = [
   "Allocated",
@@ -154,8 +154,13 @@ function QuarterSummaryTable({ quarters, currentQuarter }) {
             <tbody className="divide-y divide-gray-50">
               {quarters.map((quarter) => {
                 const isCurrent = quarter.quarter === currentQuarter;
+                // Goals can be set before a quarter starts, so a future
+                // quarter still shows its allocation; the rest is "–".
                 const cells = quarter.isFuture
-                  ? QUARTER_SUMMARY_COLUMNS.map(() => "–")
+                  ? [
+                      formatPercent(quarter.allocated),
+                      ...QUARTER_SUMMARY_COLUMNS.slice(1).map(() => "–"),
+                    ]
                   : [
                       formatPercent(quarter.allocated),
                       formatPercent(quarter.achieved),

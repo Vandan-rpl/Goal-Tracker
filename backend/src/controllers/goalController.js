@@ -12,6 +12,7 @@ const {
   getFiscalQuarterBoundsFromLabel,
   getFiscalYearQuarters,
   toDateKey,
+  getNextFiscalQuarter,
   getQuarterStartDate,
   getGoalCreationWindow,
   getManagerHodApprovalWindow,
@@ -1256,7 +1257,9 @@ const createGoal = async (req, res) => {
   const dateErrors = getGoalDateErrors(
     startDateKey,
     timelineKey,
-    getFiscalQuarterBounds(),
+    getFiscalQuarterBoundsFromLabel(
+      getNextFiscalQuarter(getFiscalQuarter().quarterEndDate).label,
+    ),
   );
   if (dateErrors) {
     return res.status(400).json({

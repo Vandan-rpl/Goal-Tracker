@@ -32,7 +32,7 @@ export const getQuarterDayWindow = (startDay, endDay, date = new Date()) => {
 
 export const getGoalCreationWindow = (date = new Date()) => {
   const reopeningStart = new Date(2026, 9, 14);
-  const reopeningEnd = new Date(2026, 9, 20);
+  const reopeningEnd = new Date(2026, 9, 25);
   const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   if (today >= reopeningStart && today <= reopeningEnd) {
@@ -83,6 +83,16 @@ export const getFiscalQuarterDateRange = (dateValue = new Date()) => {
     min: toLocalDateKey(start),
     max: toLocalDateKey(end),
   };
+};
+
+// Bounds of the fiscal quarter after the one containing `dateValue`. Goal
+// entry opens before the quarter ends, so new goals target the next quarter.
+export const getNextFiscalQuarterDateRange = (dateValue = new Date()) => {
+  const current = getFiscalQuarterDateRange(dateValue);
+  if (!current) return null;
+  const nextStart = new Date(`${current.max}T00:00:00`);
+  nextStart.setDate(nextStart.getDate() + 1);
+  return getFiscalQuarterDateRange(nextStart);
 };
 
 export const getFiscalQuarterOptions = () => {

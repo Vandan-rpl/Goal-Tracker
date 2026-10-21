@@ -4,7 +4,7 @@ import { CalendarDays } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import api from "../../services/api";
 import {
-  getFiscalQuarterDateRange,
+  getNextFiscalQuarterDateRange,
   getFiscalQuarterValue,
   getGoalCreationWindow,
 } from "../../utils/fiscalQuarter";
@@ -48,7 +48,7 @@ const AddGoal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const goalCreationWindow = getGoalCreationWindow();
-  const currentQuarterRange = getFiscalQuarterDateRange();
+  const currentQuarterRange = getNextFiscalQuarterDateRange();
   const [goals, setGoals] = useState([]);
   const [goalAllocationLoading, setGoalAllocationLoading] = useState(true);
   const [goalAllocationError, setGoalAllocationError] = useState("");
