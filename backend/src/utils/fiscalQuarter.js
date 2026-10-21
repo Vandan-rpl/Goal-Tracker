@@ -144,6 +144,15 @@ function getFiscalQuarterBoundsFromLabel(label) {
   return getFiscalQuarterBounds(firstDayOfQuarter);
 }
 
+// Q1-Q4 of the fiscal year containing `date`, in order, each with inclusive
+// 'YYYY-MM-DD' bounds.
+function getFiscalYearQuarters(date = new Date()) {
+  const fyEndYear = Number(getFiscalQuarter(date).label.slice(-4));
+  return [1, 2, 3, 4].map((quarter) =>
+    getFiscalQuarterBoundsFromLabel(`Q${quarter}-${fyEndYear}`),
+  );
+}
+
 function getNextFiscalQuarter(fromQuarterEndDate) {
   const nextStart = new Date(fromQuarterEndDate);
   nextStart.setDate(nextStart.getDate() + 1);
@@ -171,6 +180,7 @@ module.exports = {
   getFiscalQuarter,
   getFiscalQuarterBounds,
   getFiscalQuarterBoundsFromLabel,
+  getFiscalYearQuarters,
   toDateKey,
   getNextFiscalQuarter,
   getQuarterStartDate,

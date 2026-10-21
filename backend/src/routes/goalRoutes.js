@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { 
+const {
     getGoals,
+    getMyQuarterSummary,
     getJointAccountabilityUsers,
     getJointGoals,
     getAllEmployeeGoals,
@@ -27,6 +28,9 @@ router.use(verifyToken);
 
 //get particular employee goals
 router.get('/', getGoals);
+
+// Employee dashboard quarter summary. Keep above router.get('/:id').
+router.get('/dashboard/quarters', getMyQuarterSummary);
 
 router.get('/joint-accountability-users', getJointAccountabilityUsers);
 router.get('/joint-accountability', getJointGoals);

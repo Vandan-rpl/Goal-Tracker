@@ -24,6 +24,19 @@ export async function getEmployeeGoals() {
 }
 
 /**
+ * Fetch the logged-in employee's per-quarter summary for the current fiscal
+ * year (Q1-Q4), with every figure calculated on the server.
+ * Route: GET /api/v1/goals/dashboard/quarters -> getMyQuarterSummary
+ * Returns { fiscalYear, currentQuarter, quarters: [...] }.
+ */
+export async function getEmployeeQuarterSummary() {
+  const res = await api.get(`${BASE}/dashboard/quarters`, {
+    headers: { "Cache-Control": "no-cache" },
+  });
+  return res.data.data;
+}
+
+/**
  * Fetch a single goal by id.
  * Route: GET /api/v1/goals/:id -> getGoalById
  * Unconfirmed whether this controller joins GoalSubGoal rows or not —

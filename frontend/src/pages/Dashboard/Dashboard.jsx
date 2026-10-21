@@ -10,11 +10,13 @@ import {
   XCircle,
   Filter,
   Loader2,
-  Plus,
   RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { getEmployeeGoals } from "../../services/dashboardService";
+import {
+  getEmployeeGoals,
+  getEmployeeQuarterSummary,
+} from "../../services/dashboardService";
 import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 import {
   getCompletionRejectionRemark,
@@ -23,7 +25,6 @@ import {
 } from "../../utils/goalStatus";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 
-const MAX_GOALS_PER_QUARTER = 8;
 const STATUS_GROUPS = {
   Draft: ["draft"],
   "Pending approval": [
@@ -112,6 +113,92 @@ function formatDate(dateStr) {
   return new Date(date.year, date.month - 1, date.day).toLocaleDateString(
     "en-IN",
     { day: "numeric", month: "short", year: "numeric" },
+  );
+}
+
+function formatPercent(value) {
+  return `${Number(Number(value || 0).toFixed(2))}%`;
+}
+
+// ---------------------------------------------------------------------------
+// QUARTER SUMMARY — Q1–Q4 of the current fiscal year, calculated on the server.
+// Future quarters show "–". Brought forward achieved is display only.
+// ---------------------------------------------------------------------------
+const QUARTER_SUMMARY_COLUMNS = [
+  "Allocated",
+  "Achieved",
+  "Brought forward achieved",
+  "Completed",
+  "Carried forward",
+];
+
+function QuarterSummaryTable({ quarters, currentQuarter }) {
+  return (
+    <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <h2 className="text-sm font-semibold text-gray-800">Quarter summary</h2>
+      {quarters.length ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-gray-100 text-xs text-gray-400">
+              <tr>
+                <th className="pb-2 pr-4 font-medium">Quarter</th>
+                {QUARTER_SUMMARY_COLUMNS.map((column) => (
+                  <th key={column} className="pb-2 px-3 font-medium last:pr-0">
+                    {column}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {quarters.map((quarter) => {
+                const isCurrent = quarter.quarter === currentQuarter;
+                const cells = quarter.isFuture
+                  ? QUARTER_SUMMARY_COLUMNS.map(() => "–")
+                  : [
+                      formatPercent(quarter.allocated),
+                      formatPercent(quarter.achieved),
+                      formatPercent(quarter.broughtForwardAchieved),
+                      `${quarter.completedCount} of ${quarter.countedGoalCount}`,
+                      quarter.carriedForwardCount,
+                    ];
+                return (
+                  <tr
+                    key={quarter.quarter}
+                    className={isCurrent ? "bg-indigo-50/60" : ""}
+                    aria-current={isCurrent ? "true" : undefined}
+                  >
+                    <th className="py-3 pl-2 pr-4 font-medium text-gray-700 whitespace-nowrap">
+                      {quarter.quarter}
+                      {isCurrent && (
+                        <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                          Current
+                        </span>
+                      )}
+                    </th>
+                    {cells.map((value, index) => (
+                      <td
+                        key={QUARTER_SUMMARY_COLUMNS[index]}
+                        className={`px-3 py-3 whitespace-nowrap ${
+                          index === 1 && !quarter.isFuture
+                            ? "font-medium text-indigo-700"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {value}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+          Quarter summary will appear when you have goals.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -265,6 +352,7 @@ export default function GoalDashboard() {
 
   const [goals, setGoals] = useState([]);
   const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [quarterSummary, setQuarterSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState("All");
@@ -274,9 +362,13 @@ export default function GoalDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const dashboard = await getEmployeeGoals();
+      const [dashboard, quarters] = await Promise.all([
+        getEmployeeGoals(),
+        getEmployeeQuarterSummary(),
+      ]);
       setGoals(dashboard.goals || []);
       setDashboardSummary(dashboard.summary || null);
+      setQuarterSummary(quarters || null);
     } catch (err) {
       setError(
         err?.response?.status === 404
@@ -314,29 +406,10 @@ export default function GoalDashboard() {
     return c;
   }, [goals]);
 
-  const currentQuarterAllocation = useMemo(() => {
-    if (dashboardSummary?.currentQuarterWeightage) {
-      return dashboardSummary.currentQuarterWeightage;
-    }
-    return {
-      quarter: getCurrentFiscalQuarterValue(),
-      goalCount: 0,
-      allocated: 0,
-      achieved: 0,
-      performancePercentage: null,
-      unallocated: 100,
-    };
-  }, [dashboardSummary]);
-
-  const currentQuarterAllocated = Math.round(
-    Number(currentQuarterAllocation.allocated || 0),
-  );
-  const currentQuarterAchieved = Math.round(
-    Number(currentQuarterAllocation.achieved || 0),
-  );
-  const currentQuarterUnallocated = Math.round(
-    Number(currentQuarterAllocation.unallocated || 0),
-  );
+  const currentQuarterLabel =
+    quarterSummary?.currentQuarter || getCurrentFiscalQuarterValue();
+  const currentQuarterGoalCount =
+    dashboardSummary?.currentQuarterWeightage?.goalCount ?? 0;
 
   const goalStatusCounts =
     dashboardSummary?.goalStatusCounts ||
@@ -401,94 +474,6 @@ export default function GoalDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">My Goals</h1>
         </div>
 
-        <section
-          className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
-          aria-label={`${currentQuarterAllocation.quarter} progress`}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-sm font-semibold text-gray-800">
-              {currentQuarterAllocation.quarter} progress
-            </p>
-            <p className="shrink-0 text-xs font-medium text-gray-500">
-              {currentQuarterAllocation.goalCount} of {MAX_GOALS_PER_QUARTER} goals
-            </p>
-          </div>
-
-          {currentQuarterAllocation.goalCount === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-gray-400">
-                No goals added for this quarter yet
-              </p>
-              <Link
-                to="/goals/add"
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
-              >
-                <Plus size={15} />
-                Create Goal
-              </Link>
-            </div>
-          ) : (
-            <>
-              <div
-                className="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-100"
-                role="progressbar"
-                aria-label="Quarterly goal weightage allocated"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.min(100, currentQuarterAllocation.allocated)}
-                aria-valuetext={`Allocated ${currentQuarterAllocated}%, achieved ${currentQuarterAchieved}%`}
-              >
-                <div
-                  className="relative h-full rounded-full bg-indigo-200 transition-all"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, currentQuarterAllocation.allocated))}%`,
-                  }}
-                >
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-indigo-600 transition-all"
-                    style={{
-                      width: `${Math.max(
-                        0,
-                        Math.min(
-                          currentQuarterAllocation.allocated,
-                          currentQuarterAllocation.achieved,
-                        ),
-                      ) / Math.max(0.01, currentQuarterAllocation.allocated) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-indigo-200" />
-                  Allocated {currentQuarterAllocated}%
-                </span>
-                <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-indigo-600" />
-                  Achieved {currentQuarterAchieved}%
-                </span>
-                {currentQuarterAllocation.performancePercentage != null && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>
-                      Completion{" "}
-                      {Number(
-                        currentQuarterAllocation.performancePercentage,
-                      ).toFixed(2)}%
-                    </span>
-                  </>
-                )}
-                <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-gray-100 ring-1 ring-gray-200" />
-                  {currentQuarterUnallocated}% unallocated
-                </span>
-              </div>
-            </>
-          )}
-        </section>
-
         {dashboardSummary?.carryForward?.windowOpen && (
           <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
             <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
@@ -504,6 +489,11 @@ export default function GoalDashboard() {
             </div>
           </div>
         )}
+
+        <QuarterSummaryTable
+          quarters={quarterSummary?.quarters || []}
+          currentQuarter={currentQuarterLabel}
+        />
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -530,9 +520,9 @@ export default function GoalDashboard() {
 
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-800">
-              Sub-goal progress · {currentQuarterAllocation.quarter}
+              Sub-goal progress · {currentQuarterLabel}
             </h2>
-            {currentQuarterAllocation.goalCount === 0 ? (
+            {currentQuarterGoalCount === 0 ? (
               <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
                 No goals in this quarter yet.
               </p>
@@ -617,65 +607,6 @@ export default function GoalDashboard() {
             ) : (
               <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
                 No deadlines in the next 14 days.
-              </p>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:col-span-2">
-            <h2 className="text-sm font-semibold text-gray-800">Quarter history</h2>
-            {/* <p className="mt-1 text-xs text-gray-500">
-              Completion = achieved weightage ÷ allocated weightage × 100.
-              Achieved weightage sums each goal’s weightage × completion percentage ÷ 100.
-              Rejected and cancelled goals are excluded.
-            </p> */}
-            {dashboardSummary?.quarterHistory?.some(
-              (quarter) =>
-                quarter.allocatedPercentage > 0 ||
-                quarter.achievedPercentage > 0 ||
-                quarter.completedGoals > 0 ||
-                quarter.carriedForwardGoals > 0,
-            ) ? (
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-gray-100 text-xs text-gray-400">
-                    <tr>
-                      <th className="pb-2 pr-4 font-medium">Quarter</th>
-                      <th className="pb-2 px-3 font-medium">Allocated weightage</th>
-                      <th className="pb-2 px-3 font-medium">Achieved weightage</th>
-                      <th className="pb-2 px-3 font-medium">Completion (%)</th>
-                      <th className="pb-2 px-3 font-medium">Completed</th>
-                      <th className="pb-2 pl-3 font-medium">Carried forward</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {dashboardSummary.quarterHistory.map((quarter) => (
-                      <tr key={quarter.quarter}>
-                        <th className="py-3 pr-4 font-medium text-gray-700">
-                          {quarter.quarter}
-                        </th>
-                        <td className="px-3 py-3 text-gray-600">
-                          {Number(quarter.allocatedPercentage).toFixed(2)}%
-                        </td>
-                        <td className="px-3 py-3 text-gray-600">
-                          {Number(quarter.achievedPercentage).toFixed(2)}%
-                        </td>
-                        <td className="px-3 py-3 font-medium text-indigo-700">
-                          {quarter.performancePercentage == null
-                            ? "—"
-                            : `${Number(quarter.performancePercentage).toFixed(2)}%`}
-                        </td>
-                        <td className="px-3 py-3 text-gray-600">{quarter.completedGoals}</td>
-                        <td className="py-3 pl-3 text-gray-600">
-                          {quarter.carriedForwardGoals}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
-                Quarter history will appear when you have goals.
               </p>
             )}
           </section>

@@ -12,6 +12,7 @@ const {
   getFiscalQuarter,
   getFiscalQuarterBounds,
   getFiscalQuarterBoundsFromLabel,
+  getFiscalYearQuarters,
   toDateKey,
   getQuarterStartDate,
   getGoalCreationWindow,
@@ -704,6 +705,108 @@ const getGoals = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error while fetching goals.",
+      errors: error.message,
+    });
+  }
+};
+
+// Per-quarter summary of the employee's goals for the current fiscal year.
+// A goal belongs to its start quarter (Goals.Quarter), so achievement from
+// a goal carried forward and completed later still counts there. "Earlier"
+// is decided by QuarterEndDate, never by comparing quarter labels.
+const getMyQuarterSummary = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+
+  try {
+    const pool = await poolPromise;
+    const currentQuarter = getFiscalQuarterBounds();
+    const fiscalYearQuarters = getFiscalYearQuarters();
+
+    const request = pool.request().input("UserID", sql.Int, userId);
+    fiscalYearQuarters.forEach((quarter, index) => {
+      request
+        .input(`Q${index}Label`, sql.VarChar, quarter.label)
+        .input(`Q${index}Start`, sql.Date, quarter.startKey)
+        .input(`Q${index}End`, sql.Date, quarter.endKey);
+    });
+    const quarterRows = fiscalYearQuarters
+      .map((_, index) => `(@Q${index}Label, @Q${index}Start, @Q${index}End)`)
+      .join(",\n                ");
+
+    const result = await request.query(`
+      WITH FiscalQuarters AS (
+        SELECT Label, StartDate, EndDate
+        FROM (VALUES
+                ${quarterRows}
+        ) quarters(Label, StartDate, EndDate)
+      )
+      SELECT q.Label, q.EndDate,
+             ISNULL(own.Allocated, 0) AS Allocated,
+             ISNULL(own.Achieved, 0) AS Achieved,
+             ISNULL(own.CompletedCount, 0) AS CompletedCount,
+             ISNULL(own.CountedGoalCount, 0) AS CountedGoalCount,
+             ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
+             ISNULL(carried.CarriedForwardCount, 0) AS CarriedForwardCount
+      FROM FiscalQuarters q
+      OUTER APPLY (
+        SELECT SUM(g.Weightage) AS Allocated,
+               SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved,
+               SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS CompletedCount,
+               COUNT(*) AS CountedGoalCount
+        FROM dbo.Goals g
+        WHERE g.UserID = @UserID
+          AND g.Quarter = q.Label
+          AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+      ) own
+      OUTER APPLY (
+        SELECT SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved
+        FROM dbo.Goals g
+        WHERE g.UserID = @UserID
+          AND g.QuarterEndDate < q.StartDate
+          AND g.CompletedDate >= q.StartDate
+          AND g.CompletedDate < DATEADD(DAY, 1, q.EndDate)
+      ) broughtForward
+      OUTER APPLY (
+        SELECT COUNT(DISTINCT g.GoalID) AS CarriedForwardCount
+        FROM dbo.Goals g
+        INNER JOIN dbo.GoalCarryForwardHistory history
+          ON history.GoalID = g.GoalID
+        WHERE g.UserID = @UserID
+          AND g.Quarter = q.Label
+          AND history.FromQuarter = q.Label
+      ) carried
+      ORDER BY q.EndDate
+    `);
+
+    const roundPercent = (value) => Math.round(Number(value || 0) * 100) / 100;
+
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({
+      success: true,
+      data: {
+        fiscalYear: currentQuarter.label.slice(-4),
+        currentQuarter: currentQuarter.label,
+        quarters: result.recordset.map((row) => {
+          const quarterEndDate = toDateKey(row.EndDate);
+          return {
+            quarter: row.Label,
+            quarterEndDate,
+            isFuture: quarterEndDate > currentQuarter.endKey,
+            allocated: roundPercent(row.Allocated),
+            achieved: roundPercent(row.Achieved),
+            broughtForwardAchieved: roundPercent(row.BroughtForwardAchieved),
+            completedCount: row.CompletedCount,
+            countedGoalCount: row.CountedGoalCount,
+            carriedForwardCount: row.CarriedForwardCount,
+          };
+        }),
+      },
+    });
+  } catch (error) {
+    console.error("Get Quarter Summary Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching your quarterly goals.",
       errors: error.message,
     });
   }
@@ -3203,6 +3306,7 @@ const getPendingCompletionRequests = async (req, res) => {
 
 module.exports = {
   getGoals,
+  getMyQuarterSummary,
   getJointAccountabilityUsers,
   getGoalById,
   createGoal,
