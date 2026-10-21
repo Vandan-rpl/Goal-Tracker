@@ -1,10 +1,9 @@
 export const isGoalReviewWindowOpen = (goal, currentDate = new Date()) => {
   if (!goal) return false;
 
-  const completion = Number(
-    goal.CompletionPercentage ?? goal.CompletionPct ?? 0,
-  );
-  if (Number.isFinite(completion) && completion >= 100) {
+  // Review opens early once the goal's completion has been approved.
+  // Sub-goals do not drive this.
+  if (goal.GoalStatus === "Completed") {
     return true;
   }
 

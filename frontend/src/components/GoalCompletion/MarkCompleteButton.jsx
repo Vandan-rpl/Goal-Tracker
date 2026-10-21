@@ -2,14 +2,24 @@ import { useState } from "react";
 import api from "../../services/api";
 
 // Owner-only action on an Approved goal: submits it for completion approval.
-// The caller decides visibility; the backend re-checks owner and status.
-export default function MarkCompleteButton({ goalId, goalTitle, onCompleted, compact = false }) {
+// Used as "Mark Complete" for goals without sub-goals, and as "Resubmit for
+// completion" for goals whose sub-goals are all still ticked after a
+// rejected completion. The caller decides visibility; the backend re-checks
+// owner, status and sub-goals.
+export default function MarkCompleteButton({
+  goalId,
+  goalTitle,
+  onCompleted,
+  compact = false,
+  label = "Mark Complete",
+  confirmPrompt = `Mark "${goalTitle}" as complete?`,
+}) {
   const [submitting, setSubmitting] = useState(false);
 
   const handleClick = async (event) => {
     event.stopPropagation();
     const confirmed = window.confirm(
-      `Mark "${goalTitle}" as complete?\n\nIt will be sent to your manager for completion approval and can no longer be edited.`,
+      `${confirmPrompt}\n\nIt will be sent to your manager for completion approval and can no longer be edited.`,
     );
     if (!confirmed) return;
 
@@ -41,7 +51,7 @@ export default function MarkCompleteButton({ goalId, goalTitle, onCompleted, com
         compact ? "px-3.5 py-1.5 rounded-lg" : "px-4 py-2 rounded-xl"
       }`}
     >
-      {submitting ? "Submitting..." : "Mark Complete"}
+      {submitting ? "Submitting..." : label}
     </button>
   );
 }

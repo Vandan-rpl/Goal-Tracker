@@ -10,6 +10,7 @@ import {
   XCircle,
   Filter,
   Loader2,
+  Plus,
   RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -25,6 +26,7 @@ import {
 } from "../../utils/goalStatus";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 
+const MAX_GOALS_PER_QUARTER = 8;
 const STATUS_GROUPS = {
   Draft: ["draft"],
   "Pending approval": [
@@ -216,7 +218,12 @@ function GoalCard({ goal, onGoalChanged }) {
   const completedSubGoals = Number(goal.CompletedSubGoalCount || 0);
   const completionRejectionRemark = getCompletionRejectionRemark(goal);
   // My Goals lists only the user's own goals, so the owner check is implicit.
-  const canMarkComplete = goal.IsGoalOwner !== false && isGoalActiveForOwner(goal);
+  const canWorkOnGoal = goal.IsGoalOwner !== false && isGoalActiveForOwner(goal);
+  // Goals with sub-goals are submitted by ticking the last sub-goal on the
+  // goal page; Mark Complete is only for goals without sub-goals.
+  const canMarkComplete = canWorkOnGoal && totalSubGoals === 0;
+  const canResubmitCompletion =
+    canWorkOnGoal && totalSubGoals > 0 && completedSubGoals === totalSubGoals;
   const displayedTimeline = goal.DashboardTimeline || goal.Timeline;
   const days = daysUntil(displayedTimeline);
   const normalizedStatus = normalizeGoalStatus(goal.GoalStatus);
@@ -327,13 +334,22 @@ function GoalCard({ goal, onGoalChanged }) {
               to={`/goals/view/${goal.GoalID}`}
               className="inline-flex items-center justify-center px-4 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold transition"
             >
-              {canMarkComplete && totalSubGoals > 0 ? "Update sub-goals" : "View goal"}
+              {canWorkOnGoal && totalSubGoals > 0 ? "Update sub-goals" : "View goal"}
             </Link>
             {canMarkComplete && (
               <MarkCompleteButton
                 goalId={goal.GoalID}
                 goalTitle={goal.GoalTitle}
                 onCompleted={onGoalChanged}
+              />
+            )}
+            {canResubmitCompletion && (
+              <MarkCompleteButton
+                goalId={goal.GoalID}
+                goalTitle={goal.GoalTitle}
+                onCompleted={onGoalChanged}
+                label="Resubmit for completion"
+                confirmPrompt={`Resubmit "${goal.GoalTitle}" for completion?`}
               />
             )}
           </div>
@@ -411,6 +427,32 @@ export default function GoalDashboard() {
   const currentQuarterGoalCount =
     dashboardSummary?.currentQuarterWeightage?.goalCount ?? 0;
 
+  // Current-quarter progress bar. Achieved counts a goal's full weightage
+  // once its completion is approved (status Completed).
+  const currentQuarterAllocation = useMemo(() => {
+    if (dashboardSummary?.currentQuarterWeightage) {
+      return dashboardSummary.currentQuarterWeightage;
+    }
+    return {
+      quarter: getCurrentFiscalQuarterValue(),
+      goalCount: 0,
+      allocated: 0,
+      achieved: 0,
+      performancePercentage: null,
+      unallocated: 100,
+    };
+  }, [dashboardSummary]);
+
+  const currentQuarterAllocated = Math.round(
+    Number(currentQuarterAllocation.allocated || 0),
+  );
+  const currentQuarterAchieved = Math.round(
+    Number(currentQuarterAllocation.achieved || 0),
+  );
+  const currentQuarterUnallocated = Math.round(
+    Number(currentQuarterAllocation.unallocated || 0),
+  );
+
   const goalStatusCounts =
     dashboardSummary?.goalStatusCounts ||
     Object.fromEntries(
@@ -423,7 +465,6 @@ export default function GoalDashboard() {
     );
   const subGoalStatusCounts = dashboardSummary?.subGoalStatusCounts || {
     completed: 0,
-    inProgress: 0,
     pending: 0,
   };
   const filtered =
@@ -473,6 +514,94 @@ export default function GoalDashboard() {
           <p className="text-xs font-medium text-gray-400 mb-1">Your goals</p>
           <h1 className="text-2xl font-bold text-gray-900">My Goals</h1>
         </div>
+
+        <section
+          className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
+          aria-label={`${currentQuarterAllocation.quarter} progress`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-semibold text-gray-800">
+              {currentQuarterAllocation.quarter} progress
+            </p>
+            <p className="shrink-0 text-xs font-medium text-gray-500">
+              {currentQuarterAllocation.goalCount} of {MAX_GOALS_PER_QUARTER} goals
+            </p>
+          </div>
+
+          {currentQuarterAllocation.goalCount === 0 ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-gray-400">
+                No goals added for this quarter yet
+              </p>
+              <Link
+                to="/goals/add"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+              >
+                <Plus size={15} />
+                Create Goal
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div
+                className="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-100"
+                role="progressbar"
+                aria-label="Quarterly goal weightage allocated"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.min(100, currentQuarterAllocation.allocated)}
+                aria-valuetext={`Allocated ${currentQuarterAllocated}%, achieved ${currentQuarterAchieved}%`}
+              >
+                <div
+                  className="relative h-full rounded-full bg-indigo-200 transition-all"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, currentQuarterAllocation.allocated))}%`,
+                  }}
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-indigo-600 transition-all"
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          currentQuarterAllocation.allocated,
+                          currentQuarterAllocation.achieved,
+                        ),
+                      ) / Math.max(0.01, currentQuarterAllocation.allocated) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-indigo-200" />
+                  Allocated {currentQuarterAllocated}%
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-indigo-600" />
+                  Achieved {currentQuarterAchieved}%
+                </span>
+                {currentQuarterAllocation.performancePercentage != null && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      Completion{" "}
+                      {Number(
+                        currentQuarterAllocation.performancePercentage,
+                      ).toFixed(2)}%
+                    </span>
+                  </>
+                )}
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-gray-100 ring-1 ring-gray-200" />
+                  {currentQuarterUnallocated}% unallocated
+                </span>
+              </div>
+            </>
+          )}
+        </section>
 
         {dashboardSummary?.carryForward?.windowOpen && (
           <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
@@ -527,10 +656,9 @@ export default function GoalDashboard() {
                 No goals in this quarter yet.
               </p>
             ) : (
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-2 gap-3">
                 {[
                   ["Completed", subGoalStatusCounts.completed, "text-emerald-700"],
-                  ["In Progress", subGoalStatusCounts.inProgress, "text-indigo-700"],
                   ["Pending", subGoalStatusCounts.pending, "text-gray-600"],
                 ].map(([label, count, color]) => (
                   <div key={label} className="rounded-xl bg-gray-50 p-3">

@@ -1,10 +1,8 @@
 const { poolPromise, sql } = require("../config/db");
 const crypto = require("crypto");
-const goalModel = require("../models/goalModel");
 const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
-const { calculateGoalProgress } = require("../utils/goalProgress");
 const {
   calculateQuarterAllocationAndAchievement,
 } = require("../utils/quarterPerformance");
@@ -584,10 +582,6 @@ const getEmployeeDashboardSummary = (
         (total, goal) => total + Number(goal.CompletedSubGoalCount || 0),
         0,
       ),
-      inProgress: currentQuarterGoals.reduce(
-        (total, goal) => total + Number(goal.InProgressSubGoalCount || 0),
-        0,
-      ),
       pending: currentQuarterGoals.reduce(
         (total, goal) => total + Number(goal.PendingSubGoalCount || 0),
         0,
@@ -612,9 +606,12 @@ const getGoals = async (req, res) => {
     let query = `
               SELECT g.*, u.Username, u.FirstName, u.LastName,
                 CAST(CASE WHEN g.UserID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsGoalOwner,
-                progress.SubGoalCompletionPercentage,
+                -- Feeds the achieved % in calculateQuarterAllocationAndAchievement.
+                -- A goal earns its full weightage only once completion is approved;
+                -- sub-goal weightage is not used for scoring.
+                CAST(CASE WHEN g.GoalStatus = 'Completed' THEN 100 ELSE 0 END AS DECIMAL(5,2))
+                  AS SubGoalCompletionPercentage,
                 progress.CompletedSubGoalCount,
-                progress.InProgressSubGoalCount,
                 progress.PendingSubGoalCount,
                 progress.TotalSubGoalCount,
                 timelineForDashboard.DashboardTimeline
@@ -640,14 +637,12 @@ const getGoals = async (req, res) => {
               ORDER BY h.PerformedDate DESC, h.GoalHistoryID DESC
             ) pendingTimeline
             OUTER APPLY (
-              SELECT ISNULL(
-                SUM(CASE WHEN sg.Status = 'Completed' THEN sg.Weightage ELSE 0 END),
-                0
-              ) AS SubGoalCompletionPercentage,
-                SUM(CASE WHEN sg.Status = 'Completed' THEN 1 ELSE 0 END) AS CompletedSubGoalCount,
+              -- Sub-goals are Pending or Completed; legacy 'In Progress' /
+              -- 'Cancelled' rows count as Pending.
+              SELECT
+                ISNULL(SUM(CASE WHEN sg.Status = 'Completed' THEN 1 ELSE 0 END), 0) AS CompletedSubGoalCount,
                 COUNT(sg.SubGoalID) AS TotalSubGoalCount,
-                SUM(CASE WHEN sg.Status = 'In Progress' THEN 1 ELSE 0 END) AS InProgressSubGoalCount,
-                SUM(CASE WHEN sg.Status = 'Pending' THEN 1 ELSE 0 END) AS PendingSubGoalCount
+                ISNULL(SUM(CASE WHEN sg.Status <> 'Completed' THEN 1 ELSE 0 END), 0) AS PendingSubGoalCount
               FROM dbo.GoalSubGoals sg
               WHERE sg.GoalID = g.GoalID
             ) progress
@@ -1086,7 +1081,7 @@ const getGoalById = async (req, res) => {
         ...goal,
         IsGoalOwner: Number(requesterUserId) === Number(goal.UserID),
         SubGoals: subGoalsResult.recordset,
-        CompletionPercentage: calculateGoalProgress(subGoalsResult.recordset),
+        CompletionPercentage: getGoalCompletionPercentage(goal),
         History: historyResult.recordset,
         JointAccountabilities: canManageJointAccountabilities
           ? await jointAccountabilityModel.getJointAccountabilitiesByGoalId(id)
@@ -1124,6 +1119,39 @@ const getSubGoalCountError = (titledSubGoals) =>
 
 const getSubGoalStatus = (status, fallback = "Pending") =>
   SUB_GOAL_STATUSES.includes(status) ? status : fallback;
+
+// Sub-goal weightage is a % of its own goal: when a goal has sub-goals their
+// weightages must total exactly 100, whatever the goal's own weightage is.
+// Stored only; it does not feed goal scoring.
+const getSubGoalWeightageError = (titledSubGoals) => {
+  if (titledSubGoals.length === 0) return null;
+
+  let totalHundredths = 0;
+  for (const subGoal of titledSubGoals) {
+    const weightage = Number(subGoal?.Weightage);
+    if (!Number.isFinite(weightage) || weightage <= 0 || weightage > 100) {
+      return "Each sub-goal needs a weightage greater than 0% and up to 100%.";
+    }
+    const hundredths = weightage * 100;
+    if (Math.abs(hundredths - Math.round(hundredths)) > 1e-6) {
+      return "Sub-goal weightage can have at most 2 decimal places.";
+    }
+    totalHundredths += Math.round(hundredths);
+  }
+
+  return totalHundredths === 10000
+    ? null
+    : `Sub-goal weightages must add up to exactly 100% (currently ${(totalHundredths / 100).toFixed(2)}%).`;
+};
+
+const getSubGoalValidationError = (titledSubGoals) =>
+  getSubGoalCountError(titledSubGoals) ||
+  getSubGoalWeightageError(titledSubGoals);
+
+// Goal-level completion used by the review window. Sub-goals do not drive
+// it; a goal counts as 100% only once its completion has been approved.
+const getGoalCompletionPercentage = (goal) =>
+  goal?.GoalStatus === "Completed" ? 100 : 0;
 
 // startKey/timelineKey are 'YYYY-MM-DD' strings (or null when invalid);
 // bounds are the inclusive quarter bounds from getFiscalQuarterBounds.
@@ -1252,12 +1280,12 @@ const createGoal = async (req, res) => {
   }
 
   const validSubGoals = getTitledSubGoals(SubGoals);
-  const subGoalCountError = getSubGoalCountError(validSubGoals);
-  if (subGoalCountError) {
+  const subGoalError = getSubGoalValidationError(validSubGoals);
+  if (subGoalError) {
     return res.status(400).json({
       success: false,
-      message: subGoalCountError,
-      errors: { SubGoals: subGoalCountError },
+      message: subGoalError,
+      errors: { SubGoals: subGoalError },
     });
   }
 
@@ -1395,9 +1423,10 @@ const createGoal = async (req, res) => {
         sql.NVarChar,
         sub.SubGoalDescription || null,
       );
-      subRequest.input("Weightage", sql.Decimal(5, 2), 0);
+      subRequest.input("Weightage", sql.Decimal(5, 2), Number(sub.Weightage));
       subRequest.input("Target", sql.NVarChar, null);
-      subRequest.input("Status", sql.VarChar, getSubGoalStatus(sub.Status));
+      // New sub-goals always start Pending; status is ticked after approval.
+      subRequest.input("Status", sql.VarChar, "Pending");
 
       await subRequest.query(`
           INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
@@ -1594,15 +1623,22 @@ const updateGoal = async (req, res) => {
       });
     }
 
+    // Sub-goal titles/weightages are editable only while the goal is Draft or
+    // Rejected, including for approvers. In other statuses any SubGoals sent
+    // by the client are ignored.
+    const canEditSubGoals =
+      canEditAllFields &&
+      ["Draft", "Rejected"].includes(currentStatus) &&
+      Array.isArray(SubGoals);
     const validSubGoals = getTitledSubGoals(SubGoals);
-    if (canEditAllFields) {
-      const subGoalCountError = getSubGoalCountError(validSubGoals);
-      if (subGoalCountError) {
+    if (canEditSubGoals) {
+      const subGoalError = getSubGoalValidationError(validSubGoals);
+      if (subGoalError) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: subGoalCountError,
-          errors: { SubGoals: subGoalCountError },
+          message: subGoalError,
+          errors: { SubGoals: subGoalError },
         });
       }
     }
@@ -1894,7 +1930,7 @@ const updateGoal = async (req, res) => {
 
     // Sub-goals are optional, so an empty list clears existing ones. Only
     // skip the sync when the client did not send SubGoals at all.
-    if (canEditAllFields && Array.isArray(SubGoals)) {
+    if (canEditSubGoals) {
       const existingSubGoalsResult = await new sql.Request(transaction)
         .input("GoalID", sql.BigInt, id)
         .query(
@@ -1922,14 +1958,15 @@ const updateGoal = async (req, res) => {
           sql.NVarChar,
           sub.SubGoalDescription || null,
         );
-        subRequest.input("Weightage", sql.Decimal(5, 2), 0);
+        subRequest.input("Weightage", sql.Decimal(5, 2), Number(sub.Weightage));
         subRequest.input("Target", sql.NVarChar, null);
+        // Status is never taken from the edit form; it is toggled only on
+        // Approved goals through the sub-goal status endpoints.
         subRequest.input(
           "Status",
           sql.VarChar,
           getSubGoalStatus(
-            sub.Status,
-            existingSubGoalStatuses.get(String(sub.SubGoalID)) || "Pending",
+            existingSubGoalStatuses.get(String(sub.SubGoalID)),
           ),
         );
 
@@ -1939,7 +1976,7 @@ const updateGoal = async (req, res) => {
                 `);
       }
     }
-    // Note: when isCarryForward is true, canEditAllFields is false, so this
+    // Note: when isCarryForward is true, canEditSubGoals is false, so this
     // block is skipped entirely — sub-goals are left exactly as they are,
     // which is the intended behavior (they carry over as-is, completed ones
     // stay Completed).
@@ -2551,15 +2588,7 @@ const submitGoalReview = async (req, res) => {
       });
     }
 
-    const subGoalsResult = await new sql.Request(transaction)
-      .input("GoalID", sql.BigInt, goalId)
-      .query("SELECT * FROM dbo.GoalSubGoals WHERE GoalID = @GoalID");
-
-    const completionPercentage = Number(
-      existingGoal.CompletionPercentage ??
-        existingGoal.CompletionPct ??
-        calculateGoalProgress(subGoalsResult.recordset ?? []),
-    );
+    const completionPercentage = getGoalCompletionPercentage(existingGoal);
     const reviewWindowOpen = isGoalReviewWindowOpen({
       ...existingGoal,
       CompletionPercentage: completionPercentage,
@@ -2785,14 +2814,85 @@ const updateJointAccountabilityStatus = async (req, res) => {
   }
 };
 
+const isSubGoalCompleted = (subGoal) => subGoal?.Status === "Completed";
+
+const getSubGoalProgress = (subGoals) => ({
+  completedCount: subGoals.filter(isSubGoalCompleted).length,
+  totalCount: subGoals.length,
+});
+
+// Shared guard for sub-goal status changes. Locks the goal and its
+// sub-goals so the "last pending sub-goal" check cannot race. Only the goal
+// owner may tick sub-goals, and only while the goal is Approved; they are
+// read-only while completion is submitted or approved.
+const loadSubGoalForStatusChange = async (
+  transaction,
+  goalId,
+  subGoalId,
+  userId,
+) => {
+  const goal = await getGoalForCompletion(transaction, goalId);
+  if (!goal) {
+    return { status: 404, message: "Goal not found." };
+  }
+
+  if (Number(goal.UserID) !== Number(userId)) {
+    return {
+      status: 403,
+      message: "Only the goal owner can update sub-goal status.",
+    };
+  }
+
+  if (COMPLETION_STATUSES.includes(goal.GoalStatus)) {
+    return {
+      status: 400,
+      message: `Sub-goals are read-only while the goal is '${goal.GoalStatus}'.`,
+    };
+  }
+
+  if (goal.GoalStatus !== "Approved") {
+    return {
+      status: 400,
+      message: "Sub-goal status can be updated only after the goal is approved.",
+    };
+  }
+
+  const subGoalsResult = await new sql.Request(transaction)
+    .input("GoalID", sql.BigInt, goalId)
+    .query(`
+      SELECT SubGoalID, SubGoalTitle, Status
+      FROM dbo.GoalSubGoals WITH (UPDLOCK, HOLDLOCK)
+      WHERE GoalID = @GoalID
+    `);
+  const subGoals = subGoalsResult.recordset;
+  const subGoal = subGoals.find(
+    (item) => String(item.SubGoalID) === String(subGoalId),
+  );
+  if (!subGoal) {
+    return { status: 404, message: "Sub-goal not found." };
+  }
+
+  return { goal, subGoals, subGoal };
+};
+
+// The target is the last pending sub-goal when every other one is Completed.
+const isLastPendingSubGoal = (subGoals, subGoal) =>
+  !isSubGoalCompleted(subGoal) &&
+  subGoals.every(
+    (item) =>
+      String(item.SubGoalID) === String(subGoal.SubGoalID) ||
+      isSubGoalCompleted(item),
+  );
+
+// PUT /goals/:goalId/subgoals/:subGoalId/status  body: { Status }
+// Ticks or unticks one sub-goal. Ticking the last pending one must go
+// through completeLastSubGoalAndSubmit so the goal is submitted with it.
 const updateSubGoalStatus = async (req, res) => {
   const { goalId, subGoalId } = req.params;
   const { Status } = req.body;
   const userId = req.user?.UserID || req.user?.userId;
-  const role = (req.user?.Role || req.user?.role || "").toUpperCase();
 
-  const validStatuses = ["Pending", "In Progress", "Completed", "Cancelled"];
-  if (!validStatuses.includes(Status)) {
+  if (!SUB_GOAL_STATUSES.includes(Status)) {
     return res
       .status(400)
       .json({ success: false, message: "Invalid status value." });
@@ -2803,69 +2903,34 @@ const updateSubGoalStatus = async (req, res) => {
   try {
     await transaction.begin();
 
-    const goalReq = new sql.Request(transaction);
-    const goalRes = await goalReq
-      .input("GoalID", sql.BigInt, goalId)
-      .query(
-        "SELECT UserID, GoalTitle, Weightage, GoalStatus FROM dbo.Goals WHERE GoalID = @GoalID",
-      );
-
-    if (goalRes.recordset.length === 0) {
+    const { subGoals, subGoal, status, message } =
+      await loadSubGoalForStatusChange(transaction, goalId, subGoalId, userId);
+    if (status) {
       await transaction.rollback();
-      return res
-        .status(404)
-        .json({ success: false, message: "Goal not found." });
+      return res.status(status).json({ success: false, message });
     }
-    const goal = goalRes.recordset[0];
 
-    const isJointParticipant =
-      Number(goal.UserID) !== Number(userId) &&
-      (await hasJointAssignment(goalId, userId, transaction));
-    // Only the goal's own owner logs sub-goal progress; Admin can too for corrections.
-    const isAuthorized =
-      !isJointParticipant &&
-      (role === "ADMIN" || Number(goal.UserID) === Number(userId));
-    if (!isAuthorized) {
+    const oldStatus = getSubGoalStatus(subGoal.Status);
+    if (oldStatus === Status) {
       await transaction.rollback();
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to update this sub-goal.",
+      return res.status(200).json({
+        success: true,
+        message: "Sub-goal status is unchanged.",
+        data: getSubGoalProgress(subGoals),
       });
     }
 
-    const approvedGoalStatuses = [
-      "Approved",
-      "HOD Approved",
-      "Manager Approved",
-      "Business Head Approved",
-    ];
-    if (!approvedGoalStatuses.includes(goal.GoalStatus)) {
+    if (Status === "Completed" && isLastPendingSubGoal(subGoals, subGoal)) {
       await transaction.rollback();
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: "Sub-goal progress can be updated after the goal is approved.",
+        requiresCompletionSubmit: true,
+        message:
+          "This is the last pending sub-goal. Completing it submits the goal for completion approval.",
       });
     }
 
-    const subGoalReq = new sql.Request(transaction);
-    const subGoalRes = await subGoalReq
-      .input("SubGoalID", sql.BigInt, subGoalId)
-      .input("GoalID", sql.BigInt, goalId)
-      .query(
-        "SELECT * FROM dbo.GoalSubGoals WHERE SubGoalID = @SubGoalID AND GoalID = @GoalID",
-      );
-
-    if (subGoalRes.recordset.length === 0) {
-      await transaction.rollback();
-      return res
-        .status(404)
-        .json({ success: false, message: "Sub-goal not found." });
-    }
-    const subGoal = subGoalRes.recordset[0];
-    const oldStatus = subGoal.Status;
-
-    const updateReq = new sql.Request(transaction);
-    await updateReq
+    await new sql.Request(transaction)
       .input("SubGoalID", sql.BigInt, subGoalId)
       .input("Status", sql.VarChar, Status).query(`
         UPDATE dbo.GoalSubGoals
@@ -2885,24 +2950,17 @@ const updateSubGoalStatus = async (req, res) => {
 
     await transaction.commit();
 
-    // Return updated progress so the frontend can refresh immediately without a second fetch
-    const allSubGoals = await goalModel.getSubGoalsByGoalId(goalId);
-    const completionPct = calculateGoalProgress(allSubGoals);
-    const earnedWeightage = Number(
-      (Number(goal.Weightage) * (completionPct / 100)).toFixed(2),
-    );
-
     return res.status(200).json({
       success: true,
       message: "Sub-goal status updated successfully.",
-      data: { progress: { completionPct, earnedWeightage } },
+      data: getSubGoalProgress(
+        subGoals.map((item) =>
+          item === subGoal ? { ...item, Status } : item,
+        ),
+      ),
     });
   } catch (error) {
-    if (transaction._aborted === false && transaction._acquiredConnection) {
-      try {
-        await transaction.rollback();
-      } catch (rbErr) {}
-    }
+    await rollbackQuietly(transaction);
     console.error("Update Sub-Goal Status Error:", error);
     return res.status(500).json({
       success: false,
@@ -3029,6 +3087,32 @@ const notifyCompletionEvent = async ({
   }
 };
 
+// Approved -> Completion Submitted. Returns false if the status changed
+// concurrently.
+const markGoalCompletionSubmitted = async (transaction, goalId) => {
+  const result = await new sql.Request(transaction)
+    .input("GoalID", sql.BigInt, goalId)
+    .query(`
+      UPDATE dbo.Goals
+      SET GoalStatus = 'Completion Submitted',
+          CompletionRequestedDate = GETDATE(),
+          CompletionRemark = NULL,
+          ModifiedDate = GETDATE()
+      WHERE GoalID = @GoalID AND GoalStatus = 'Approved'
+    `);
+  return result.rowsAffected[0] === 1;
+};
+
+const notifyCompletionRequested = ({ approverId, goal, userId }) =>
+  notifyCompletionEvent({
+    recipientId: approverId,
+    goalId: goal.GoalID,
+    title: "Goal Completion Requested",
+    message: `Completion has been requested for the goal "${goal.GoalTitle}" and is awaiting your approval.`,
+    type: "GOAL_COMPLETION_REQUESTED",
+    createdBy: userId,
+  });
+
 // POST /goals/:id/completion/request
 const requestGoalCompletion = async (req, res) => {
   const { id } = req.params;
@@ -3062,6 +3146,27 @@ const requestGoalCompletion = async (req, res) => {
       });
     }
 
+    // Goals with sub-goals are submitted by ticking the last sub-goal. This
+    // endpoint only serves them as "Resubmit for completion" after a
+    // rejection, when every sub-goal is still Completed.
+    const subGoalCountsResult = await new sql.Request(transaction)
+      .input("GoalID", sql.BigInt, id)
+      .query(`
+        SELECT COUNT(*) AS TotalCount,
+               ISNULL(SUM(CASE WHEN Status = 'Completed' THEN 1 ELSE 0 END), 0) AS CompletedCount
+        FROM dbo.GoalSubGoals WITH (UPDLOCK, HOLDLOCK)
+        WHERE GoalID = @GoalID
+      `);
+    const { TotalCount, CompletedCount } = subGoalCountsResult.recordset[0];
+    if (TotalCount > 0 && CompletedCount < TotalCount) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message:
+          "Complete all sub-goals first. Ticking the last sub-goal submits the goal for completion approval.",
+      });
+    }
+
     const approverId = await getCompletionApproverId(transaction, goal.UserID);
     if (approverId === null) {
       await transaction.rollback();
@@ -3072,17 +3177,7 @@ const requestGoalCompletion = async (req, res) => {
       });
     }
 
-    const updateResult = await new sql.Request(transaction)
-      .input("GoalID", sql.BigInt, id)
-      .query(`
-        UPDATE dbo.Goals
-        SET GoalStatus = 'Completion Submitted',
-            CompletionRequestedDate = GETDATE(),
-            CompletionRemark = NULL,
-            ModifiedDate = GETDATE()
-        WHERE GoalID = @GoalID AND GoalStatus = 'Approved'
-      `);
-    if (updateResult.rowsAffected[0] !== 1) {
+    if (!(await markGoalCompletionSubmitted(transaction, id))) {
       await transaction.rollback();
       return res.status(409).json({
         success: false,
@@ -3092,14 +3187,7 @@ const requestGoalCompletion = async (req, res) => {
 
     await transaction.commit();
 
-    await notifyCompletionEvent({
-      recipientId: approverId,
-      goalId: id,
-      title: "Goal Completion Requested",
-      message: `Completion has been requested for the goal "${goal.GoalTitle}" and is awaiting your approval.`,
-      type: "GOAL_COMPLETION_REQUESTED",
-      createdBy: userId,
-    });
+    await notifyCompletionRequested({ approverId, goal, userId });
 
     return res.status(200).json({
       success: true,
@@ -3111,6 +3199,91 @@ const requestGoalCompletion = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error while requesting goal completion.",
+      errors: error.message,
+    });
+  }
+};
+
+// POST /goals/:goalId/subgoals/:subGoalId/complete-and-submit
+// Ticks the goal's last pending sub-goal and submits the goal for completion
+// approval in one transaction. The backend verifies it really is the last
+// pending sub-goal.
+const completeLastSubGoalAndSubmit = async (req, res) => {
+  const { goalId, subGoalId } = req.params;
+  const userId = req.user?.UserID || req.user?.userId;
+  const transaction = new sql.Transaction(await poolPromise);
+
+  try {
+    await transaction.begin();
+
+    const { goal, subGoals, subGoal, status, message } =
+      await loadSubGoalForStatusChange(transaction, goalId, subGoalId, userId);
+    if (status) {
+      await transaction.rollback();
+      return res.status(status).json({ success: false, message });
+    }
+
+    if (!isLastPendingSubGoal(subGoals, subGoal)) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: isSubGoalCompleted(subGoal)
+          ? "This sub-goal is already completed."
+          : "This is not the last pending sub-goal. Complete the other sub-goals first.",
+      });
+    }
+
+    const approverId = await getCompletionApproverId(transaction, goal.UserID);
+    if (approverId === null) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message:
+          "You have no Reporting Manager or HOD assigned to approve goal completion.",
+      });
+    }
+
+    await new sql.Request(transaction)
+      .input("SubGoalID", sql.BigInt, subGoalId)
+      .query(`
+        UPDATE dbo.GoalSubGoals
+        SET Status = 'Completed'
+        WHERE SubGoalID = @SubGoalID
+      `);
+
+    if (!(await markGoalCompletionSubmitted(transaction, goalId))) {
+      await transaction.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This goal's status changed. Refresh and try again.",
+      });
+    }
+
+    await logGoalHistory(
+      transaction,
+      goalId,
+      "UPDATE",
+      getSubGoalStatus(subGoal.Status),
+      "Completed",
+      `Sub-goal "${subGoal.SubGoalTitle}" status updated to Completed; goal submitted for completion approval`,
+      userId,
+    );
+
+    await transaction.commit();
+
+    await notifyCompletionRequested({ approverId, goal, userId });
+
+    return res.status(200).json({
+      success: true,
+      message: "Last sub-goal completed. Goal submitted for completion approval.",
+    });
+  } catch (error) {
+    await rollbackQuietly(transaction);
+    console.error("Complete Last Sub-Goal Error:", error);
+    return res.status(500).json({
+      success: false,
+      message:
+        "Internal server error while completing the sub-goal and submitting the goal.",
       errors: error.message,
     });
   }
@@ -3319,6 +3492,7 @@ module.exports = {
   updateJointAccountabilityStatus,
   getGoalHistory,
   updateSubGoalStatus,
+  completeLastSubGoalAndSubmit,
   getTeamGoals,
   requestGoalCompletion,
   approveGoalCompletion,

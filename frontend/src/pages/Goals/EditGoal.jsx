@@ -9,8 +9,12 @@ import {
   isTimelineOverdue,
 } from "../../utils/goalEditability";
 import { getFiscalQuarterDateRange } from "../../utils/fiscalQuarter";
+import {
+  MAX_SUB_GOALS,
+  getSubGoalError,
+  getSubGoalWeightageSummary,
+} from "../../utils/subGoals";
 
-const MAX_SUB_GOALS = 5;
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 30;
 
@@ -119,7 +123,8 @@ const EditGoal = () => {
             SubGoalID: sub.SubGoalID,
             SubGoalNo: sub.SubGoalNo,
             SubGoalTitle: sub.SubGoalTitle || "",
-            Status: sub.Status === "Completed" ? "Completed" : "Pending",
+            Weightage:
+              sub.Weightage == null ? "" : String(Number(sub.Weightage)),
           })),
         );
       }
@@ -151,6 +156,11 @@ const EditGoal = () => {
     const updated = [...subGoals];
     updated[index][name] = value;
     setSubGoals(updated);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.SubGoals;
+      return next;
+    });
   };
 
   const handleJointAccountabilityChange = (index, e) => {
@@ -224,10 +234,10 @@ const EditGoal = () => {
     }
 
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
-    if (titledSubGoals.length > MAX_SUB_GOALS) {
-      const message = `A goal can have no more than ${MAX_SUB_GOALS} sub-goals.`;
-      setError(message);
-      setFieldErrors({ SubGoals: message });
+    const subGoalError = canEditSubGoals && getSubGoalError(titledSubGoals);
+    if (subGoalError) {
+      setError(subGoalError);
+      setFieldErrors({ SubGoals: subGoalError });
       return;
     }
 
@@ -261,7 +271,17 @@ const EditGoal = () => {
             : formData.JointAccountability || null),
         JointAccountabilities: selectedJointAccountabilities,
         GoalStatus: status,
-        SubGoals: titledSubGoals,
+        // Sub-goal definitions are only sent while they are editable; the
+        // backend ignores them in other statuses anyway. SubGoalID lets the
+        // backend keep each existing sub-goal's status.
+        ...(canEditSubGoals && {
+          SubGoals: titledSubGoals.map((sub) => ({
+            SubGoalID: sub.SubGoalID,
+            SubGoalNo: sub.SubGoalNo,
+            SubGoalTitle: sub.SubGoalTitle,
+            Weightage: Number(sub.Weightage),
+          })),
+        }),
       };
 
       const res = await api.put(`/goals/${id}`, payload);
@@ -325,6 +345,9 @@ const EditGoal = () => {
   const terminalStatus = ["Completed", "Cancelled"].includes(originalStatus);
   const timelineOverdue = isTimelineOverdue(originalGoal?.Timeline);
   const canEditAllFields = isDraft || isRejected || isApprover;
+  // Sub-goal titles/weightages are editable only in Draft or Rejected, for
+  // approvers too; their status is ticked from the goal page once Approved.
+  const canEditSubGoals = isDraft || isRejected;
   const canEditTimelineOnly =
     !canEditAllFields && canEditTimelineOnlyGoal(originalGoal);
   const canEdit = canEditGoal(originalGoal, isApprover);
@@ -372,7 +395,7 @@ const EditGoal = () => {
             {
               SubGoalNo: prev.length + 1,
               SubGoalTitle: "",
-              Status: "Pending",
+              Weightage: "",
             },
           ],
     );
@@ -381,6 +404,8 @@ const EditGoal = () => {
   const removeSubGoalRow = (index) => {
     setSubGoals((prev) => prev.filter((_, i) => i !== index));
   };
+
+  const subGoalWeightage = getSubGoalWeightageSummary(subGoals);
 
   return (
   <div className="flex-1 bg-white min-h-screen p-4 sm:p-6 md:p-8 text-slate-800">
@@ -875,7 +900,7 @@ const EditGoal = () => {
             <button
               type="button"
               onClick={addSubGoalRow}
-              disabled={isRestrictedEdit || subGoals.length >= MAX_SUB_GOALS}
+              disabled={!canEditSubGoals || subGoals.length >= MAX_SUB_GOALS}
               className="inline-flex items-center justify-center px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               + Add Sub-Goal ({subGoals.length}/{MAX_SUB_GOALS})
@@ -886,6 +911,19 @@ const EditGoal = () => {
             {subGoals.length === 0 && (
               <p className="text-xs text-slate-400">No sub-goals added.</p>
             )}
+            {!canEditSubGoals && (
+              <p className="text-xs text-slate-500">
+                Sub-goals can be added, edited or removed only while the goal is Draft or Rejected.
+              </p>
+            )}
+            {subGoals.length > 0 && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-950">
+                <p className="font-semibold">
+                  Allocated {subGoalWeightage.allocated.toFixed(2)}% · Remaining{" "}
+                  {subGoalWeightage.remaining.toFixed(2)}%
+                </p>
+              </div>
+            )}
             {subGoals.map((sub, index) => (
               <div
                 key={index}
@@ -895,7 +933,7 @@ const EditGoal = () => {
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                     Sub-Goal #{index + 1}
                   </span>
-                  {!isRestrictedEdit && (
+                  {canEditSubGoals && (
                     <button
                       type="button"
                       onClick={() => removeSubGoalRow(index)}
@@ -913,23 +951,27 @@ const EditGoal = () => {
                       name="SubGoalTitle"
                       placeholder="Sub-Goal Title *"
                       required
-                      disabled={isRestrictedEdit}
+                      disabled={!canEditSubGoals}
                       value={sub.SubGoalTitle}
                       onChange={(e) => handleSubGoalChange(index, e)}
                       className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs font-medium bg-white focus:border-slate-800 focus:outline-none disabled:bg-slate-100"
                     />
                   </div>
                   <div>
-                    <select
-                      name="Status"
-                      disabled={isRestrictedEdit}
-                      value={sub.Status}
+                    <input
+                      type="number"
+                      name="Weightage"
+                      placeholder="Weightage % *"
+                      aria-label={`Sub-Goal #${index + 1} weightage (% of this goal)`}
+                      required
+                      min="0.01"
+                      max="100"
+                      step="0.01"
+                      disabled={!canEditSubGoals}
+                      value={sub.Weightage}
                       onChange={(e) => handleSubGoalChange(index, e)}
                       className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white focus:border-slate-800 focus:outline-none disabled:bg-slate-100"
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Completed">Completed</option>
-                    </select>
+                    />
                   </div>
                 </div>
               </div>

@@ -80,11 +80,9 @@ const getUserGoals = async (req, res) => {
 
     const result = await request.query(`
             SELECT g.*,
-              COALESCE((
-                SELECT SUM(CASE WHEN sg.Status = 'Completed' THEN sg.Weightage ELSE 0 END)
-                FROM dbo.GoalSubGoals sg
-                WHERE sg.GoalID = g.GoalID
-              ), 0) AS CompletionPercentage
+              -- Sub-goal weightage is not used for progress; a goal is 100%
+              -- only once its completion has been approved.
+              CASE WHEN g.GoalStatus = 'Completed' THEN 100 ELSE 0 END AS CompletionPercentage
             FROM dbo.Goals g
             WHERE g.UserID = @UserID AND g.GoalStatus <> 'Draft'
             ORDER BY g.CreatedDate DESC

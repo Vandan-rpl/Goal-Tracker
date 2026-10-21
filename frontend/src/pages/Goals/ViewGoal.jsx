@@ -5,6 +5,7 @@ import api from "../../services/api";
 import GoalStatusStepper from "../../components/GoalStatusStepper/GoalStatusStepper";
 import GoalHistory from "./Goalhistory";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
+import LastSubGoalDialog from "../../components/GoalCompletion/LastSubGoalDialog";
 import { canEditGoal as isGoalEditable } from "../../utils/goalEditability";
 import {
   getCompletionRejectionRemark,
@@ -29,6 +30,9 @@ const ViewGoal = () => {
 
   // Sub-goal currently being saved from the checklist
   const [updatingSubGoalId, setUpdatingSubGoalId] = useState(null);
+  // Last pending sub-goal awaiting the "submit for completion" confirmation
+  const [lastSubGoalToConfirm, setLastSubGoalToConfirm] = useState(null);
+  const [submittingLastSubGoal, setSubmittingLastSubGoal] = useState(false);
 
   // Review form state
   const [reviewRating, setReviewRating] = useState(5);
@@ -172,6 +176,19 @@ const ViewGoal = () => {
 
   const handleSubGoalToggle = async (subGoal) => {
     const nextStatus = subGoal.Status === "Completed" ? "Pending" : "Completed";
+    const isLastPending =
+      nextStatus === "Completed" &&
+      (goal.SubGoals || []).every(
+        (item) =>
+          item.SubGoalID === subGoal.SubGoalID || item.Status === "Completed",
+      );
+    // Ticking the last step submits the goal, so confirm first. Nothing is
+    // saved until the user chooses Submit.
+    if (isLastPending) {
+      setLastSubGoalToConfirm(subGoal);
+      return;
+    }
+
     try {
       setUpdatingSubGoalId(subGoal.SubGoalID);
       const response = await api.put(
@@ -191,11 +208,42 @@ const ViewGoal = () => {
         alert(response.data.message || "Failed to update sub-goal.");
       }
     } catch (err) {
+      // The backend decides what is "last"; if it disagrees with our view
+      // (stale data), fall back to the confirmation flow.
+      if (err.response?.data?.requiresCompletionSubmit) {
+        setLastSubGoalToConfirm(subGoal);
+        return;
+      }
       alert(
         err.response?.data?.message || "Server error while updating sub-goal.",
       );
     } finally {
       setUpdatingSubGoalId(null);
+    }
+  };
+
+  const handleSubmitLastSubGoal = async () => {
+    if (!lastSubGoalToConfirm) return;
+    try {
+      setSubmittingLastSubGoal(true);
+      const response = await api.post(
+        `/goals/${goal.GoalID}/subgoals/${lastSubGoalToConfirm.SubGoalID}/complete-and-submit`,
+      );
+      if (response.data.success) {
+        setLastSubGoalToConfirm(null);
+        await fetchGoalDetails();
+      } else {
+        alert(response.data.message || "Failed to submit the goal for completion.");
+      }
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+          "Server error while submitting the goal for completion.",
+      );
+      setLastSubGoalToConfirm(null);
+      await fetchGoalDetails();
+    } finally {
+      setSubmittingLastSubGoal(false);
     }
   };
 
@@ -326,6 +374,14 @@ const ViewGoal = () => {
   const completedSubGoalCount = subGoals.filter(
     (subGoal) => subGoal.Status === "Completed",
   ).length;
+  // Goals with sub-goals are submitted by ticking the last sub-goal, so Mark
+  // Complete is only for goals without them. After a rejected completion with
+  // every sub-goal still ticked, the owner resubmits instead.
+  const canMarkComplete = canWorkOnGoal && subGoals.length === 0;
+  const canResubmitCompletion =
+    canWorkOnGoal &&
+    subGoals.length > 0 &&
+    completedSubGoalCount === subGoals.length;
   const completionRejectionRemark = getCompletionRejectionRemark(goal);
 
   const getStatusBadgeStyle = (status) => {
@@ -366,12 +422,22 @@ const ViewGoal = () => {
             >
               {showHistory ? "Hide History" : "View History"}
             </button>
-            {canWorkOnGoal && (
+            {canMarkComplete && (
               <MarkCompleteButton
                 goalId={goal.GoalID}
                 goalTitle={goal.GoalTitle}
                 onCompleted={fetchGoalDetails}
                 compact
+              />
+            )}
+            {canResubmitCompletion && (
+              <MarkCompleteButton
+                goalId={goal.GoalID}
+                goalTitle={goal.GoalTitle}
+                onCompleted={fetchGoalDetails}
+                compact
+                label="Resubmit for completion"
+                confirmPrompt={`Resubmit "${goal.GoalTitle}" for completion?`}
               />
             )}
             <span
@@ -646,7 +712,8 @@ const ViewGoal = () => {
                           checked={isDone}
                           disabled={
                             !canWorkOnGoal ||
-                            updatingSubGoalId === subGoal.SubGoalID
+                            updatingSubGoalId === subGoal.SubGoalID ||
+                            submittingLastSubGoal
                           }
                           onChange={() => handleSubGoalToggle(subGoal)}
                           className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-60"
@@ -867,6 +934,14 @@ const ViewGoal = () => {
           </div>
         </div>
       </div>
+      {lastSubGoalToConfirm && (
+        <LastSubGoalDialog
+          goalTitle={goal.GoalTitle}
+          submitting={submittingLastSubGoal}
+          onSubmit={handleSubmitLastSubGoal}
+          onCancel={() => setLastSubGoalToConfirm(null)}
+        />
+      )}
     </div>
   );
 };

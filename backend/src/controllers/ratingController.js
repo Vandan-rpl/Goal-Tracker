@@ -46,20 +46,13 @@ const submitQuarterlyUpdate = async (req, res) => {
     });
   }
 
-  const validSubGoalStatuses = ["Pending", "In Progress", "Completed", "Cancelled"];
-  if (
-    subGoalUpdates !== undefined &&
-    (!Array.isArray(subGoalUpdates) ||
-      subGoalUpdates.some(
-        (update) =>
-          !update?.subGoalId || !validSubGoalStatuses.includes(update.status),
-      ) ||
-      new Set(subGoalUpdates.map((update) => String(update.subGoalId))).size !==
-        subGoalUpdates.length)
-  ) {
+  // Sub-goal status is changed only through the goal's sub-goal endpoints,
+  // so ticking the last sub-goal always submits the goal for completion.
+  if (Array.isArray(subGoalUpdates) ? subGoalUpdates.length > 0 : subGoalUpdates != null) {
     return res.status(400).json({
       success: false,
-      message: "Each sub-goal update must have a unique ID and valid status.",
+      message:
+        "Sub-goal status cannot be changed through a quarterly update. Update sub-goals from the goal page.",
     });
   }
 
@@ -106,63 +99,6 @@ const submitQuarterlyUpdate = async (req, res) => {
     await transaction.begin();
 
     try {
-      for (const update of subGoalUpdates || []) {
-        const subGoalResult = await new sql.Request(transaction)
-          .input("GoalID", sql.BigInt, goalId)
-          .input("SubGoalID", sql.BigInt, update.subGoalId)
-          .query(`
-            SELECT SubGoalTitle, Status
-            FROM dbo.GoalSubGoals
-            WHERE GoalID = @GoalID AND SubGoalID = @SubGoalID
-          `);
-
-        const subGoal = subGoalResult.recordset[0];
-        if (!subGoal) {
-          await transaction.rollback();
-          return res.status(400).json({
-            success: false,
-            message: "A sub-goal does not belong to this goal.",
-          });
-        }
-
-        if (subGoal.Status === "Completed" && update.status !== "Completed") {
-          await transaction.rollback();
-          return res.status(400).json({
-            success: false,
-            message: "Completed sub-goals cannot be reopened.",
-          });
-        }
-
-        if (subGoal.Status === update.status) continue;
-
-        await new sql.Request(transaction)
-          .input("SubGoalID", sql.BigInt, update.subGoalId)
-          .input("Status", sql.VarChar, update.status)
-          .query(`
-            UPDATE dbo.GoalSubGoals
-            SET Status = @Status
-            WHERE SubGoalID = @SubGoalID
-          `);
-
-        await new sql.Request(transaction)
-          .input("GoalID", sql.BigInt, goalId)
-          .input("Action", sql.VarChar, "Updated")
-          .input("OldValue", sql.NVarChar(sql.MAX), subGoal.Status)
-          .input("NewValue", sql.NVarChar(sql.MAX), update.status)
-          .input(
-            "Remarks",
-            sql.NVarChar(sql.MAX),
-            `Sub-goal "${subGoal.SubGoalTitle}" status updated to ${update.status}`,
-          )
-          .input("PerformedBy", sql.Int, userId)
-          .query(`
-            INSERT INTO dbo.GoalHistory
-              (GoalID, Action, OldValue, NewValue, Remarks, PerformedBy, PerformedDate)
-            VALUES
-              (@GoalID, @Action, @OldValue, @NewValue, @Remarks, @PerformedBy, GETDATE())
-          `);
-      }
-
       await new sql.Request(transaction)
         .input("GoalId", sql.BigInt, goalId)
         .input("Quarter", sql.VarChar, quarter)

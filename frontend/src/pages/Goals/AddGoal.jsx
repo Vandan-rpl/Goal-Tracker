@@ -8,8 +8,12 @@ import {
   getFiscalQuarterValue,
   getGoalCreationWindow,
 } from "../../utils/fiscalQuarter";
+import {
+  MAX_SUB_GOALS,
+  getSubGoalError,
+  getSubGoalWeightageSummary,
+} from "../../utils/subGoals";
 
-const MAX_SUB_GOALS = 5;
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 30;
@@ -92,7 +96,8 @@ const AddGoal = () => {
     GoalCategory: "",
   });
 
-  // Optional sub-goals (0-5): title + status only.
+  // Optional sub-goals (0-5): title + weightage (% of this goal). They always
+  // start Pending; status is ticked from the goal page after approval.
   const [subGoals, setSubGoals] = useState([]);
 
   const [error, setError] = useState("");
@@ -184,6 +189,7 @@ const AddGoal = () => {
     const updated = [...subGoals];
     updated[index][name] = value;
     setSubGoals(updated);
+    clearFieldError("SubGoals");
   };
 
   const addSubGoalRow = () => {
@@ -195,7 +201,7 @@ const AddGoal = () => {
             {
               SubGoalNo: prev.length + 1,
               SubGoalTitle: "",
-              Status: "Pending",
+              Weightage: "",
             },
           ],
     );
@@ -204,6 +210,8 @@ const AddGoal = () => {
   const removeSubGoalRow = (index) => {
     setSubGoals((prev) => prev.filter((_, i) => i !== index));
   };
+
+  const subGoalWeightage = getSubGoalWeightageSummary(subGoals);
 
   const selectedQuarter = getFiscalQuarterValue(
     parseDateInput(formData.StartDate),
@@ -302,10 +310,10 @@ const AddGoal = () => {
     }
 
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
-    if (titledSubGoals.length > MAX_SUB_GOALS) {
-      const message = `A goal can have no more than ${MAX_SUB_GOALS} sub-goals.`;
-      setError(message);
-      setFieldErrors({ SubGoals: message });
+    const subGoalError = getSubGoalError(titledSubGoals);
+    if (subGoalError) {
+      setError(subGoalError);
+      setFieldErrors({ SubGoals: subGoalError });
       return;
     }
 
@@ -342,7 +350,11 @@ const AddGoal = () => {
         JointAccountability: jointAccountabilityNames || null,
         UserID: user?.userId || user?.UserID,
         GoalStatus: status,
-        SubGoals: titledSubGoals,
+        SubGoals: titledSubGoals.map((sub) => ({
+          SubGoalNo: sub.SubGoalNo,
+          SubGoalTitle: sub.SubGoalTitle,
+          Weightage: Number(sub.Weightage),
+        })),
         JointAccountabilities: selectedJointAccountabilities,
       };
 
@@ -878,7 +890,7 @@ return (
                     Sub-Goals
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Optional: add up to {MAX_SUB_GOALS} sub-goals to track this goal's progress
+                    Optional: add up to {MAX_SUB_GOALS} sub-goals. Their weightages are a % of this goal and must total 100%.
                   </p>
                 </div>
                 <button
@@ -897,6 +909,14 @@ return (
               <div className="space-y-3">
                 {subGoals.length === 0 && (
                   <p className="text-sm text-slate-400">No sub-goals added.</p>
+                )}
+                {subGoals.length > 0 && (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-950">
+                    <p className="font-semibold">
+                      Allocated {subGoalWeightage.allocated.toFixed(2)}% · Remaining{" "}
+                      {subGoalWeightage.remaining.toFixed(2)}%
+                    </p>
+                  </div>
                 )}
                 {subGoals.map((sub, index) => (
                   <div
@@ -925,15 +945,19 @@ return (
                         onChange={(e) => handleSubGoalChange(index, e)}
                         className="sm:col-span-2 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
                       />
-                      <select
-                        name="Status"
-                        value={sub.Status}
+                      <input
+                        type="number"
+                        name="Weightage"
+                        placeholder="Weightage % *"
+                        aria-label={`Sub-Goal #${index + 1} weightage (% of this goal)`}
+                        required
+                        min="0.01"
+                        max="100"
+                        step="0.01"
+                        value={sub.Weightage}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Completed">Completed</option>
-                      </select>
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                      />
                     </div>
                   </div>
                 ))}

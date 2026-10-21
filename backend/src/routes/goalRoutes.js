@@ -14,6 +14,7 @@ const {
     submitGoalReview,
     getGoalHistory,
     updateSubGoalStatus,
+    completeLastSubGoalAndSubmit,
     getTeamGoals,
     updateJointAccountabilityStatus,
     requestGoalCompletion,
@@ -69,6 +70,12 @@ router.put(
   "/:goalId/subgoals/:subGoalId/status",
   verifyToken,
   updateSubGoalStatus,
+);
+
+// Ticks the last pending sub-goal and submits the goal for completion approval.
+router.post(
+  "/:goalId/subgoals/:subGoalId/complete-and-submit",
+  completeLastSubGoalAndSubmit,
 );
 
 module.exports = router;

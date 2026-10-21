@@ -192,17 +192,12 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                             ELSE CONCAT('Q4-', YEAR(goal.CreatedDate))
                         END
                     ) AS OriginalQuarter,
-                    progress.SubGoalCompletionPercentage,
+                    -- A goal earns its full weightage only once completion is
+                    -- approved; sub-goal weightage is not used for scoring.
+                    CAST(CASE WHEN goal.GoalStatus = 'Completed' THEN 100 ELSE 0 END AS DECIMAL(5,2))
+                        AS SubGoalCompletionPercentage,
                     firstCarryForward.ProgressAtCarryForward
                 FROM dbo.Goals goal
-                OUTER APPLY (
-                    SELECT ISNULL(
-                        SUM(CASE WHEN subGoal.Status = 'Completed' THEN subGoal.Weightage ELSE 0 END),
-                        0
-                    ) AS SubGoalCompletionPercentage
-                    FROM dbo.GoalSubGoals subGoal
-                    WHERE subGoal.GoalID = goal.GoalID
-                ) progress
                 OUTER APPLY (
                     SELECT TOP 1
                         history.FromQuarter,
