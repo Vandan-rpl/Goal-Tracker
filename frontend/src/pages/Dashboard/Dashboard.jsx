@@ -587,7 +587,7 @@ export default function GoalDashboard() {
                   <span className="h-2 w-2 rounded-full bg-indigo-600" />
                   Achieved {currentQuarterAchieved}%
                 </span>
-                {currentQuarterAllocation.performancePercentage != null && (
+                {/* {currentQuarterAllocation.performancePercentage != null && (
                   <>
                     <span aria-hidden="true">·</span>
                     <span>
@@ -597,7 +597,7 @@ export default function GoalDashboard() {
                       ).toFixed(2)}%
                     </span>
                   </>
-                )}
+                )} */}
                 <span aria-hidden="true">·</span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-gray-100 ring-1 ring-gray-200" />
