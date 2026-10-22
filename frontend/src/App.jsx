@@ -20,6 +20,7 @@ import Setting from './pages/Settings/Settings';
 import Profile from './pages/Profile/Profile';
 import ChangePassword from './pages/Auth/ChangePassword';
 import EmployeeExcelUpload from './pages/Admin/EmployeeExcelUpload';
+import ImportEmployees from './pages/Admin/ImportEmployees';
 import ListEmployees from './pages/Admin/ListEmployees';
 import Reports from './pages/Admin/Reports';
 import ReviewEmployeeGoal from './pages/manager/ReviewEmployeeGoal';
@@ -55,6 +56,7 @@ function App() {
               <Route path="/goals/final-evaluation" element={<FinalEvaluation />} />
               <Route path="/goals/final-evaluation/:userId" element={<FinalEvaluation />} />
               <Route path="/admin/add-employees" element={<AddEmployees />} />
+              <Route path="/admin/import-employees" element={<ImportEmployees />} />
               <Route path="/admin/upload-excel" element={<EmployeeExcelUpload />} />
               <Route path="/admin/employees-list" element={<ListEmployees />} />
               <Route path="/admin/reports" element={<Reports />} />

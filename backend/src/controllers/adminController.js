@@ -5,6 +5,10 @@ const fs = require("fs");
 const { registerUser } = require("../services/authService");
 const { DEFAULT_PASSWORD } = require("../constants/constants");
 const path = require('path');
+const {
+  importEmployees: importEmployeeFile,
+  ImportValidationError,
+} = require("../services/employeeImportService");
 
 const REPORTING_HIERARCHY_FIELDS = [
   "ReportingManagerID",
@@ -827,7 +831,54 @@ const uploadEmployeesExcel = async (req, res) => {
   }
 };
 
+/**
+ * Bulk import / update employees from HR's Excel export.
+ * POST /admin/employees/import?dryRun=true&deactivateMissing=true
+ */
+const importEmployees = async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: "Please upload an .xlsx file in the 'file' field.",
+      errors: [],
+    });
+  }
+
+  const dryRun = String(req.query.dryRun).toLowerCase() === "true";
+  const deactivateMissing =
+    String(req.query.deactivateMissing).toLowerCase() === "true";
+
+  try {
+    const report = await importEmployeeFile(req.file.buffer, {
+      dryRun,
+      deactivateMissing,
+    });
+    return res.status(200).json({
+      success: true,
+      message: dryRun
+        ? "Preview generated. No changes were saved."
+        : `Import completed. Inserted: ${report.inserted}, Updated: ${report.updated}, Deactivated: ${report.deactivated}.`,
+      ...report,
+    });
+  } catch (error) {
+    if (error instanceof ImportValidationError) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        errors: error.errors,
+      });
+    }
+    console.error("Employee Import Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to import employees. No changes were saved.",
+      errors: error.message,
+    });
+  }
+};
+
 module.exports = {
+  importEmployees,
   getDropdownData,
   getAllEmployees,
   downloadTemplate,
