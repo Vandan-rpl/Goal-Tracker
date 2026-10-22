@@ -238,32 +238,37 @@ const FinalEvaluation = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Fiscal quarter</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Overall goal completion</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Goals</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Quarter</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Allocated</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Achieved</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Brought forward achieved</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Completed</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Carried forward</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {evaluation.YearlyPerformance.Quarters.map((quarter) => (
                   <tr key={quarter.Quarter}>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-800">
-                      {quarter.Quarter}
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-800 whitespace-nowrap">
+                      {`${quarter.Quarter}-${evaluation.YearlyPerformance.FiscalYear}`}
+                    </th>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {`${Number(quarter.SummaryAllocated || 0).toFixed(2)}%`}
                     </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-indigo-700">
-                      {quarter.Percentage == null ? '—' : `${Number(quarter.Percentage).toFixed(2)}%`}
+                    <td className={`px-4 py-3 text-sm ${quarter.isFuture ? 'text-gray-600' : 'font-semibold text-indigo-700'}`}>
+                      {quarter.isFuture ? '–' : `${Number(quarter.SummaryAchieved || 0).toFixed(2)}%`}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{quarter.GoalCount}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {quarter.isFuture ? '–' : `${Number(quarter.BroughtForwardAchieved || 0).toFixed(2)}%`}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {quarter.isFuture ? '–' : `${quarter.CompletedCount} of ${quarter.CountedGoalCount}`}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {quarter.isFuture ? '–' : quarter.CarriedForwardCount}
+                    </td>
                   </tr>
                 ))}
-                <tr className="bg-indigo-50/60">
-                  <td className="px-4 py-3 text-sm font-bold text-gray-900">Yearly average achieved</td>
-                  <td className="px-4 py-3 text-sm font-bold text-indigo-800">
-                    {evaluation.YearlyPerformance.AveragePercentage == null
-                      ? '—'
-                      : `${evaluation.YearlyPerformance.AveragePercentage.toFixed(2)}%`}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">Average of quarters with goals</td>
-                </tr>
               </tbody>
             </table>
           </div>

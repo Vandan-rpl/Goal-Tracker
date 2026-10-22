@@ -1,6 +1,10 @@
 const { poolPromise, sql } = require('../config/db');
 const { notifyUser } = require('../services/notifyService');
-const { getFiscalQuarter } = require('../utils/fiscalQuarter');
+const {
+    getFiscalQuarter,
+    getFiscalQuarterBounds,
+    getFiscalQuarterBoundsFromLabel
+} = require('../utils/fiscalQuarter');
 const {
     calculateQuarterAllocationAndAchievement
 } = require('../utils/quarterPerformance');
@@ -215,6 +219,75 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
             ORDER BY GoalID
         `);
 
+    const fiscalQuarters = [1, 2, 3, 4].map((quarterNumber) =>
+        getFiscalQuarterBoundsFromLabel(`Q${quarterNumber}-${fiscalYear}`),
+    );
+    const quarterSummaryRequest = pool.request().input('UserID', sql.Int, userId);
+    fiscalQuarters.forEach((quarter, index) => {
+        quarterSummaryRequest
+            .input(`Q${index}Label`, sql.VarChar, quarter.label)
+            .input(`Q${index}Start`, sql.Date, quarter.startKey)
+            .input(`Q${index}End`, sql.Date, quarter.endKey);
+    });
+    const quarterValues = fiscalQuarters
+        .map((_, index) => `(@Q${index}Label, @Q${index}Start, @Q${index}End)`)
+        .join(',\n                ');
+    const quarterSummaryResult = await quarterSummaryRequest.query(`
+        WITH FiscalQuarters AS (
+            SELECT Label, StartDate, EndDate
+            FROM (VALUES
+                ${quarterValues}
+            ) quarters(Label, StartDate, EndDate)
+        )
+        SELECT q.Label AS SummaryQuarter,
+               ISNULL(own.Allocated, 0) AS SummaryAllocated,
+               ISNULL(own.Achieved, 0) AS SummaryAchieved,
+               ISNULL(own.CompletedCount, 0) AS CompletedCount,
+               ISNULL(own.CountedGoalCount, 0) AS CountedGoalCount,
+               ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
+               ISNULL(carried.CarriedForwardCount, 0) AS CarriedForwardCount
+        FROM FiscalQuarters q
+        OUTER APPLY (
+            SELECT SUM(g.Weightage) AS Allocated,
+                   SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved,
+                   SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS CompletedCount,
+                   COUNT(*) AS CountedGoalCount
+            FROM dbo.Goals g
+            WHERE g.UserID = @UserID
+              AND g.Quarter = q.Label
+              AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+        ) own
+        OUTER APPLY (
+            SELECT SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved
+            FROM dbo.Goals g
+            WHERE g.UserID = @UserID
+              AND g.QuarterEndDate < q.StartDate
+              AND g.CompletedDate >= q.StartDate
+              AND g.CompletedDate < DATEADD(DAY, 1, q.EndDate)
+        ) broughtForward
+        OUTER APPLY (
+            SELECT COUNT(DISTINCT g.GoalID) AS CarriedForwardCount
+            FROM dbo.Goals g
+            INNER JOIN dbo.GoalCarryForwardHistory history
+                ON history.GoalID = g.GoalID
+            WHERE g.UserID = @UserID
+              AND g.Quarter = q.Label
+              AND history.FromQuarter = q.Label
+        ) carried
+        ORDER BY q.EndDate
+    `);
+    const currentQuarterEnd = getFiscalQuarterBounds().endKey;
+    const quarterSummaries = new Map(
+        quarterSummaryResult.recordset.map((quarter) => [
+            quarter.SummaryQuarter,
+            {
+                ...quarter,
+                isFuture: fiscalQuarters.find((bounds) => bounds.label === quarter.SummaryQuarter).endKey >
+                    currentQuarterEnd
+            }
+        ]),
+    );
+
     const quarters = [1, 2, 3, 4].map((quarterNumber) => {
         const quarter = `Q${quarterNumber}`;
         const quarterGoals = result.recordset
@@ -227,6 +300,7 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
             }));
         const performance =
             calculateQuarterAllocationAndAchievement(quarterGoals);
+        const quarterSummary = quarterSummaries.get(`${quarter}-${fiscalYear}`);
 
         return {
             Quarter: quarter,
@@ -235,7 +309,8 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                 : Math.round(performance.achievedPercentage * 100) / 100,
             AllocatedPercentage: performance.allocatedPercentage,
             AchievedPercentage: performance.achievedPercentage,
-            GoalCount: quarterGoals.length
+            GoalCount: quarterGoals.length,
+            ...quarterSummary
         };
     });
 
