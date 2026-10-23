@@ -742,7 +742,7 @@ const getMyQuarterSummary = async (req, res) => {
              ISNULL(own.CompletedCount, 0) AS CompletedCount,
              ISNULL(own.CountedGoalCount, 0) AS CountedGoalCount,
              ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
-             ISNULL(carried.CarriedForwardCount, 0) AS CarriedForwardCount
+             ISNULL(broughtForwardPending.Pending, 0) AS BroughtForwardPending
       FROM FiscalQuarters q
       OUTER APPLY (
         SELECT SUM(g.Weightage) AS Allocated,
@@ -762,15 +762,18 @@ const getMyQuarterSummary = async (req, res) => {
           AND g.CompletedDate >= q.StartDate
           AND g.CompletedDate < DATEADD(DAY, 1, q.EndDate)
       ) broughtForward
+      -- Goals moved INTO this quarter: End Date (Timeline) falls in it, the
+      -- start quarter is earlier (same QuarterEndDate test as broughtForward),
+      -- and the goal is still open.
       OUTER APPLY (
-        SELECT COUNT(DISTINCT g.GoalID) AS CarriedForwardCount
+        SELECT SUM(g.Weightage) AS Pending
         FROM dbo.Goals g
-        INNER JOIN dbo.GoalCarryForwardHistory history
-          ON history.GoalID = g.GoalID
         WHERE g.UserID = @UserID
-          AND g.Quarter = q.Label
-          AND history.FromQuarter = q.Label
-      ) carried
+          AND g.QuarterEndDate < q.StartDate
+          AND g.Timeline >= q.StartDate
+          AND g.Timeline < DATEADD(DAY, 1, q.EndDate)
+          AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
+      ) broughtForwardPending
       ORDER BY q.EndDate
     `);
 
@@ -793,7 +796,7 @@ const getMyQuarterSummary = async (req, res) => {
             broughtForwardAchieved: roundPercent(row.BroughtForwardAchieved),
             completedCount: row.CompletedCount,
             countedGoalCount: row.CountedGoalCount,
-            carriedForwardCount: row.CarriedForwardCount,
+            broughtForwardPending: roundPercent(row.BroughtForwardPending),
           };
         }),
       },
@@ -1061,6 +1064,29 @@ const getGoalById = async (req, res) => {
         "SELECT h.*, u.FirstName, u.LastName FROM dbo.GoalHistory h LEFT JOIN dbo.Users u ON h.PerformedBy = u.UserID WHERE h.GoalID = @GoalID ORDER BY h.PerformedDate DESC",
       );
 
+    // Manager/HOD and CFO/Business Head reviews, oldest first.
+    const reviewsResult = await pool
+      .request()
+      .input("GoalID", sql.BigInt, id)
+      .query(`
+        SELECT r.ReviewerType, r.Quarter, r.Rating, r.Comments, r.ReviewedBy,
+               r.ReviewedDate, u.FirstName, u.LastName, u.Role
+        FROM (
+          SELECT 'Manager/HOD' AS ReviewerType, Quarter, Rating, Comments,
+                 ReviewedBy, ReviewedDate
+          FROM dbo.HODRatings
+          WHERE GoalID = @GoalID
+          UNION ALL
+          SELECT 'Business Head/CFO', Quarter, Rating, Comments,
+                 ReviewedBy, ReviewedDate
+          FROM dbo.BusinessHeadRatings
+          WHERE GoalID = @GoalID
+        ) r
+        LEFT JOIN dbo.Users u ON u.UserID = r.ReviewedBy
+        ORDER BY r.ReviewedDate
+      `);
+    const reviews = reviewsResult.recordset;
+
     const canApproveOrReject =
       (!isJointParticipant || Number(requesterUserId) === Number(goal.UserID)) &&
       (requesterRole === "CFO" ||
@@ -1084,6 +1110,10 @@ const getGoalById = async (req, res) => {
         SubGoals: subGoalsResult.recordset,
         CompletionPercentage: getGoalCompletionPercentage(goal),
         History: historyResult.recordset,
+        Reviews: reviews,
+        HasReviewed: reviews.some(
+          (review) => Number(review.ReviewedBy) === Number(requesterUserId),
+        ),
         JointAccountabilities: canManageJointAccountabilities
           ? await jointAccountabilityModel.getJointAccountabilitiesByGoalId(id)
           : [],
@@ -2546,10 +2576,15 @@ const submitGoalReview = async (req, res) => {
   // Defines which status comes next depending on the goal's current status.
   // HOD reviews a goal that is 'HOD Approved' -> moves it to 'Reviewed By HOD'
   // Business Head reviews a goal that is 'Reviewed By HOD' -> moves it to 'Review By Business Head'
+  // A Completed goal can still be reviewed by the manager/HOD and by the
+  // CFO/Business Head; its status stays Completed.
   const statusFlow = {
     "HOD Approved": "Reviewed By HOD",
     "Reviewed By HOD": "Review By Business Head",
+    Completed: "Completed",
   };
+  const role = (req.user?.Role || req.user?.role || "").toUpperCase();
+  const isCfoReviewer = ["BUSINESSHEAD", "CFO"].includes(role);
 
   const transaction = new sql.Transaction(await poolPromise);
 
@@ -2591,6 +2626,19 @@ const submitGoalReview = async (req, res) => {
       });
     }
 
+    const isAuthorizedReviewer =
+      Number(existingGoal.UserID) !== Number(userId) &&
+      (isCfoReviewer ||
+        role === "ADMIN" ||
+        (await canApproveOrRejectGoal(userId, existingGoal.UserID)));
+    if (!isAuthorizedReviewer) {
+      await transaction.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to review this goal.",
+      });
+    }
+
     const completionPercentage = getGoalCompletionPercentage(existingGoal);
     const reviewWindowOpen = isGoalReviewWindowOpen({
       ...existingGoal,
@@ -2605,14 +2653,25 @@ const submitGoalReview = async (req, res) => {
       });
     }
 
-    const reviewQuarter = existingGoal.Quarter || getFiscalQuarter(new Date(existingGoal.Timeline || new Date())).label;
+    // The ratings tables store the quarter as 'Q1'-'Q4' (VARCHAR(2)), while
+    // Goals.Quarter is 'Q2-2026'. A goal belongs to one fiscal year, so the
+    // short label is enough to key the rating.
+    const reviewQuarter = (
+      existingGoal.Quarter ||
+      getFiscalQuarter(new Date(existingGoal.Timeline || new Date())).label
+    ).slice(0, 2);
+    // Manager/HOD and CFO/Business Head ratings live in separate tables so
+    // each can review the same goal once per quarter.
+    const ratingsTable = isCfoReviewer
+      ? "dbo.BusinessHeadRatings"
+      : "dbo.HODRatings";
     const duplicateCheckReq = new sql.Request(transaction);
     const duplicateCheckRes = await duplicateCheckReq
       .input("GoalID", sql.BigInt, goalId)
       .input("Quarter", sql.VarChar, reviewQuarter)
       .query(`
         SELECT TOP 1 GoalID
-        FROM dbo.HODRatings
+        FROM ${ratingsTable}
         WHERE GoalID = @GoalID AND Quarter = @Quarter
       `);
 
@@ -2620,9 +2679,17 @@ const submitGoalReview = async (req, res) => {
       await transaction.rollback();
       return res.status(409).json({
         success: false,
-        message: "This goal has already been reviewed in this quarter.",
+        message: "You have already reviewed this goal in this quarter.",
       });
     }
+
+    const insertRatingSql = isCfoReviewer
+      ? `INSERT INTO dbo.BusinessHeadRatings
+                    (GoalID, Quarter, Rating, FinalRating, Comments, ReviewedBy)
+                VALUES (@GoalID, @Quarter, @Rating, @Rating, @Comments, @ReviewedBy);`
+      : `INSERT INTO dbo.HODRatings
+                    (GoalID, Quarter, Rating, AchievementPercentage, Comments, ReviewedBy)
+                VALUES (@GoalID, @Quarter, @Rating, @AchievementPercentage, @Comments, @ReviewedBy);`;
 
     const updateReq = new sql.Request(transaction);
     await updateReq
@@ -2633,19 +2700,7 @@ const submitGoalReview = async (req, res) => {
       .input("Comments", sql.NVarChar, comment || null)
       .input("ReviewedBy", sql.Int, userId)
       .input("GoalStatus", sql.VarChar, newStatus).query(`
-                MERGE dbo.HODRatings AS target
-                USING (SELECT @GoalID AS GoalID, @Quarter AS Quarter) AS source
-                ON target.GoalID = source.GoalID AND target.Quarter = source.Quarter
-                WHEN MATCHED THEN UPDATE SET
-                    Rating = @Rating,
-                    AchievementPercentage = @AchievementPercentage,
-                    Comments = @Comments,
-                    ReviewedBy = @ReviewedBy,
-                    ReviewedDate = GETDATE(),
-                    ModifiedDate = GETDATE()
-                WHEN NOT MATCHED THEN INSERT
-                    (GoalID, Quarter, Rating, AchievementPercentage, Comments, ReviewedBy)
-                    VALUES (@GoalID, @Quarter, @Rating, @AchievementPercentage, @Comments, @ReviewedBy);
+                ${insertRatingSql}
 
                 UPDATE dbo.Goals
                 SET GoalStatus = @GoalStatus,
@@ -2670,7 +2725,7 @@ const submitGoalReview = async (req, res) => {
     try {
       const pool = await poolPromise;
       const employee = await getUserContact(pool, existingGoal.UserID);
-      const isBusinessHeadReview = oldStatus === "Reviewed By HOD"; // Business Head / CFO stage
+      const isBusinessHeadReview = isCfoReviewer; // Business Head / CFO stage
       const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${goalId}`;
 
       if (employee) {
@@ -2860,6 +2915,11 @@ const loadSubGoalForStatusChange = async (
     };
   }
 
+  const notStartedMessage = getGoalNotStartedMessage(goal);
+  if (notStartedMessage) {
+    return { status: 400, message: notStartedMessage };
+  }
+
   const subGoalsResult = await new sql.Request(transaction)
     .input("GoalID", sql.BigInt, goalId)
     .query(`
@@ -3000,11 +3060,24 @@ const getGoalForCompletion = async (transaction, goalId) => {
   const result = await new sql.Request(transaction)
     .input("GoalID", sql.BigInt, goalId)
     .query(`
-      SELECT GoalID, UserID, GoalTitle, GoalStatus, Weightage
+      SELECT GoalID, UserID, GoalTitle, GoalStatus, Weightage, StartDate
       FROM dbo.Goals WITH (UPDLOCK, ROWLOCK)
       WHERE GoalID = @GoalID
     `);
   return result.recordset[0] || null;
+};
+
+// A goal approved ahead of its quarter (e.g. a Q4 goal approved during Q3)
+// cannot be worked on or completed until its start date arrives.
+const getGoalNotStartedMessage = (goal) => {
+  const startKey = toDateKey(goal?.StartDate);
+  if (!startKey) return null;
+  const today = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  return todayKey < startKey
+    ? `This goal starts on ${startKey}. Sub-goals and completion open from that date.`
+    : null;
 };
 
 const rollbackQuietly = async (transaction) => {
@@ -3147,6 +3220,14 @@ const requestGoalCompletion = async (req, res) => {
         success: false,
         message: `Only Approved goals can be submitted for completion (current status: ${goal.GoalStatus}).`,
       });
+    }
+
+    const notStartedMessage = getGoalNotStartedMessage(goal);
+    if (notStartedMessage) {
+      await transaction.rollback();
+      return res
+        .status(400)
+        .json({ success: false, message: notStartedMessage });
     }
 
     // Goals with sub-goals are submitted by ticking the last sub-goal. This

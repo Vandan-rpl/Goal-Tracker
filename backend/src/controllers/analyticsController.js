@@ -174,7 +174,7 @@ const getTeamStats = async (req, res) => {
                     'Submitted', 'HOD Approved', 'Manager Approved',
                     'Reviewed By HOD', 'Business Head Approved', 'Review By Business Head'
                 ) THEN 1 ELSE 0 END) AS pendingGoals,
-                SUM(CASE WHEN g.GoalStatus IN ('Running', 'Approved', 'Postpone') THEN 1 ELSE 0 END) AS activeGoals,
+                SUM(CASE WHEN g.GoalStatus IN ('Running', 'Approved', 'Postpone', 'Completion Submitted') THEN 1 ELSE 0 END) AS activeGoals,
                 SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS completedGoals,
                 SUM(CASE WHEN g.GoalStatus IN ('Draft', 'Rejected', 'Cancelled') THEN 1 ELSE 0 END) AS otherGoals
             FROM dbo.Users u

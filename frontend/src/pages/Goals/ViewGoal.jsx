@@ -10,7 +10,9 @@ import { canEditGoal as isGoalEditable } from "../../utils/goalEditability";
 import {
   getCompletionRejectionRemark,
   getGoalStatusLabel,
+  formatGoalStartDate,
   isGoalActiveForOwner,
+  isGoalAwaitingStart,
 } from "../../utils/goalStatus";
 import { isGoalReviewWindowOpen } from "../../utils/goalReviewWindow";
 import {
@@ -96,7 +98,7 @@ const ViewGoal = () => {
       : null;
   const isApprovalWindowOpen = approvalWindow?.isOpen === true;
 
-  const reviewableStatuses = ["HOD Approved", "Reviewed By HOD"];
+  const reviewableStatuses = ["HOD Approved", "Reviewed By HOD", "Completed"];
   let loggedInUserId = null;
   try {
     const token = localStorage.getItem("token");
@@ -122,6 +124,7 @@ const ViewGoal = () => {
     isAuthorizedApprover &&
     goal &&
     !isJointParticipant &&
+    !goal.HasReviewed &&
     reviewableStatuses.includes(goal.GoalStatus);
 
   const canSubmitReview = isReviewer && isGoalReviewWindowOpen(goal);
@@ -452,6 +455,13 @@ const ViewGoal = () => {
           </div>
         </div>
 
+        {isGoalOwner && isGoalAwaitingStart(goal) && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+            This goal starts on {formatGoalStartDate(goal)}. You can update
+            sub-goals and mark it complete from that date.
+          </div>
+        )}
+
         {approvalWindow && !isGoalOwner && (
           <div
             className={`rounded-xl border p-4 text-sm font-medium ${
@@ -684,10 +694,10 @@ const ViewGoal = () => {
             </div>
           )}
 
-          <hr className="border-slate-200" />
-
           {/* Sub-goals checklist */}
           {subGoals.length > 0 && (
+            <>
+            <hr className="border-slate-200" />
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-lg font-bold text-slate-900 tracking-tight">
@@ -733,6 +743,7 @@ const ViewGoal = () => {
                 })}
               </ul>
             </div>
+            </>
           )}
 
           {/* Reviewer Feedback */}
@@ -768,6 +779,61 @@ const ViewGoal = () => {
                   <p className="text-slate-700 text-sm leading-relaxed">
                     {goal.ManagerComment || "No comments provided."}
                   </p>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Reviews from the Manager/HOD and Business Head/CFO */}
+          {goal.Reviews?.length > 0 && (
+            <>
+              <hr className="border-slate-200" />
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Reviews
+                </h3>
+                <div className="space-y-3">
+                  {goal.Reviews.map((review) => (
+                    <div
+                      key={`${review.ReviewerType}-${review.ReviewedBy}-${review.ReviewedDate}`}
+                      className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">
+                            {[review.FirstName, review.LastName]
+                              .filter(Boolean)
+                              .join(" ") || "Reviewer"}
+                          </p>
+                          <p className="text-xs font-medium text-slate-500">
+                            {review.ReviewerType}
+                            {review.ReviewedDate &&
+                              ` · ${new Date(review.ReviewedDate).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <div
+                          className="text-xl"
+                          aria-label={`Rating ${Number(review.Rating)} out of 5`}
+                        >
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <span
+                              key={star}
+                              className={
+                                star <= Number(review.Rating)
+                                  ? "text-amber-400"
+                                  : "text-slate-300"
+                              }
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-sm text-slate-700 whitespace-pre-line">
+                        {review.Comments || "No comment provided."}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </>
@@ -885,6 +951,10 @@ const ViewGoal = () => {
             ) : isApproved && !reviewableStatuses.includes(goal.GoalStatus) ? (
               <div className="w-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-4 rounded-xl font-bold text-sm">
                 ✓ This goal has been successfully {goal.GoalStatus}.
+              </div>
+            ) : goal.GoalStatus === "Completed" && !canSubmitReview ? (
+              <div className="w-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-4 rounded-xl font-bold text-sm">
+                ✓ This goal has been completed.
               </div>
             ) : canShowApproveReject ? (
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between w-full gap-4">

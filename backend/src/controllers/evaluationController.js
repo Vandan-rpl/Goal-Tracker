@@ -248,8 +248,13 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                ISNULL(carried.CarriedForwardCount, 0) AS CarriedForwardCount
         FROM FiscalQuarters q
         OUTER APPLY (
+            -- A goal completed after its start quarter ended is shown only as
+            -- brought forward achieved in the quarter it was completed in.
             SELECT SUM(g.Weightage) AS Allocated,
-                   SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved,
+                   SUM(CASE
+                           WHEN g.CompletedDate >= DATEADD(DAY, 1, g.QuarterEndDate) THEN 0
+                           ELSE COALESCE(g.AchievedWeightage, 0)
+                       END) AS Achieved,
                    SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS CompletedCount,
                    COUNT(*) AS CountedGoalCount
             FROM dbo.Goals g
@@ -314,8 +319,10 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
         };
     });
 
+    // Average the Achieved column shown in the table, over quarters that have
+    // started and have counted goals.
     const availableQuarters = quarters.filter(
-        (quarter) => quarter.Percentage != null,
+        (quarter) => !quarter.isFuture && quarter.CountedGoalCount > 0,
     );
 
     return {
@@ -324,7 +331,7 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
         AveragePercentage: availableQuarters.length > 0
             ? Math.round(
                 (availableQuarters.reduce(
-                    (total, quarter) => total + quarter.Percentage,
+                    (total, quarter) => total + Number(quarter.SummaryAchieved || 0),
                     0,
                 ) / availableQuarters.length) * 100,
             ) / 100

@@ -22,7 +22,9 @@ import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 import {
   getCompletionRejectionRemark,
   getGoalStatusLabel,
+  formatGoalStartDate,
   isGoalActiveForOwner,
+  isGoalAwaitingStart,
 } from "../../utils/goalStatus";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 
@@ -124,14 +126,15 @@ function formatPercent(value) {
 
 // ---------------------------------------------------------------------------
 // QUARTER SUMMARY — Q1–Q4 of the current fiscal year, calculated on the server.
-// Future quarters show only Allocated. Brought forward achieved is display only.
+// Future quarters show only Allocated and Brought forward (pending).
+// Brought forward achieved is display only.
 // ---------------------------------------------------------------------------
 const QUARTER_SUMMARY_COLUMNS = [
   "Allocated",
   "Achieved",
-  "Brought forward achieved",
   "Completed",
-  "Carried forward",
+  "Brought forward (pending)",
+  "Brought forward achieved",
 ];
 
 function QuarterSummaryTable({ quarters, currentQuarter }) {
@@ -154,19 +157,23 @@ function QuarterSummaryTable({ quarters, currentQuarter }) {
             <tbody className="divide-y divide-gray-50">
               {quarters.map((quarter) => {
                 const isCurrent = quarter.quarter === currentQuarter;
-                // Goals can be set before a quarter starts, so a future
-                // quarter still shows its allocation; the rest is "–".
+                // Goals can be set (or moved) before a quarter starts, so a
+                // future quarter still shows its allocation and pending
+                // brought-forward weightage; the rest is "–".
                 const cells = quarter.isFuture
                   ? [
                       formatPercent(quarter.allocated),
-                      ...QUARTER_SUMMARY_COLUMNS.slice(1).map(() => "–"),
+                      "–",
+                      "–",
+                      formatPercent(quarter.broughtForwardPending),
+                      "–",
                     ]
                   : [
                       formatPercent(quarter.allocated),
                       formatPercent(quarter.achieved),
-                      formatPercent(quarter.broughtForwardAchieved),
                       `${quarter.completedCount} of ${quarter.countedGoalCount}`,
-                      quarter.carriedForwardCount,
+                      formatPercent(quarter.broughtForwardPending),
+                      formatPercent(quarter.broughtForwardAchieved),
                     ];
                 return (
                   <tr
@@ -335,6 +342,11 @@ function GoalCard({ goal, onGoalChanged }) {
           )}
 
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {goal.IsGoalOwner !== false && isGoalAwaitingStart(goal) && (
+              <span className="mr-auto text-xs text-amber-700">
+                Starts {formatGoalStartDate(goal)} — completion opens then.
+              </span>
+            )}
             <Link
               to={`/goals/view/${goal.GoalID}`}
               className="inline-flex items-center justify-center px-4 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold transition"

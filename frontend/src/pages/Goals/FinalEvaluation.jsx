@@ -201,9 +201,9 @@ const FinalEvaluation = () => {
               <h2 className="text-lg font-bold text-gray-900">
                 Yearly Performance · FY{fiscalYear}
               </h2>
-              <p className="mt-1 text-sm text-gray-600">
+              {/* <p className="mt-1 text-sm text-gray-600">
                 April–March. Goals stay in the quarter they were added, including after carry-forward.
-              </p>
+              </p> */}
             </div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
               Fiscal year ending
@@ -231,9 +231,9 @@ const FinalEvaluation = () => {
               ? 'Enter the fiscal year ending year (for example, 2026).'
               : 'Enter a four-digit year from 1900 to 9998. The report will load once the year is valid.'}
           </p>
-          <p className="mb-3 text-sm text-gray-600">
+          {/* <p className="mb-3 text-sm text-gray-600">
             This is the sum of each goal's achieved weightage, using the same calculation as the employee dashboard. Rejected and cancelled goals are excluded.
-          </p>
+          </p> */}
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -269,6 +269,16 @@ const FinalEvaluation = () => {
                     </td>
                   </tr>
                 ))}
+                <tr className="bg-indigo-50/60">
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900 whitespace-nowrap">Yearly average achieved</th>
+                  <td className="px-4 py-3 text-sm text-gray-600" />
+                  <td className="px-4 py-3 text-sm font-bold text-indigo-800">
+                    {evaluation.YearlyPerformance.AveragePercentage == null
+                      ? '—'
+                      : `${Number(evaluation.YearlyPerformance.AveragePercentage).toFixed(2)}%`}
+                  </td>
+                  <td colSpan={3} className="px-4 py-3 text-xs text-gray-500">Average of quarters with goals</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -357,7 +367,7 @@ const FinalEvaluation = () => {
         {/* Finalize action — HOD/reporting manager/Business Head only;
             enforced server-side, this button just isn't shown for a
             self-view since finalizing your own evaluation doesn't apply. */}
-        {!isSelf && (
+        {/* {!isSelf && (
           <div className="pt-4 border-t">
             <button
               onClick={handleFinalize}
@@ -373,7 +383,7 @@ const FinalEvaluation = () => {
               This computes the same figures shown above and notifies the employee — it does not lock in a permanent record (see the note in evaluationController.js if you want that).
             </p>
           </div>
-        )}
+        )} */}
 
       </div>
     </div>

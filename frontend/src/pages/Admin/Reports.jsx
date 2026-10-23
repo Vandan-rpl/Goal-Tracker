@@ -110,7 +110,7 @@ const Reports = () => {
                         <YAxis type="category" dataKey="employeeName" width={140} tick={{ fontSize: 12 }} />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="pendingGoals" name="Needs review" stackId="goals" fill="#D97706" />
+                        {/* <Bar dataKey="pendingGoals" name="Needs review" stackId="goals" fill="#D97706" /> */}
                         <Bar dataKey="activeGoals" name="In progress" stackId="goals" fill="#2563EB" />
                         <Bar dataKey="completedGoals" name="Completed" stackId="goals" fill="#059669" />
                         <Bar dataKey="otherGoals" name="Draft / closed" stackId="goals" fill="#9CA3AF" />
@@ -125,7 +125,7 @@ const Reports = () => {
                       <tr>
                         <th className="py-3 pr-4 font-semibold">Team member</th>
                         <th className="py-3 px-3 text-right font-semibold">Total</th>
-                        <th className="py-3 px-3 text-right font-semibold">Needs review</th>
+                        {/* <th className="py-3 px-3 text-right font-semibold">Needs review</th> */}
                         <th className="py-3 px-3 text-right font-semibold">In progress</th>
                         <th className="py-3 px-3 text-right font-semibold">Completed</th>
                         <th className="py-3 pl-3 text-right font-semibold">Draft / closed</th>
@@ -136,7 +136,6 @@ const Reports = () => {
                         <tr key={member.UserID}>
                           <td className="py-3 pr-4 font-medium text-gray-900">{member.employeeName}</td>
                           <td className="py-3 px-3 text-right tabular-nums">{member.totalGoals}</td>
-                          <td className="py-3 px-3 text-right tabular-nums">{member.pendingGoals}</td>
                           <td className="py-3 px-3 text-right tabular-nums">{member.activeGoals}</td>
                           <td className="py-3 px-3 text-right tabular-nums">{member.completedGoals}</td>
                           <td className="py-3 pl-3 text-right tabular-nums">{member.otherGoals}</td>
