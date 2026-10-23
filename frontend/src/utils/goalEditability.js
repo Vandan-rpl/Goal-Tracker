@@ -55,6 +55,18 @@ export const canEditTimelineOnlyGoal = (goal) =>
       isTimelineOverdue(goal.Timeline),
   );
 
+// An overdue goal that has not been carried forward yet cannot be completed;
+// it must be carried forward and approved again first. Mirrors the backend.
+export const isCompletionBlockedByOverdue = (goal) =>
+  Boolean(
+    goal &&
+      Number(goal.CarryForwardCount || 0) === 0 &&
+      isTimelineOverdue(goal.Timeline),
+  );
+
+export const OVERDUE_COMPLETION_MESSAGE =
+  "This goal is overdue. Carry it forward to the next quarter and get it approved again before marking it complete.";
+
 export const isApproverRole = (role) => {
   const normalizedRole = String(role || "")
     .toLowerCase()

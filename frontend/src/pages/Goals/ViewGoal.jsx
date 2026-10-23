@@ -6,7 +6,11 @@ import GoalStatusStepper from "../../components/GoalStatusStepper/GoalStatusStep
 import GoalHistory from "./Goalhistory";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 import LastSubGoalDialog from "../../components/GoalCompletion/LastSubGoalDialog";
-import { canEditGoal as isGoalEditable } from "../../utils/goalEditability";
+import {
+  canEditGoal as isGoalEditable,
+  isCompletionBlockedByOverdue,
+  OVERDUE_COMPLETION_MESSAGE,
+} from "../../utils/goalEditability";
 import {
   getCompletionRejectionRemark,
   getGoalStatusLabel,
@@ -187,6 +191,10 @@ const ViewGoal = () => {
       );
     // Ticking the last step submits the goal, so confirm first. Nothing is
     // saved until the user chooses Submit.
+    if (isLastPending && isCompletionBlockedByOverdue(goal)) {
+      alert(OVERDUE_COMPLETION_MESSAGE);
+      return;
+    }
     if (isLastPending) {
       setLastSubGoalToConfirm(subGoal);
       return;
@@ -380,9 +388,14 @@ const ViewGoal = () => {
   // Goals with sub-goals are submitted by ticking the last sub-goal, so Mark
   // Complete is only for goals without them. After a rejected completion with
   // every sub-goal still ticked, the owner resubmits instead.
-  const canMarkComplete = canWorkOnGoal && subGoals.length === 0;
+  // Overdue goals must be carried forward and re-approved before completion.
+  const completionBlockedByOverdue =
+    canWorkOnGoal && isCompletionBlockedByOverdue(goal);
+  const canMarkComplete =
+    canWorkOnGoal && !completionBlockedByOverdue && subGoals.length === 0;
   const canResubmitCompletion =
     canWorkOnGoal &&
+    !completionBlockedByOverdue &&
     subGoals.length > 0 &&
     completedSubGoalCount === subGoals.length;
   const completionRejectionRemark = getCompletionRejectionRemark(goal);
@@ -425,6 +438,15 @@ const ViewGoal = () => {
             >
               {showHistory ? "Hide History" : "View History"}
             </button>
+            {completionBlockedByOverdue && (
+              <Link
+                to={`/goals/edit/${goal.GoalID}`}
+                title={OVERDUE_COMPLETION_MESSAGE}
+                className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-xs"
+              >
+                Overdue — Carry forward
+              </Link>
+            )}
             {canMarkComplete && (
               <MarkCompleteButton
                 goalId={goal.GoalID}

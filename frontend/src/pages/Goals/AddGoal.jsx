@@ -13,6 +13,7 @@ import {
   getSubGoalError,
   getSubGoalWeightageSummary,
 } from "../../utils/subGoals";
+import "./AddGoal.css";
 
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
@@ -381,25 +382,38 @@ const AddGoal = () => {
   };
 
 return (
-    <div className="flex-1 bg-linear-to-br from-slate-50 via-white to-indigo-50/40 min-h-screen overflow-y-auto p-4 sm:p-8">
+    <div className="goal-workspace flex-1 min-h-screen overflow-y-auto p-4 sm:p-8">
       <div className="max-w-[1600px] mx-auto">
-        <div className="bg-white/90 backdrop-blur rounded-3xl shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-6 sm:p-10 lg:p-12">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-6 border-b border-slate-100 mb-8">
+        <div className="goal-workbook">
+          <div className="goal-appbar">
+            <div className="goal-app-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 3.5h16v17H4z" />
+                <path d="M4 8.5h16M4 14h16M10 3.5v17M15 3.5v17" />
+              </svg>
+            </div>
+            <span>GOAL WORKBOOK</span>
+            <span className="goal-appbar-divider" aria-hidden="true" />
+            <span className="goal-appbar-document">Quarterly goal entry</span>
+          </div>
+
+          <div className="goal-workbook-content">
+          <div className="goal-workbook-heading flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-6 border-b border-slate-100 mb-8">
             <div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full mb-2">
-                New Goal
+              <span className="goal-worksheet-badge inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 mb-2">
+                NEW WORKSHEET
               </span>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                Create New Goal
+                Create a goal
               </h1>
               <p className="text-sm text-slate-500 mt-1">
-                Fill in the metrics, performance criteria, and sub-goals.
+                Enter your goal details in the worksheet below.
               </p>
             </div>
             <button
               type="button"
               onClick={() => navigate("/goals")}
-              className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium cursor-pointer transition-colors self-start sm:self-auto"
+              className="goal-back-button inline-flex items-center gap-1.5 text-sm font-medium cursor-pointer transition-colors self-start sm:self-auto"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
@@ -409,7 +423,7 @@ return (
           </div>
 
           {error && (
-            <div className="mb-6 flex items-start gap-3 bg-red-50 border border-red-100 text-red-700 p-4 rounded-2xl text-sm font-medium">
+            <div className="goal-form-error mb-6 flex items-start gap-3 p-4 text-sm font-medium">
               <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
               </svg>
@@ -418,10 +432,10 @@ return (
           )}
 
           <div
-            className={`mb-6 rounded-2xl border p-4 text-sm font-medium ${
+            className={`goal-window-notice mb-6 border p-4 text-sm font-medium ${
               goalCreationWindow.isOpen
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-amber-200 bg-amber-50 text-amber-900"
+                ? "goal-window-open"
+                : "goal-window-closed"
             }`}
             role="status"
           >
@@ -435,343 +449,137 @@ return (
           <form
             hidden={!goalCreationWindow.isOpen}
             onSubmit={(e) => handleSubmit(e, "Draft")}
-            className="space-y-8"
+            className="goal-sheet-form"
           >
-            {/* Section: Basics */}
-            <section className="space-y-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Basics
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Goal No <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="GoalNumber"
-                    required
-                    value={formData.GoalNumber}
-                    readOnly
-                    className="w-full px-3.5 py-2.5 border border-slate-200 bg-slate-50 text-slate-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition"
-                  />
-                </div>
-                <div className="sm:col-span-3">
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Goal Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="GoalTitle"
-                    required
-                    placeholder="e.g. Production Target -- Moly 180 MT, V - 80 MT"
-                    value={formData.GoalTitle}
-                    onChange={handleChange}
-                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder:text-slate-400 ${
-                      fieldErrors.GoalTitle
-                        ? "border-red-300 bg-red-50/40"
-                        : "border-slate-200"
-                    }`}
-                  />
-                  {fieldErrors.GoalTitle && (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.GoalTitle}
-                    </p>
-                  )}
-                </div>
-              </div>
+            <div className="goal-worksheet-help">
+              Enter the goal details in the cells. Scroll horizontally to see all columns.
+            </div>
+            <div className="goal-grid-scroll" role="region" aria-label="Goal entry worksheet" tabIndex="0">
+              <table className="goal-entry-grid">
+                <colgroup>
+                  <col className="goal-row-number-column" />
+                  <col className="goal-number-column" />
+                  <col className="goal-title-column" />
+                  <col className="goal-category-column" />
+                  <col className="goal-priority-column" />
+                  <col className="goal-weightage-column" />
+                  <col className="goal-date-column" />
+                  <col className="goal-date-column" />
+                  <col className="goal-description-column" />
+                  <col className="goal-measurability-column" />
+                  <col className="goal-performance-column" />
+                  <col className="goal-performance-column" />
+                </colgroup>
+                <thead>
+                  <tr className="goal-grid-letters">
+                    <th aria-label="Row number" />
+                    {["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"].map((letter) => (
+                      <th key={letter}>{letter}</th>
+                    ))}
+                  </tr>
+                  <tr className="goal-grid-headings">
+                    <th aria-label="Row number">#</th>
+                    <th>Goal No.</th>
+                    <th>Goal Title <span>*</span></th>
+                    <th>Category</th>
+                    <th>Priority <span>*</span></th>
+                    <th>Weightage (%) <span>*</span></th>
+                    <th>Start Date <span>*</span></th>
+                    <th>End Date <span>*</span></th>
+                    <th>Goal Description</th>
+                    <th>Measurability</th>
+                    <th>Meet Performance Target</th>
+                    <th>Exceed Performance Target</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th className="goal-grid-row-number" scope="row">1</th>
+                    <td>
+                      <input aria-label="Goal number" type="number" name="GoalNumber" required value={formData.GoalNumber} readOnly />
+                    </td>
+                    <td>
+                      <input aria-label="Goal title" type="text" name="GoalTitle" required placeholder="Enter goal title" value={formData.GoalTitle} onChange={handleChange} />
+                      {fieldErrors.GoalTitle && <p className="goal-cell-error">{fieldErrors.GoalTitle}</p>}
+                    </td>
+                    <td>
+                      <input aria-label="Category" type="text" name="GoalCategory" placeholder="Category" value={formData.GoalCategory} onChange={handleChange} />
+                      {fieldErrors.GoalCategory && <p className="goal-cell-error">{fieldErrors.GoalCategory}</p>}
+                    </td>
+                    <td>
+                      <select aria-label="Priority" name="Priority" value={formData.Priority} onChange={handleChange}>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                    </td>
+                    <td>
+                      <input aria-label="Weightage percentage" type="number" min={MIN_GOAL_WEIGHTAGE} max={MAX_GOAL_WEIGHTAGE} step="0.01" name="Weightage" required placeholder="5 - 30" value={formData.Weightage} onChange={handleChange} />
+                      {fieldErrors.Weightage && <p className="goal-cell-error">{fieldErrors.Weightage}</p>}
+                    </td>
+                    <td>
+                      <div className="goal-grid-date">
+                        <input aria-label="Start date (DD/MM/YYYY)" type="text" name="StartDate" required maxLength={10} placeholder="DD/MM/YYYY" value={formData.StartDate} onChange={handleChange} />
+                        <span className="goal-grid-calendar">
+                          <CalendarDays size={16} aria-hidden="true" />
+                          <input type="date" aria-label="Choose Start Date from calendar" title="Choose Start Date from calendar" name="StartDate" min={currentQuarterRange.min} max={currentQuarterRange.max} value={parseDateInput(formData.StartDate)} onChange={handleDatePickerChange} />
+                        </span>
+                      </div>
+                      {fieldErrors.StartDate ? <p className="goal-cell-error">{fieldErrors.StartDate}</p> : <p className="goal-cell-hint">Within {currentQuarterRange.quarter}</p>}
+                    </td>
+                    <td>
+                      <div className="goal-grid-date">
+                        <input aria-label="End date (DD/MM/YYYY)" type="text" name="Timeline" required maxLength={10} placeholder="DD/MM/YYYY" value={formData.Timeline} onChange={handleChange} />
+                        <span className="goal-grid-calendar">
+                          <CalendarDays size={16} aria-hidden="true" />
+                          <input type="date" aria-label="Choose End Date from calendar" title="Choose End Date from calendar" name="Timeline" min={parseDateInput(formData.StartDate) || currentQuarterRange.min} value={parseDateInput(formData.Timeline)} onChange={handleDatePickerChange} />
+                        </span>
+                      </div>
+                      {fieldErrors.Timeline ? <p className="goal-cell-error">{fieldErrors.Timeline}</p> : <p className="goal-cell-hint">DD/MM/YYYY</p>}
+                    </td>
+                    <td>
+                      <textarea aria-label="Goal description" name="GoalDescription" rows="4" value={formData.GoalDescription} onChange={handleChange} />
+                      {fieldErrors.GoalDescription && <p className="goal-cell-error">{fieldErrors.GoalDescription}</p>}
+                    </td>
+                    <td>
+                      <textarea aria-label="Measurability" name="Measurability" rows="4" placeholder="Source of validation" value={formData.Measurability} onChange={handleChange} />
+                      {fieldErrors.Measurability && <p className="goal-cell-error">{fieldErrors.Measurability}</p>}
+                    </td>
+                    <td>
+                      <textarea aria-label="Meet performance target" name="MeetPerformance" rows="4" placeholder="Expected target" value={formData.MeetPerformance} onChange={handleChange} />
+                      {fieldErrors.MeetPerformance && <p className="goal-cell-error">{fieldErrors.MeetPerformance}</p>}
+                    </td>
+                    <td>
+                      <textarea aria-label="Exceed performance target" name="ExceedPerformance" rows="4" placeholder="Exceed target" value={formData.ExceedPerformance} onChange={handleChange} />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
-              {/* Row 2: Category, Priority, Weightage, Start Date, End Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Category
-                  </label>
-                  <input
-                    type="text"
-                    name="GoalCategory"
-                    placeholder="e.g. Operational"
-                    value={formData.GoalCategory}
-                    onChange={handleChange}
-                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder:text-slate-400 ${
-                      fieldErrors.GoalCategory
-                        ? "border-red-300 bg-red-50/40"
-                        : "border-slate-200"
-                    }`}
-                  />
-                  {fieldErrors.GoalCategory && (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.GoalCategory}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Priority <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="Priority"
-                    value={formData.Priority}
-                    onChange={handleChange}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition bg-white"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Weightage (%) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={MIN_GOAL_WEIGHTAGE}
-                    max={MAX_GOAL_WEIGHTAGE}
-                    step="0.01"
-                    name="Weightage"
-                    required
-                    placeholder="5 - 30%"
-                    value={formData.Weightage}
-                    onChange={handleChange}
-                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder:text-slate-400 ${
-                      fieldErrors.Weightage
-                        ? "border-red-300 bg-red-50/40"
-                        : "border-slate-200"
-                    }`}
-                  />
-                  {fieldErrors.Weightage && (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.Weightage}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Start Date <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      name="StartDate"
-                      required
-                      maxLength={10}
-                      placeholder="DD/MM/YYYY"
-                      value={formData.StartDate}
-                      onChange={handleChange}
-                      className={`w-full px-3.5 py-2.5 pr-11 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition ${
-                        fieldErrors.StartDate
-                          ? "border-red-300 bg-red-50/40"
-                          : "border-slate-200"
-                      }`}
-                    />
-                    <span className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-indigo-600">
-                      <CalendarDays size={18} aria-hidden="true" />
-                      <input
-                        type="date"
-                        aria-label="Choose Start Date from calendar"
-                        title="Choose Start Date from calendar"
-                        name="StartDate"
-                        min={currentQuarterRange.min}
-                        max={currentQuarterRange.max}
-                        value={parseDateInput(formData.StartDate)}
-                        onChange={handleDatePickerChange}
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      />
-                    </span>
-                  </div>
-                  {fieldErrors.StartDate ? (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.StartDate}
-                    </p>
-                  ) : (
-                    <p className="text-slate-400 text-xs mt-1.5">
-                      Enter as DD/MM/YYYY within {currentQuarterRange.quarter}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    End Date <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      name="Timeline"
-                      required
-                      maxLength={10}
-                      placeholder="DD/MM/YYYY"
-                      value={formData.Timeline}
-                      onChange={handleChange}
-                      className={`w-full px-3.5 py-2.5 pr-11 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition ${
-                        fieldErrors.Timeline
-                          ? "border-red-300 bg-red-50/40"
-                          : "border-slate-200"
-                      }`}
-                    />
-                    <span className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-indigo-600">
-                      <CalendarDays size={18} aria-hidden="true" />
-                      <input
-                        type="date"
-                        aria-label="Choose End Date from calendar"
-                        title="Choose End Date from calendar"
-                        name="Timeline"
-                        min={
-                          parseDateInput(formData.StartDate) ||
-                          currentQuarterRange.min
-                        }
-                        value={parseDateInput(formData.Timeline)}
-                        onChange={handleDatePickerChange}
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      />
-                    </span>
-                  </div>
-                  {fieldErrors.Timeline ? (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.Timeline}
-                    </p>
-                  ) : (
-                    <p className="text-slate-400 text-xs mt-1.5">
-                      Enter as DD/MM/YYYY
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-950">
-                {goalAllocationLoading ? (
-                  <p className="text-xs text-indigo-800">
-                    Loading current goal allocations...
-                  </p>
-                ) : goalAllocationError ? (
-                  <p className="text-xs text-red-700">{goalAllocationError}</p>
-                ) : selectedQuarter ? (
-                  <>
-                    <p className="font-semibold">
-                      {selectedQuarter} allocation:{" "}
-                      {(allocatedWeightageHundredths / 100).toFixed(2)}% used,{" "}
-                      {(remainingWeightageHundredths / 100).toFixed(2)}% remaining.
-                    </p>
-                    <p className="mt-1 text-xs text-indigo-800">
-                      {selectedQuarterGoals.length} of {MAX_GOALS_PER_QUARTER} goals added; up to{" "}
-                      {additionalGoalsAvailable} more can fit with the current weightage.
-                    </p>
-                    <p className="mt-1 text-xs text-indigo-800">
-                      Save goals as drafts while allocating; submission requires the quarter total to reach 100%.
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-xs text-indigo-800">
-                    Choose a start date to see the quarter's remaining goal slots and weightage.
-                  </p>
-                )}
-              </div>
-            </section>
-
-            {/* Section: Descriptions & Measurability */}
-            <section className="space-y-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Description & Measurability
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Goal Description
-                  </label>
-                  <textarea
-                    name="GoalDescription"
-                    rows="3"
-                    value={formData.GoalDescription}
-                    onChange={handleChange}
-                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition resize-none ${
-                      fieldErrors.GoalDescription
-                        ? "border-red-300 bg-red-50/40"
-                        : "border-slate-200"
-                    }`}
-                  />
-                  {fieldErrors.GoalDescription && (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.GoalDescription}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Measurability
-                  </label>
-                  <textarea
-                    name="Measurability"
-                    rows="3"
-                    placeholder="Source of validation (e.g. As per production reports)"
-                    value={formData.Measurability}
-                    onChange={handleChange}
-                    className={`w-full px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition resize-none placeholder:text-slate-400 ${
-                      fieldErrors.Measurability
-                        ? "border-red-300 bg-red-50/40"
-                        : "border-slate-200"
-                    }`}
-                  />
-                  {fieldErrors.Measurability && (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.Measurability}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            {/* Section: Performance Criteria */}
-            <section className="space-y-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Performance Criteria
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-                  <label className="flex items-center gap-1.5 text-sm font-semibold text-emerald-700 mb-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    Meet Performance Target
-                  </label>
-                  <textarea
-                    name="MeetPerformance"
-                    rows="2"
-                    placeholder="e.g. Moly - 180 MT, V - 80 MT"
-                    value={formData.MeetPerformance}
-                    onChange={handleChange}
-                    className={`w-full px-3.5 py-2.5 border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition resize-none placeholder:text-slate-400 ${
-                      fieldErrors.MeetPerformance
-                        ? "border-red-300 bg-red-50/40"
-                        : "border-emerald-200"
-                    }`}
-                  />
-                  {fieldErrors.MeetPerformance && (
-                    <p className="text-red-600 text-xs mt-1.5 font-medium">
-                      {fieldErrors.MeetPerformance}
-                    </p>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
-                  <label className="flex items-center gap-1.5 text-sm font-semibold text-indigo-700 mb-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
-                    </svg>
-                    Exceed Performance Target
-                  </label>
-                  <textarea
-                    name="ExceedPerformance"
-                    rows="2"
-                    placeholder="e.g. Moly - >180 MT, V - >80 MT"
-                    value={formData.ExceedPerformance}
-                    onChange={handleChange}
-                    className="w-full px-3.5 py-2.5 border border-indigo-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition resize-none placeholder:text-slate-400"
-                  />
-                </div>
-              </div>
-            </section>
+            <div className="goal-allocation-summary">
+              {goalAllocationLoading ? (
+                <p>Loading current goal allocations...</p>
+              ) : goalAllocationError ? (
+                <p className="goal-cell-error">{goalAllocationError}</p>
+              ) : selectedQuarter ? (
+                <>
+                  <strong>{selectedQuarter} allocation:</strong>{" "}
+                  {(allocatedWeightageHundredths / 100).toFixed(2)}% used,{" "}
+                  {(remainingWeightageHundredths / 100).toFixed(2)}% remaining.
+                  <span>
+                    {selectedQuarterGoals.length} of {MAX_GOALS_PER_QUARTER} goals added; up to{" "}
+                    {additionalGoalsAvailable} more can fit. Drafts can be saved while allocating; submitted goals must total 100%.
+                  </span>
+                </>
+              ) : (
+                <p>Enter a start date to see the quarter's remaining goal slots and weightage.</p>
+              )}
+            </div>
 
             {/* Joint Accountability Section */}
             <section>
-              <div className="flex justify-between items-center mb-4">
+              <div className="goal-section-toolbar flex justify-between items-center mb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-800">
                     Joint Accountability
@@ -783,7 +591,7 @@ return (
                 <button
                   type="button"
                   onClick={addJointAccountabilityRow}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-sm font-semibold transition cursor-pointer"
+                  className="goal-sheet-add-button inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold transition cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -792,7 +600,7 @@ return (
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="goal-sheet-rows space-y-3">
                 {jointAccountabilities.map((ja, index) => (
                   <div
                     key={index}
@@ -884,7 +692,7 @@ return (
 
             {/* Sub-Goals Section */}
             <section className="border-t border-slate-100 pt-6">
-              <div className="flex justify-between items-center mb-4">
+              <div className="goal-section-toolbar flex justify-between items-center mb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-800">
                     Sub-Goals
@@ -897,7 +705,7 @@ return (
                   type="button"
                   onClick={addSubGoalRow}
                   disabled={subGoals.length >= MAX_SUB_GOALS}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className="goal-sheet-add-button inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -906,7 +714,7 @@ return (
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="goal-sheet-rows space-y-3">
                 {subGoals.length === 0 && (
                   <p className="text-sm text-slate-400">No sub-goals added.</p>
                 )}
@@ -970,7 +778,7 @@ return (
             </section>
 
             {/* Action Buttons */}
-            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-6 border-t border-slate-100">
+            <div className="goal-form-actions flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-6 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => navigate("/goals")}
@@ -995,6 +803,11 @@ return (
               </button>
             </div>
           </form>
+          <div className="goal-sheet-tabs" aria-hidden="true">
+            <span className="goal-sheet-tab">Goal Entry</span>
+            <span className="goal-sheet-tab-hint">Quarterly planning worksheet</span>
+          </div>
+          </div>
         </div>
       </div>
     </div>

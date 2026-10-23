@@ -3060,12 +3060,22 @@ const getGoalForCompletion = async (transaction, goalId) => {
   const result = await new sql.Request(transaction)
     .input("GoalID", sql.BigInt, goalId)
     .query(`
-      SELECT GoalID, UserID, GoalTitle, GoalStatus, Weightage, StartDate
+      SELECT GoalID, UserID, GoalTitle, GoalStatus, Weightage, StartDate,
+             Timeline, CarryForwardCount
       FROM dbo.Goals WITH (UPDLOCK, ROWLOCK)
       WHERE GoalID = @GoalID
     `);
   return result.recordset[0] || null;
 };
+
+// An overdue goal that has not been carried forward yet cannot be completed.
+// The owner must carry it forward to a new Timeline and get it approved
+// again first.
+const getGoalOverdueCompletionMessage = (goal) =>
+  Number(goal?.CarryForwardCount || 0) === 0 &&
+  isDateBeforeToday(goal?.Timeline)
+    ? "This goal is overdue. Carry it forward to the next quarter and get it approved again before marking it complete."
+    : null;
 
 // A goal approved ahead of its quarter (e.g. a Q4 goal approved during Q3)
 // cannot be worked on or completed until its start date arrives.
@@ -3230,6 +3240,12 @@ const requestGoalCompletion = async (req, res) => {
         .json({ success: false, message: notStartedMessage });
     }
 
+    const overdueMessage = getGoalOverdueCompletionMessage(goal);
+    if (overdueMessage) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: overdueMessage });
+    }
+
     // Goals with sub-goals are submitted by ticking the last sub-goal. This
     // endpoint only serves them as "Resubmit for completion" after a
     // rejection, when every sub-goal is still Completed.
@@ -3315,6 +3331,12 @@ const completeLastSubGoalAndSubmit = async (req, res) => {
           ? "This sub-goal is already completed."
           : "This is not the last pending sub-goal. Complete the other sub-goals first.",
       });
+    }
+
+    const overdueMessage = getGoalOverdueCompletionMessage(goal);
+    if (overdueMessage) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: overdueMessage });
     }
 
     const approverId = await getCompletionApproverId(transaction, goal.UserID);
