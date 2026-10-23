@@ -13,11 +13,14 @@ import {
   getSubGoalError,
   getSubGoalWeightageSummary,
 } from "../../utils/subGoals";
-import "./AddGoal.css";
 
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 30;
+
+const worksheetControlClass =
+  "block w-full min-h-[42px] px-[10px] border border-transparent bg-transparent text-xs text-[#202522] shadow-none placeholder:text-[#9aa39b] read-only:bg-slate-50 read-only:text-slate-500 focus:relative focus:z-[1] focus:border-2 focus:border-[#2c3e82] focus:bg-white focus:outline-none";
+const worksheetErrorClass = "m-0 px-[9px] pb-2 text-[10px] leading-[1.35] text-[#b3403f]";
 
 const isQuarterGoalActive = (goal) =>
   !["Rejected", "Cancelled"].includes(goal.GoalStatus);
@@ -382,28 +385,28 @@ const AddGoal = () => {
   };
 
 return (
-    <div className="goal-workspace flex-1 min-h-screen overflow-y-auto p-4 sm:p-8">
+    <div className="flex-1 min-h-screen overflow-y-auto bg-[#edf1f7] p-4 text-[#202522] [font-family:Segoe_UI,Arial,sans-serif] sm:p-8">
       <div className="max-w-[1600px] mx-auto">
-        <div className="goal-workbook">
-          <div className="goal-appbar">
-            <div className="goal-app-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
+        <div className="overflow-hidden border border-[#c6cedc] bg-white shadow-[0_4px_18px_rgba(37,55,80,0.1)]">
+          <div className="flex min-h-12 items-center gap-3 bg-[#2c3e82] px-3 py-2 text-xs font-bold tracking-[0.08em] text-white sm:px-[22px]">
+            <div className="grid size-7 place-items-center border border-white/45" aria-hidden="true">
+              <svg className="size-[18px] stroke-current stroke-[1.5]" viewBox="0 0 24 24" fill="none">
                 <path d="M4 3.5h16v17H4z" />
                 <path d="M4 8.5h16M4 14h16M10 3.5v17M15 3.5v17" />
               </svg>
             </div>
             <span>GOAL WORKBOOK</span>
-            <span className="goal-appbar-divider" aria-hidden="true" />
-            <span className="goal-appbar-document">Quarterly goal entry</span>
+            <span className="h-5 w-px bg-white/40" aria-hidden="true" />
+            <span className="text-[13px] font-normal tracking-normal">Quarterly goal entry</span>
           </div>
 
-          <div className="goal-workbook-content">
-          <div className="goal-workbook-heading flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-6 border-b border-slate-100 mb-8">
+          <div className="px-3 pt-5 sm:px-8 sm:pt-7">
+          <div className="mb-8 flex flex-col justify-between gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center">
             <div>
-              <span className="goal-worksheet-badge inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 mb-2">
+              <span className="mb-2 inline-flex items-center gap-1.5 border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-[#2c3e82]">
                 NEW WORKSHEET
               </span>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                 Create a goal
               </h1>
               <p className="text-sm text-slate-500 mt-1">
@@ -413,7 +416,7 @@ return (
             <button
               type="button"
               onClick={() => navigate("/goals")}
-              className="goal-back-button inline-flex items-center gap-1.5 text-sm font-medium cursor-pointer transition-colors self-start sm:self-auto"
+              className="inline-flex cursor-pointer items-center gap-1.5 self-start text-sm font-medium text-slate-600 transition-colors hover:text-[#2c3e82] sm:self-auto"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
@@ -423,7 +426,7 @@ return (
           </div>
 
           {error && (
-            <div className="goal-form-error mb-6 flex items-start gap-3 p-4 text-sm font-medium">
+            <div className="mb-6 flex items-start gap-3 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
               <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
               </svg>
@@ -432,10 +435,10 @@ return (
           )}
 
           <div
-            className={`goal-window-notice mb-6 border p-4 text-sm font-medium ${
+            className={`mb-6 border p-4 text-sm font-medium ${
               goalCreationWindow.isOpen
-                ? "goal-window-open"
-                : "goal-window-closed"
+                ? "border-blue-200 bg-blue-50 text-[#2c3e82]"
+                : "border-amber-200 bg-amber-50 text-amber-900"
             }`}
             role="status"
           >
@@ -449,125 +452,119 @@ return (
           <form
             hidden={!goalCreationWindow.isOpen}
             onSubmit={(e) => handleSubmit(e, "Draft")}
-            className="goal-sheet-form"
+            className="flex flex-col gap-3.5"
           >
-            <div className="goal-worksheet-help">
+            <div className="mb-[-8px] text-xs text-slate-500">
               Enter the goal details in the cells. Scroll horizontally to see all columns.
             </div>
-            <div className="goal-grid-scroll" role="region" aria-label="Goal entry worksheet" tabIndex="0">
-              <table className="goal-entry-grid">
+            <div className="max-w-full overflow-x-auto border border-[#aeb9cc] bg-white [scrollbar-color:#aeb9cc_#edf1f7] [scrollbar-width:thin] focus-visible:outline-2 focus-visible:outline-[#2c3e82] focus-visible:outline-offset-2" role="region" aria-label="Goal entry worksheet" tabIndex="0">
+              <table className="w-full min-w-[1992px] table-fixed border-separate border-spacing-0 text-xs text-[#202522] [&_td]:h-[168px] [&_td]:border-r [&_td]:border-b [&_td]:border-[#d5dce5] [&_td]:bg-white [&_td]:p-0 [&_td]:align-top [&_td:last-child]:border-r-0">
                 <colgroup>
-                  <col className="goal-row-number-column" />
-                  <col className="goal-number-column" />
-                  <col className="goal-title-column" />
-                  <col className="goal-category-column" />
-                  <col className="goal-priority-column" />
-                  <col className="goal-weightage-column" />
-                  <col className="goal-date-column" />
-                  <col className="goal-date-column" />
-                  <col className="goal-description-column" />
-                  <col className="goal-measurability-column" />
-                  <col className="goal-performance-column" />
-                  <col className="goal-performance-column" />
+                  <col className="w-[42px]" />
+                  <col className="w-[90px]" />
+                  <col className="w-[230px]" />
+                  <col className="w-[150px]" />
+                  <col className="w-[125px]" />
+                  <col className="w-[125px]" />
+                  <col className="w-[165px]" />
+                  <col className="w-[165px]" />
+                  <col className="w-[220px]" />
+                  <col className="w-[220px]" />
+                  <col className="w-[230px]" />
+                  <col className="w-[230px]" />
                 </colgroup>
                 <thead>
-                  <tr className="goal-grid-letters">
-                    <th aria-label="Row number" />
+                  <tr>
+                    <th className="sticky left-0 top-0 z-[3] h-[26px] border-r border-b border-[#d5dce5] bg-[#edf1f7] text-center text-[11px] font-medium text-slate-600" aria-label="Row number" />
                     {["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"].map((letter) => (
-                      <th key={letter}>{letter}</th>
+                      <th className="sticky top-0 z-[2] h-[26px] border-r border-b border-[#d5dce5] bg-[#edf1f7] text-center text-[11px] font-medium text-slate-600" key={letter}>{letter}</th>
                     ))}
                   </tr>
-                  <tr className="goal-grid-headings">
-                    <th aria-label="Row number">#</th>
-                    <th>Goal No.</th>
-                    <th>Goal Title <span>*</span></th>
-                    <th>Category</th>
-                    <th>Priority <span>*</span></th>
-                    <th>Weightage (%) <span>*</span></th>
-                    <th>Start Date <span>*</span></th>
-                    <th>End Date <span>*</span></th>
-                    <th>Goal Description</th>
-                    <th>Measurability</th>
-                    <th>Meet Performance Target</th>
-                    <th>Exceed Performance Target</th>
+                  <tr>
+                    <th className="sticky left-0 top-[26px] z-[4] border-r border-b border-[#d5dce5] bg-[#e5eaf3] px-2.5 py-2 text-center text-[11px] font-bold text-[#30415f]" aria-label="Row number">#</th>
+                    {["Goal No.", "Goal Title", "Category", "Priority", "Weightage (%)", "Start Date", "End Date", "Goal Description", "Measurability", "Meet Performance Target", "Exceed Performance Target"].map((heading, index) => (
+                      <th className="sticky top-[26px] z-[2] h-[42px] border-r border-b border-[#cbd4e2] bg-[#dce5f2] px-2.5 py-2 text-left text-[11px] font-bold leading-[1.35] text-[#30415f] align-middle" key={heading}>
+                        {heading}{[0, 1, 3, 4, 5, 6].includes(index) && <span className="text-red-600"> *</span>}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <th className="goal-grid-row-number" scope="row">1</th>
+                    <th className="sticky left-0 z-[1] border-r border-b border-[#d5dce5] bg-[#edf1f7] pt-3 text-center font-medium text-slate-600" scope="row">1</th>
                     <td>
-                      <input aria-label="Goal number" type="number" name="GoalNumber" required value={formData.GoalNumber} readOnly />
+                      <input className={worksheetControlClass} aria-label="Goal number" type="number" name="GoalNumber" required value={formData.GoalNumber} readOnly />
                     </td>
                     <td>
-                      <input aria-label="Goal title" type="text" name="GoalTitle" required placeholder="Enter goal title" value={formData.GoalTitle} onChange={handleChange} />
-                      {fieldErrors.GoalTitle && <p className="goal-cell-error">{fieldErrors.GoalTitle}</p>}
+                      <input className={worksheetControlClass} aria-label="Goal title" type="text" name="GoalTitle" required placeholder="Enter goal title" value={formData.GoalTitle} onChange={handleChange} />
+                      {fieldErrors.GoalTitle && <p className={worksheetErrorClass}>{fieldErrors.GoalTitle}</p>}
                     </td>
                     <td>
-                      <input aria-label="Category" type="text" name="GoalCategory" placeholder="Category" value={formData.GoalCategory} onChange={handleChange} />
-                      {fieldErrors.GoalCategory && <p className="goal-cell-error">{fieldErrors.GoalCategory}</p>}
+                      <input className={worksheetControlClass} aria-label="Category" type="text" name="GoalCategory" placeholder="Category" value={formData.GoalCategory} onChange={handleChange} />
+                      {fieldErrors.GoalCategory && <p className={worksheetErrorClass}>{fieldErrors.GoalCategory}</p>}
                     </td>
                     <td>
-                      <select aria-label="Priority" name="Priority" value={formData.Priority} onChange={handleChange}>
+                      <select className={worksheetControlClass} aria-label="Priority" name="Priority" value={formData.Priority} onChange={handleChange}>
                         <option value="Low">Low</option>
                         <option value="Medium">Medium</option>
                         <option value="High">High</option>
                       </select>
                     </td>
                     <td>
-                      <input aria-label="Weightage percentage" type="number" min={MIN_GOAL_WEIGHTAGE} max={MAX_GOAL_WEIGHTAGE} step="0.01" name="Weightage" required placeholder="5 - 30" value={formData.Weightage} onChange={handleChange} />
-                      {fieldErrors.Weightage && <p className="goal-cell-error">{fieldErrors.Weightage}</p>}
+                      <input className={worksheetControlClass} aria-label="Weightage percentage" type="number" min={MIN_GOAL_WEIGHTAGE} max={MAX_GOAL_WEIGHTAGE} step="0.01" name="Weightage" required placeholder="5 - 30" value={formData.Weightage} onChange={handleChange} />
+                      {fieldErrors.Weightage && <p className={worksheetErrorClass}>{fieldErrors.Weightage}</p>}
                     </td>
                     <td>
-                      <div className="goal-grid-date">
-                        <input aria-label="Start date (DD/MM/YYYY)" type="text" name="StartDate" required maxLength={10} placeholder="DD/MM/YYYY" value={formData.StartDate} onChange={handleChange} />
-                        <span className="goal-grid-calendar">
+                      <div className="relative">
+                        <input className={`${worksheetControlClass} pr-[34px]`} aria-label="Start date (DD/MM/YYYY)" type="text" name="StartDate" required maxLength={10} placeholder="DD/MM/YYYY" value={formData.StartDate} onChange={handleChange} />
+                        <span className="absolute right-[9px] top-3 grid size-[18px] place-items-center text-slate-500">
                           <CalendarDays size={16} aria-hidden="true" />
-                          <input type="date" aria-label="Choose Start Date from calendar" title="Choose Start Date from calendar" name="StartDate" min={currentQuarterRange.min} max={currentQuarterRange.max} value={parseDateInput(formData.StartDate)} onChange={handleDatePickerChange} />
+                          <input className="absolute inset-0 size-full cursor-pointer opacity-0" type="date" aria-label="Choose Start Date from calendar" title="Choose Start Date from calendar" name="StartDate" min={currentQuarterRange.min} max={currentQuarterRange.max} value={parseDateInput(formData.StartDate)} onChange={handleDatePickerChange} />
                         </span>
                       </div>
-                      {fieldErrors.StartDate ? <p className="goal-cell-error">{fieldErrors.StartDate}</p> : <p className="goal-cell-hint">Within {currentQuarterRange.quarter}</p>}
+                      {fieldErrors.StartDate ? <p className={worksheetErrorClass}>{fieldErrors.StartDate}</p> : <p className="m-0 px-[9px] pb-2 text-[10px] leading-[1.35] text-slate-500">Within {currentQuarterRange.quarter}</p>}
                     </td>
                     <td>
-                      <div className="goal-grid-date">
-                        <input aria-label="End date (DD/MM/YYYY)" type="text" name="Timeline" required maxLength={10} placeholder="DD/MM/YYYY" value={formData.Timeline} onChange={handleChange} />
-                        <span className="goal-grid-calendar">
+                      <div className="relative">
+                        <input className={`${worksheetControlClass} pr-[34px]`} aria-label="End date (DD/MM/YYYY)" type="text" name="Timeline" required maxLength={10} placeholder="DD/MM/YYYY" value={formData.Timeline} onChange={handleChange} />
+                        <span className="absolute right-[9px] top-3 grid size-[18px] place-items-center text-slate-500">
                           <CalendarDays size={16} aria-hidden="true" />
-                          <input type="date" aria-label="Choose End Date from calendar" title="Choose End Date from calendar" name="Timeline" min={parseDateInput(formData.StartDate) || currentQuarterRange.min} value={parseDateInput(formData.Timeline)} onChange={handleDatePickerChange} />
+                          <input className="absolute inset-0 size-full cursor-pointer opacity-0" type="date" aria-label="Choose End Date from calendar" title="Choose End Date from calendar" name="Timeline" min={parseDateInput(formData.StartDate) || currentQuarterRange.min} value={parseDateInput(formData.Timeline)} onChange={handleDatePickerChange} />
                         </span>
                       </div>
-                      {fieldErrors.Timeline ? <p className="goal-cell-error">{fieldErrors.Timeline}</p> : <p className="goal-cell-hint">DD/MM/YYYY</p>}
+                      {fieldErrors.Timeline ? <p className={worksheetErrorClass}>{fieldErrors.Timeline}</p> : <p className="m-0 px-[9px] pb-2 text-[10px] leading-[1.35] text-slate-500">DD/MM/YYYY</p>}
                     </td>
                     <td>
-                      <textarea aria-label="Goal description" name="GoalDescription" rows="4" value={formData.GoalDescription} onChange={handleChange} />
-                      {fieldErrors.GoalDescription && <p className="goal-cell-error">{fieldErrors.GoalDescription}</p>}
+                      <textarea className={`${worksheetControlClass} min-h-[126px] resize-y`} aria-label="Goal description" name="GoalDescription" rows="4" value={formData.GoalDescription} onChange={handleChange} />
+                      {fieldErrors.GoalDescription && <p className={worksheetErrorClass}>{fieldErrors.GoalDescription}</p>}
                     </td>
                     <td>
-                      <textarea aria-label="Measurability" name="Measurability" rows="4" placeholder="Source of validation" value={formData.Measurability} onChange={handleChange} />
-                      {fieldErrors.Measurability && <p className="goal-cell-error">{fieldErrors.Measurability}</p>}
+                      <textarea className={`${worksheetControlClass} min-h-[126px] resize-y`} aria-label="Measurability" name="Measurability" rows="4" placeholder="Source of validation" value={formData.Measurability} onChange={handleChange} />
+                      {fieldErrors.Measurability && <p className={worksheetErrorClass}>{fieldErrors.Measurability}</p>}
                     </td>
                     <td>
-                      <textarea aria-label="Meet performance target" name="MeetPerformance" rows="4" placeholder="Expected target" value={formData.MeetPerformance} onChange={handleChange} />
-                      {fieldErrors.MeetPerformance && <p className="goal-cell-error">{fieldErrors.MeetPerformance}</p>}
+                      <textarea className={`${worksheetControlClass} min-h-[126px] resize-y`} aria-label="Meet performance target" name="MeetPerformance" rows="4" placeholder="Expected target" value={formData.MeetPerformance} onChange={handleChange} />
+                      {fieldErrors.MeetPerformance && <p className={worksheetErrorClass}>{fieldErrors.MeetPerformance}</p>}
                     </td>
                     <td>
-                      <textarea aria-label="Exceed performance target" name="ExceedPerformance" rows="4" placeholder="Exceed target" value={formData.ExceedPerformance} onChange={handleChange} />
+                      <textarea className={`${worksheetControlClass} min-h-[126px] resize-y`} aria-label="Exceed performance target" name="ExceedPerformance" rows="4" placeholder="Exceed target" value={formData.ExceedPerformance} onChange={handleChange} />
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            <div className="goal-allocation-summary">
+            <div className="border border-[#cbd4e2] bg-blue-50/50 px-3 py-2.5 text-xs leading-relaxed text-[#2c3e82]">
               {goalAllocationLoading ? (
                 <p>Loading current goal allocations...</p>
               ) : goalAllocationError ? (
-                <p className="goal-cell-error">{goalAllocationError}</p>
+                <p className={worksheetErrorClass}>{goalAllocationError}</p>
               ) : selectedQuarter ? (
                 <>
                   <strong>{selectedQuarter} allocation:</strong>{" "}
                   {(allocatedWeightageHundredths / 100).toFixed(2)}% used,{" "}
                   {(remainingWeightageHundredths / 100).toFixed(2)}% remaining.
-                  <span>
+                  <span className="mt-1 block text-[11px] text-slate-600">
                     {selectedQuarterGoals.length} of {MAX_GOALS_PER_QUARTER} goals added; up to{" "}
                     {additionalGoalsAvailable} more can fit. Drafts can be saved while allocating; submitted goals must total 100%.
                   </span>
@@ -578,20 +575,20 @@ return (
             </div>
 
             {/* Joint Accountability Section */}
-            <section>
-              <div className="goal-section-toolbar flex justify-between items-center mb-4">
+            <section className="overflow-hidden border border-[#cbd4e2] bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-[#cbd4e2] bg-[#eaf0f8] px-3.5 py-3 max-sm:flex-col max-sm:items-start">
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">
+                  <h3 className="text-[13px] font-bold uppercase tracking-wide text-[#30415f]">
                     Joint Accountability
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="mt-1 text-[11px] text-slate-600">
                     Add colleagues sharing responsibility for this goal
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={addJointAccountabilityRow}
-                  className="goal-sheet-add-button inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold transition cursor-pointer"
+                  className="inline-flex cursor-pointer items-center gap-1.5 border border-blue-200 bg-white px-3.5 py-2 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -600,14 +597,14 @@ return (
                 </button>
               </div>
 
-              <div className="goal-sheet-rows space-y-3">
+              <div className="flex flex-col gap-2 p-3">
                 {jointAccountabilities.map((ja, index) => (
                   <div
                     key={index}
-                    className="bg-slate-50/70 border border-slate-200 rounded-2xl p-4 relative space-y-3"
+                    className="relative space-y-3 border border-slate-200 bg-slate-50/70 p-4"
                   >
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">
+                      <span className="text-xs font-bold uppercase tracking-wide text-[#2c3e82]">
                         Joint Employee #{index + 1}
                       </span>
                       {jointAccountabilities.length > 1 && (
@@ -628,7 +625,7 @@ return (
                           handleJointAccountabilityChange(index, e)
                         }
                         disabled={jointAccountabilityUsersLoading}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                        className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2c3e82] focus:outline-none focus:ring-2 focus:ring-blue-200"
                       >
                         <option value="">
                           {jointAccountabilityUsersLoading
@@ -654,7 +651,7 @@ return (
                         onChange={(e) =>
                           handleJointAccountabilityChange(index, e)
                         }
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                        className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-[#2c3e82] focus:outline-none focus:ring-2 focus:ring-blue-200"
                       />
                       <input
                         type="number"
@@ -665,7 +662,7 @@ return (
                         onChange={(e) =>
                           handleJointAccountabilityChange(index, e)
                         }
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                        className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-[#2c3e82] focus:outline-none focus:ring-2 focus:ring-blue-200"
                       />
                     </div>
                   </div>
@@ -691,13 +688,13 @@ return (
             </div> */}
 
             {/* Sub-Goals Section */}
-            <section className="border-t border-slate-100 pt-6">
-              <div className="goal-section-toolbar flex justify-between items-center mb-4">
+            <section className="overflow-hidden border border-[#cbd4e2] bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-[#cbd4e2] bg-[#eaf0f8] px-3.5 py-3 max-sm:flex-col max-sm:items-start">
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">
+                  <h3 className="text-[13px] font-bold uppercase tracking-wide text-[#30415f]">
                     Sub-Goals
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="mt-1 text-[11px] text-slate-600">
                     Optional: add up to {MAX_SUB_GOALS} sub-goals. Their weightages are a % of this goal and must total 100%.
                   </p>
                 </div>
@@ -705,7 +702,7 @@ return (
                   type="button"
                   onClick={addSubGoalRow}
                   disabled={subGoals.length >= MAX_SUB_GOALS}
-                  className="goal-sheet-add-button inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className="inline-flex cursor-pointer items-center gap-1.5 border border-blue-200 bg-white px-3.5 py-2 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -714,12 +711,12 @@ return (
                 </button>
               </div>
 
-              <div className="goal-sheet-rows space-y-3">
+              <div className="flex flex-col gap-2 p-3">
                 {subGoals.length === 0 && (
-                  <p className="text-sm text-slate-400">No sub-goals added.</p>
+                  <p className="text-sm text-slate-500">No sub-goals added.</p>
                 )}
                 {subGoals.length > 0 && (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-950">
+                  <div className="border border-blue-200 bg-blue-50/60 px-4 py-3 text-sm text-[#2c3e82]">
                     <p className="font-semibold">
                       Allocated {subGoalWeightage.allocated.toFixed(2)}% · Remaining{" "}
                       {subGoalWeightage.remaining.toFixed(2)}%
@@ -729,10 +726,10 @@ return (
                 {subGoals.map((sub, index) => (
                   <div
                     key={index}
-                    className="bg-slate-50/70 border border-slate-200 rounded-2xl p-4 relative space-y-3"
+                    className="relative space-y-3 border border-slate-200 bg-slate-50/70 p-4"
                   >
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">
+                      <span className="text-xs font-bold uppercase tracking-wide text-[#2c3e82]">
                         Sub-Goal #{index + 1}
                       </span>
                       <button
@@ -751,7 +748,7 @@ return (
                         required
                         value={sub.SubGoalTitle}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="sm:col-span-2 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                        className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-[#2c3e82] focus:outline-none focus:ring-2 focus:ring-blue-200 sm:col-span-2"
                       />
                       <input
                         type="number"
@@ -764,7 +761,7 @@ return (
                         step="0.01"
                         value={sub.Weightage}
                         onChange={(e) => handleSubGoalChange(index, e)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-400"
+                        className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-[#2c3e82] focus:outline-none focus:ring-2 focus:ring-blue-200"
                       />
                     </div>
                   </div>
@@ -778,18 +775,18 @@ return (
             </section>
 
             {/* Action Buttons */}
-            <div className="goal-form-actions flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-6 border-t border-slate-100">
+            <div className="flex flex-col-reverse items-center justify-end gap-3 border-t border-slate-200 pt-6 sm:flex-row">
               <button
                 type="button"
                 onClick={() => navigate("/goals")}
-                className="w-full sm:w-auto px-5 py-2.5 border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 font-medium text-sm transition cursor-pointer"
+                className="w-full cursor-pointer border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full sm:w-auto px-6 py-2.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-xl font-semibold text-sm shadow-sm transition disabled:opacity-50 cursor-pointer"
+                className="w-full cursor-pointer border border-blue-200 bg-white px-6 py-2.5 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:opacity-50 sm:w-auto"
               >
                 {loading ? "Saving..." : "Save as Draft"}
               </button>
@@ -797,15 +794,15 @@ return (
                 type="button"
                 disabled={loading}
                 onClick={(e) => handleSubmit(e, "Submitted")}
-                className="w-full sm:w-auto px-6 py-2.5 bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-semibold text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 cursor-pointer"
+                className="w-full cursor-pointer bg-[#2c3e82] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1f2c61] disabled:opacity-50 sm:w-auto"
               >
                 Submit Goal
               </button>
             </div>
           </form>
-          <div className="goal-sheet-tabs" aria-hidden="true">
-            <span className="goal-sheet-tab">Goal Entry</span>
-            <span className="goal-sheet-tab-hint">Quarterly planning worksheet</span>
+          <div className="-mx-3 mt-[18px] flex min-h-[42px] items-stretch gap-[18px] border-t border-[#d5dce5] bg-[#f4f6fa] px-3 sm:-mx-8 sm:px-6" aria-hidden="true">
+            <span className="flex items-center border-t-[3px] border-[#2c3e82] bg-white px-[18px] text-xs font-bold text-[#2c3e82]">Goal Entry</span>
+            <span className="self-center text-[11px] text-slate-500">Quarterly planning worksheet</span>
           </div>
           </div>
         </div>
