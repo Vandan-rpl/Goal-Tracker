@@ -3,11 +3,16 @@ const router = express.Router();
 const {
     getGoals,
     getMyQuarterSummary,
+    getAddGoalStatus,
+    getBringForwardGoals,
+    bringForwardGoal,
     getJointAccountabilityUsers,
     getJointGoals,
     getAllEmployeeGoals,
     getGoalById,
     createGoal, 
+    getGoalSheet,
+    saveGoalSheet,
     updateGoal,
     deleteGoal,
     changeGoalStatus,
@@ -32,6 +37,16 @@ router.get('/', getGoals);
 
 // Employee dashboard quarter summary. Keep above router.get('/:id').
 router.get('/dashboard/quarters', getMyQuarterSummary);
+
+// Add Goal sheet: the user's Draft goals for the target quarter, saved
+// together. Keep above the '/:id' routes.
+router.get('/sheet', getGoalSheet);
+router.put('/sheet', saveGoalSheet);
+
+// Goal Management header: Add Goal availability and goals to bring
+// forward. Keep above the '/:id' routes.
+router.get('/add-status', getAddGoalStatus);
+router.get('/bring-forward', getBringForwardGoals);
 
 router.get('/joint-accountability-users', getJointAccountabilityUsers);
 router.get('/joint-accountability', getJointGoals);
@@ -61,7 +76,11 @@ router.post('/', createGoal);
 router.post('/review', submitGoalReview);
 // IMPORTANT: Keep status update route BEFORE router.put('/:id', updateGoal) 
 // so '/status/:id' matches correctly instead of treating 'status' as an ID.
-router.put('/status/:id', changeGoalStatus); 
+router.put('/status/:id', changeGoalStatus);
+
+// New End Date for a goal on the bring-forward list, submitted through the
+// existing carry-forward approval.
+router.put('/:id/bring-forward', bringForwardGoal);
 
 router.put('/:id', updateGoal);
 router.delete('/:id', deleteGoal);

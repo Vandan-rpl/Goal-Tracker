@@ -16,7 +16,7 @@ import {
 } from "../../utils/subGoals";
 
 const MIN_GOAL_WEIGHTAGE = 5;
-const MAX_GOAL_WEIGHTAGE = 30;
+const MAX_GOAL_WEIGHTAGE = 100;
 
 const EditGoal = () => {
   const { id } = useParams();

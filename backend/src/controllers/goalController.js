@@ -1,6 +1,7 @@
 const { poolPromise, sql } = require("../config/db");
 const crypto = require("crypto");
 const jointAccountabilityModel = require("../models/jointAccountabilityModel");
+const goalModel = require("../models/goalModel");
 const { notifyUser } = require("../services/notifyService");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const {
@@ -12,6 +13,7 @@ const {
   getFiscalQuarterBoundsFromLabel,
   getFiscalYearQuarters,
   toDateKey,
+  formatLocalDateKey,
   getNextFiscalQuarter,
   getQuarterStartDate,
   getGoalCreationWindow,
@@ -36,7 +38,7 @@ const CARRY_FORWARD_BLOCKED_STATUSES = [
 
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
-const MAX_GOAL_WEIGHTAGE = 30;
+const MAX_GOAL_WEIGHTAGE = 100;
 
 const getQuarterGoalAllocation = async (
   transaction,
@@ -1179,6 +1181,144 @@ const getSubGoalValidationError = (titledSubGoals) =>
   getSubGoalCountError(titledSubGoals) ||
   getSubGoalWeightageError(titledSubGoals);
 
+// Inserts a goal's sub-goals as SubGoalNo 1..n. Status is never taken from
+// the client: a resent sub-goal keeps its stored status (looked up by
+// SubGoalID in `existingStatuses`) and a new one starts Pending.
+const insertSubGoals = async (
+  transaction,
+  goalId,
+  validSubGoals,
+  existingStatuses = new Map(),
+) => {
+  for (let i = 0; i < validSubGoals.length; i++) {
+    const sub = validSubGoals[i];
+    const subRequest = new sql.Request(transaction);
+    subRequest.input("GoalID", sql.BigInt, goalId);
+    subRequest.input("SubGoalNo", sql.Int, i + 1);
+    subRequest.input("SubGoalTitle", sql.NVarChar, sub.SubGoalTitle.trim());
+    subRequest.input(
+      "SubGoalDescription",
+      sql.NVarChar,
+      sub.SubGoalDescription || null,
+    );
+    subRequest.input("Weightage", sql.Decimal(5, 2), Number(sub.Weightage));
+    subRequest.input("Target", sql.NVarChar, null);
+    subRequest.input(
+      "Status",
+      sql.VarChar,
+      getSubGoalStatus(existingStatuses.get(String(sub.SubGoalID))),
+    );
+
+    await subRequest.query(`
+        INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
+        VALUES (@GoalID, @SubGoalNo, @SubGoalTitle, @SubGoalDescription, @Weightage, @Target, @Status, GETDATE())
+    `);
+  }
+};
+
+// Replaces all of a goal's sub-goals with `validSubGoals` (an empty list
+// clears them), keeping the status of sub-goals resent with their SubGoalID.
+const replaceSubGoals = async (transaction, goalId, validSubGoals) => {
+  const existingSubGoalsResult = await new sql.Request(transaction)
+    .input("GoalID", sql.BigInt, goalId)
+    .query(
+      "SELECT SubGoalID, Status FROM dbo.GoalSubGoals WHERE GoalID = @GoalID",
+    );
+  const existingStatuses = new Map(
+    existingSubGoalsResult.recordset.map((subGoal) => [
+      String(subGoal.SubGoalID),
+      subGoal.Status,
+    ]),
+  );
+  await new sql.Request(transaction)
+    .input("GoalID", sql.BigInt, goalId)
+    .query("DELETE FROM dbo.GoalSubGoals WHERE GoalID = @GoalID");
+
+  await insertSubGoals(transaction, goalId, validSubGoals, existingStatuses);
+};
+
+// Inserts one dbo.Goals row inside `transaction` and returns its GoalID.
+// Dates are 'YYYY-MM-DD' keys; Quarter/QuarterEndDate come from StartDate.
+const insertGoalRow = async (transaction, goal) => {
+  const result = await new sql.Request(transaction)
+    .input("UserID", sql.Int, goal.UserID)
+    .input("GoalNumber", sql.Int, goal.GoalNumber)
+    .input("GoalTitle", sql.NVarChar, goal.GoalTitle)
+    .input("GoalDescription", sql.NVarChar, goal.GoalDescription || null)
+    .input("Measurability", sql.NVarChar, goal.Measurability || null)
+    .input("JointAccountability", sql.NVarChar, goal.JointAccountability || null)
+    .input("Weightage", sql.Decimal(5, 2), goal.Weightage)
+    .input("Priority", sql.VarChar, goal.Priority)
+    .input("StartDate", sql.Date, goal.StartDate)
+    .input("Timeline", sql.Date, goal.Timeline)
+    .input("Quarter", sql.VarChar, goal.Quarter)
+    .input("QuarterEndDate", sql.Date, goal.QuarterEndDate)
+    .input("MeetPerformance", sql.NVarChar, goal.MeetPerformance || null)
+    .input("ExceedPerformance", sql.NVarChar, goal.ExceedPerformance || null)
+    .input("ValidationSource", sql.NVarChar, goal.ValidationSource || null)
+    .input("CrossFunctionalGoal", sql.Bit, goal.CrossFunctionalGoal ? 1 : 0)
+    .input("GoalCategory", sql.NVarChar, goal.GoalCategory || null)
+    .input("GoalStatus", sql.VarChar, goal.GoalStatus)
+    .input(
+      "SubmittedDate",
+      sql.DateTime,
+      goal.GoalStatus === "Submitted" ? new Date() : null,
+    ).query(`
+            INSERT INTO dbo.Goals (
+                UserID, GoalNumber, GoalTitle, GoalDescription, Measurability,
+                JointAccountability, Weightage, Priority, StartDate, Timeline, Quarter, QuarterEndDate, MeetPerformance,
+                ExceedPerformance, ValidationSource, CrossFunctionalGoal, GoalCategory,
+                GoalStatus, DraftVersion, SubmittedDate, CreatedDate
+            )
+            OUTPUT INSERTED.GoalID
+            VALUES (
+                @UserID, @GoalNumber, @GoalTitle, @GoalDescription, @Measurability,
+                @JointAccountability, @Weightage, @Priority, @StartDate, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance,
+                @ExceedPerformance, @ValidationSource, @CrossFunctionalGoal, @GoalCategory,
+                @GoalStatus, 1, @SubmittedDate, GETDATE()
+            )
+        `);
+  return result.recordset[0].GoalID;
+};
+
+// Statuses that do not count towards a quarter's active 100% allocation.
+const NON_ACTIVE_GOAL_STATUSES = ["Draft", "Rejected", "Cancelled"];
+const FULL_ALLOCATION_HUNDREDTHS = 10000;
+
+const toWeightageHundredths = (weightage) =>
+  Math.round(Number(weightage || 0) * 100);
+
+const formatWeightageHundredths = (hundredths) =>
+  (hundredths / 100).toFixed(2);
+
+// Locks and returns all of a user's goals in a quarter, so allocation
+// checks and the writes that follow see a stable set.
+const lockUserQuarterGoals = async (transaction, userId, quarter) => {
+  const result = await new sql.Request(transaction)
+    .input("UserID", sql.Int, userId)
+    .input("Quarter", sql.VarChar, quarter).query(`
+      SELECT *
+      FROM dbo.Goals WITH (UPDLOCK, HOLDLOCK)
+      WHERE UserID = @UserID
+        AND Quarter = @Quarter
+    `);
+  return result.recordset;
+};
+
+const getActiveWeightageHundredths = (goals) =>
+  goals
+    .filter((goal) => !NON_ACTIVE_GOAL_STATUSES.includes(goal.GoalStatus))
+    .reduce((total, goal) => total + toWeightageHundredths(goal.Weightage), 0);
+
+// Goals are added for the fiscal quarter after the current one.
+const getTargetGoalQuarterBounds = () =>
+  getFiscalQuarterBoundsFromLabel(
+    getNextFiscalQuarter(getFiscalQuarter().quarterEndDate).label,
+  );
+
+const getGoalCreationWindowClosedMessage = (goalCreationWindow) =>
+  `Goal creation is available only during the first 7 days of each quarter. The current window was ${goalCreationWindow.startDate.toLocaleDateString()} through ${goalCreationWindow.endDate.toLocaleDateString()}.`;
+
 // Goal-level completion used by the review window. Sub-goals do not drive
 // it; a goal counts as 100% only once its completion has been approved.
 const getGoalCompletionPercentage = (goal) =>
@@ -1264,7 +1404,7 @@ const createGoal = async (req, res) => {
   if (!goalCreationWindow.isOpen) {
     return res.status(403).json({
       success: false,
-      message: `Goal creation is available only during the first 7 days of each quarter. The current window was ${goalCreationWindow.startDate.toLocaleDateString()} through ${goalCreationWindow.endDate.toLocaleDateString()}.`,
+      message: getGoalCreationWindowClosedMessage(goalCreationWindow),
     });
   }
 
@@ -1287,9 +1427,7 @@ const createGoal = async (req, res) => {
   const dateErrors = getGoalDateErrors(
     startDateKey,
     timelineKey,
-    getFiscalQuarterBoundsFromLabel(
-      getNextFiscalQuarter(getFiscalQuarter().quarterEndDate).label,
-    ),
+    getTargetGoalQuarterBounds(),
   );
   if (dateErrors) {
     return res.status(400).json({
@@ -1357,9 +1495,7 @@ const createGoal = async (req, res) => {
 
   try {
     await transaction.begin();
-    const request = new sql.Request(transaction);
 
-    request.input("UserID", sql.Int, userId);
     const nextGoalNumberResult = await new sql.Request(transaction).input(
       "UserID",
       sql.Int,
@@ -1369,23 +1505,6 @@ const createGoal = async (req, res) => {
         FROM dbo.Goals
         WHERE UserID = @UserID
       `);
-    request.input(
-      "GoalNumber",
-      sql.Int,
-      nextGoalNumberResult.recordset[0].NextGoalNumber,
-    );
-    request.input("GoalTitle", sql.NVarChar, GoalTitle);
-    request.input("GoalDescription", sql.NVarChar, GoalDescription || null);
-    request.input("Measurability", sql.NVarChar, Measurability || null);
-    request.input(
-      "JointAccountability",
-      sql.NVarChar,
-      JointAccountability || null,
-    );
-    request.input("Weightage", sql.Decimal(5, 2), Weightage);
-    request.input("Priority", sql.VarChar, Priority);
-    request.input("StartDate", sql.Date, startDateKey);
-    request.input("Timeline", sql.Date, timelineKey);
     const allocation = await getQuarterGoalAllocation(
       transaction,
       userId,
@@ -1403,37 +1522,26 @@ const createGoal = async (req, res) => {
         errors: { [allocationError.field]: allocationError.message },
       });
     }
-    request.input("Quarter", sql.VarChar, goalQuarter);
-    request.input("QuarterEndDate", sql.Date, goalQuarterEndDate);
-    request.input("MeetPerformance", sql.NVarChar, MeetPerformance || null);
-    request.input("ExceedPerformance", sql.NVarChar, ExceedPerformance || null);
-    request.input("ValidationSource", sql.NVarChar, ValidationSource || null);
-    request.input("CrossFunctionalGoal", sql.Bit, CrossFunctionalGoal ? 1 : 0);
-    request.input("GoalCategory", sql.NVarChar, GoalCategory || null);
-    request.input("GoalStatus", sql.VarChar, GoalStatus || "Draft");
-    request.input(
-      "SubmittedDate",
-      sql.DateTime,
-      GoalStatus === "Submitted" ? new Date() : null,
-    );
-
-    const goalInsertResult = await request.query(`
-            INSERT INTO dbo.Goals (
-                UserID, GoalNumber, GoalTitle, GoalDescription, Measurability, 
-                JointAccountability, Weightage, Priority, StartDate, Timeline, Quarter, QuarterEndDate, MeetPerformance,
-                ExceedPerformance, ValidationSource, CrossFunctionalGoal, GoalCategory,
-                GoalStatus, DraftVersion, SubmittedDate, CreatedDate
-            )
-            OUTPUT INSERTED.GoalID
-            VALUES (
-                @UserID, @GoalNumber, @GoalTitle, @GoalDescription, @Measurability,
-                @JointAccountability, @Weightage, @Priority, @StartDate, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance,
-                @ExceedPerformance, @ValidationSource, @CrossFunctionalGoal, @GoalCategory, 
-                @GoalStatus, 1, @SubmittedDate, GETDATE()
-            )
-        `);
-
-    const newGoalID = goalInsertResult.recordset[0].GoalID;
+    const newGoalID = await insertGoalRow(transaction, {
+      UserID: userId,
+      GoalNumber: nextGoalNumberResult.recordset[0].NextGoalNumber,
+      GoalTitle,
+      GoalDescription,
+      Measurability,
+      JointAccountability,
+      Weightage,
+      Priority,
+      StartDate: startDateKey,
+      Timeline: timelineKey,
+      Quarter: goalQuarter,
+      QuarterEndDate: goalQuarterEndDate,
+      MeetPerformance,
+      ExceedPerformance,
+      ValidationSource,
+      CrossFunctionalGoal,
+      GoalCategory,
+      GoalStatus: GoalStatus || "Draft",
+    });
 
     await logGoalHistory(
       transaction,
@@ -1445,27 +1553,8 @@ const createGoal = async (req, res) => {
       userId,
     );
 
-    for (let i = 0; i < validSubGoals.length; i++) {
-      const sub = validSubGoals[i];
-      const subRequest = new sql.Request(transaction);
-      subRequest.input("GoalID", sql.BigInt, newGoalID);
-      subRequest.input("SubGoalNo", sql.Int, i + 1);
-      subRequest.input("SubGoalTitle", sql.NVarChar, sub.SubGoalTitle.trim());
-      subRequest.input(
-        "SubGoalDescription",
-        sql.NVarChar,
-        sub.SubGoalDescription || null,
-      );
-      subRequest.input("Weightage", sql.Decimal(5, 2), Number(sub.Weightage));
-      subRequest.input("Target", sql.NVarChar, null);
-      // New sub-goals always start Pending; status is ticked after approval.
-      subRequest.input("Status", sql.VarChar, "Pending");
-
-      await subRequest.query(`
-          INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
-          VALUES (@GoalID, @SubGoalNo, @SubGoalTitle, @SubGoalDescription, @Weightage, @Target, @Status, GETDATE())
-      `);
-    }
+    // New sub-goals always start Pending; status is ticked after approval.
+    await insertSubGoals(transaction, newGoalID, validSubGoals);
 
     await jointAccountabilityModel.insertJointAccountabilities(
       newGoalID,
@@ -1634,7 +1723,9 @@ const updateGoal = async (req, res) => {
       !terminalStatus &&
       timelineOnlyEditStatuses.includes(currentStatus) &&
       Number(existingGoal.CarryForwardCount || 0) === 0 &&
-      isDateBeforeToday(existingGoal.Timeline);
+      // bringForwardGoal has already checked that the goal ends this quarter
+      // or earlier, so it need not be overdue yet.
+      (isDateBeforeToday(existingGoal.Timeline) || req.isBringForward === true);
 
     if (
       isGoalOwner &&
@@ -1827,6 +1918,30 @@ const updateGoal = async (req, res) => {
       }
     }
 
+    // A resubmitted Rejected goal rejoins the quarter's active allocation,
+    // which must then total exactly 100%.
+    if (currentStatus === "Rejected" && newStatus === "Submitted") {
+      const quarterGoals = await lockUserQuarterGoals(
+        transaction,
+        existingGoal.UserID,
+        newQuarter,
+      );
+      const otherActiveHundredths = getActiveWeightageHundredths(
+        quarterGoals.filter((goal) => String(goal.GoalID) !== String(id)),
+      );
+      const totalHundredths =
+        otherActiveHundredths + toWeightageHundredths(finalWeightage);
+      if (totalHundredths !== FULL_ALLOCATION_HUNDREDTHS) {
+        const message = `Resubmitting this goal would make your active ${newQuarter} goals total ${formatWeightageHundredths(totalHundredths)}%, but they must total exactly 100.00%. Your other active goals total ${formatWeightageHundredths(otherActiveHundredths)}%, so this goal's weightage must be ${formatWeightageHundredths(FULL_ALLOCATION_HUNDREDTHS - otherActiveHundredths)}%.`;
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message,
+          errors: { Weightage: message },
+        });
+      }
+    }
+
     // SMART validation uses the exact field values that will be persisted.
     // Uses the goal's own transaction connection for the Achievable
     // weightage-sum read, and the goal's real CreatedDate as the
@@ -1964,50 +2079,9 @@ const updateGoal = async (req, res) => {
     // Sub-goals are optional, so an empty list clears existing ones. Only
     // skip the sync when the client did not send SubGoals at all.
     if (canEditSubGoals) {
-      const existingSubGoalsResult = await new sql.Request(transaction)
-        .input("GoalID", sql.BigInt, id)
-        .query(
-          "SELECT SubGoalID, Status FROM dbo.GoalSubGoals WHERE GoalID = @GoalID",
-        );
-      const existingSubGoalStatuses = new Map(
-        existingSubGoalsResult.recordset.map((subGoal) => [
-          String(subGoal.SubGoalID),
-          subGoal.Status,
-        ]),
-      );
-      const deleteSubRequest = new sql.Request(transaction);
-      await deleteSubRequest
-        .input("GoalID", sql.BigInt, id)
-        .query("DELETE FROM dbo.GoalSubGoals WHERE GoalID = @GoalID");
-
-      for (let i = 0; i < validSubGoals.length; i++) {
-        const sub = validSubGoals[i];
-        const subRequest = new sql.Request(transaction);
-        subRequest.input("GoalID", sql.BigInt, id);
-        subRequest.input("SubGoalNo", sql.Int, i + 1);
-        subRequest.input("SubGoalTitle", sql.NVarChar, sub.SubGoalTitle.trim());
-        subRequest.input(
-          "SubGoalDescription",
-          sql.NVarChar,
-          sub.SubGoalDescription || null,
-        );
-        subRequest.input("Weightage", sql.Decimal(5, 2), Number(sub.Weightage));
-        subRequest.input("Target", sql.NVarChar, null);
-        // Status is never taken from the edit form; it is toggled only on
-        // Approved goals through the sub-goal status endpoints.
-        subRequest.input(
-          "Status",
-          sql.VarChar,
-          getSubGoalStatus(
-            existingSubGoalStatuses.get(String(sub.SubGoalID)),
-          ),
-        );
-
-        await subRequest.query(`
-                    INSERT INTO dbo.GoalSubGoals (GoalID, SubGoalNo, SubGoalTitle, SubGoalDescription, Weightage, Target, Status, CreatedDate)
-                    VALUES (@GoalID, @SubGoalNo, @SubGoalTitle, @SubGoalDescription, @Weightage, @Target, @Status, GETDATE())
-                `);
-      }
+      // Status is never taken from the edit form; it is toggled only on
+      // Approved goals through the sub-goal status endpoints.
+      await replaceSubGoals(transaction, id, validSubGoals);
     }
     // Note: when isCarryForward is true, canEditSubGoals is false, so this
     // block is skipped entirely — sub-goals are left exactly as they are,
@@ -2077,6 +2151,537 @@ const updateGoal = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error while updating goal.",
+      errors: error.message,
+    });
+  }
+};
+
+// Goal sheet: the Add Goal page edits all of a user's goals for the target
+// quarter in one sheet. Only Draft goals are shown or editable there.
+const GOAL_SHEET_STATUSES = ["Draft", "Submitted"];
+
+// Goal numbers are per user per quarter. Goals already out of Draft keep
+// their numbers, so the sheet's rows are numbered after them.
+const getSheetGoalNumberStart = (otherQuarterGoals) =>
+  otherQuarterGoals.filter((goal) => goal.GoalStatus !== "Draft").length + 1;
+
+// Free goal slots, counted the same way as getQuarterAllocationError.
+const getSheetGoalSlots = (otherQuarterGoals) =>
+  Math.max(
+    0,
+    MAX_GOALS_PER_QUARTER -
+      otherQuarterGoals.filter(
+        (goal) => !["Rejected", "Cancelled"].includes(goal.GoalStatus),
+      ).length,
+  );
+
+// Field errors for one sheet row, keyed like the single-goal endpoints.
+const getGoalSheetRowErrors = (row, bounds) => {
+  const { goal } = row;
+  const errors = {};
+
+  if (row.GoalID !== null && !(Number.isInteger(row.GoalID) && row.GoalID > 0)) {
+    errors.GoalID = "This goal reference is invalid. Reload the page.";
+  }
+  if (!String(goal?.GoalTitle ?? "").trim()) {
+    errors.GoalTitle = "Goal Title is required.";
+  }
+  if (!String(goal?.Priority ?? "").trim()) {
+    errors.Priority = "Priority is required.";
+  }
+
+  const weightageError = getGoalWeightageError(goal?.Weightage);
+  if (weightageError) errors.Weightage = weightageError;
+
+  // The target-quarter bounds also keep every row in the same quarter.
+  Object.assign(
+    errors,
+    getGoalDateErrors(row.startDateKey, row.timelineKey, bounds) || {},
+  );
+
+  const subGoalError = getSubGoalValidationError(row.validSubGoals);
+  if (subGoalError) errors.SubGoals = subGoalError;
+
+  return Object.keys(errors).length > 0 ? errors : null;
+};
+
+// `rowErrors` is aligned with the request's Goals array (null = row is OK).
+const sendGoalSheetRowErrors = (res, rowErrors, message, status = 400) =>
+  res.status(status).json({
+    success: false,
+    message,
+    errors: { rows: rowErrors },
+  });
+
+// Why an existing sheet row can't be updated, i.e. it is not one of this
+// user's Draft goals in the target quarter. `quarterGoal` is the row from
+// the user's locked quarter goals, if it was there.
+const getSheetGoalAccessError = async (
+  transaction,
+  goalId,
+  quarterGoal,
+  userId,
+  quarter,
+) => {
+  const goal =
+    quarterGoal ||
+    (
+      await new sql.Request(transaction)
+        .input("GoalID", sql.BigInt, goalId)
+        .query(
+          "SELECT UserID, GoalStatus, Quarter FROM dbo.Goals WHERE GoalID = @GoalID",
+        )
+    ).recordset[0];
+
+  if (!goal) {
+    return { status: 404, message: "This draft goal no longer exists. Reload the page." };
+  }
+  if (Number(goal.UserID) !== Number(userId)) {
+    return { status: 403, message: "You can only edit your own goals." };
+  }
+  if (goal.GoalStatus !== "Draft") {
+    return {
+      status: 400,
+      message: `This goal is already ${goal.GoalStatus}; only Draft goals can be edited here. Reload the page.`,
+    };
+  }
+  return {
+    status: 400,
+    message: `This draft goal belongs to ${goal.Quarter || "another quarter"}, not ${quarter}. Reload the page.`,
+  };
+};
+
+// 6. Load the user's Draft goals for the target quarter (Add Goal sheet)
+const getGoalSheet = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+  const bounds = getTargetGoalQuarterBounds();
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .input("Quarter", sql.VarChar, bounds.label).query(`
+        SELECT GoalID, GoalNumber, GoalTitle, GoalDescription, Measurability,
+               Weightage, Priority, StartDate, Timeline, MeetPerformance,
+               ExceedPerformance, ValidationSource, CrossFunctionalGoal,
+               GoalCategory, GoalStatus
+        FROM dbo.Goals
+        WHERE UserID = @UserID
+          AND Quarter = @Quarter
+        ORDER BY GoalNumber, GoalID
+      `);
+
+    const drafts = result.recordset.filter((goal) => goal.GoalStatus === "Draft");
+    const otherGoals = result.recordset.filter(
+      (goal) => goal.GoalStatus !== "Draft",
+    );
+
+    const goals = await Promise.all(
+      drafts.map(async (goal) => {
+        const [subGoals, jointAccountabilities] = await Promise.all([
+          goalModel.getSubGoalsByGoalId(goal.GoalID),
+          jointAccountabilityModel.getJointAccountabilitiesByGoalId(goal.GoalID),
+        ]);
+        return {
+          GoalID: goal.GoalID,
+          GoalTitle: goal.GoalTitle,
+          GoalDescription: goal.GoalDescription,
+          Measurability: goal.Measurability,
+          Weightage: goal.Weightage,
+          Priority: goal.Priority,
+          StartDate: toDateKey(goal.StartDate),
+          Timeline: toDateKey(goal.Timeline),
+          MeetPerformance: goal.MeetPerformance,
+          ExceedPerformance: goal.ExceedPerformance,
+          ValidationSource: goal.ValidationSource,
+          CrossFunctionalGoal: Boolean(goal.CrossFunctionalGoal),
+          GoalCategory: goal.GoalCategory,
+          SubGoals: subGoals
+            .sort((a, b) => Number(a.SubGoalNo) - Number(b.SubGoalNo))
+            .map((subGoal) => ({
+              SubGoalID: subGoal.SubGoalID,
+              SubGoalNo: subGoal.SubGoalNo,
+              SubGoalTitle: subGoal.SubGoalTitle,
+              Weightage: subGoal.Weightage,
+            })),
+          JointAccountabilities: jointAccountabilities.map((ja) => ({
+            UserID: ja.UserID,
+            ContributionNote: ja.ContributionNote,
+            Weightage: ja.Weightage,
+          })),
+        };
+      }),
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Goal sheet fetched successfully.",
+      data: {
+        quarter: bounds.label,
+        startDate: bounds.startKey,
+        endDate: bounds.endKey,
+        goalNumberStart: getSheetGoalNumberStart(otherGoals),
+        maxGoals: getSheetGoalSlots(otherGoals),
+        goals,
+      },
+    });
+  } catch (error) {
+    console.error("Get Goal Sheet Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching draft goals.",
+      errors: error.message,
+    });
+  }
+};
+
+// 7. Save the whole Add Goal sheet as Draft or Submitted, all or nothing.
+const saveGoalSheet = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+  const { GoalStatus, Goals } = req.body || {};
+
+  const goalCreationWindow = getGoalCreationWindow();
+  if (!goalCreationWindow.isOpen) {
+    return res.status(403).json({
+      success: false,
+      message: getGoalCreationWindowClosedMessage(goalCreationWindow),
+    });
+  }
+
+  if (!GOAL_SHEET_STATUSES.includes(GoalStatus)) {
+    return res.status(400).json({
+      success: false,
+      message: "Goals can only be saved as Draft or Submitted from the goal sheet.",
+    });
+  }
+
+  if (!Array.isArray(Goals) || Goals.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Add at least one goal.",
+    });
+  }
+
+  if (Goals.length > MAX_GOALS_PER_QUARTER) {
+    const message = `A maximum of ${MAX_GOALS_PER_QUARTER} goals can be added per quarter.`;
+    return res.status(400).json({
+      success: false,
+      message,
+      errors: { GoalCount: message },
+    });
+  }
+
+  const bounds = getTargetGoalQuarterBounds();
+  const rows = Goals.map((goal) => ({
+    goal,
+    GoalID:
+      goal?.GoalID === undefined || goal?.GoalID === null || goal?.GoalID === ""
+        ? null
+        : Number(goal.GoalID),
+    startDateKey: toDateKey(goal?.StartDate),
+    timelineKey: toDateKey(goal?.Timeline),
+    validSubGoals: getTitledSubGoals(goal?.SubGoals),
+  }));
+
+  const rowErrors = rows.map((row) => getGoalSheetRowErrors(row, bounds));
+  const seenGoalIds = new Set();
+  rows.forEach((row, index) => {
+    if (!row.GoalID) return;
+    if (seenGoalIds.has(row.GoalID)) {
+      rowErrors[index] = {
+        ...rowErrors[index],
+        GoalID: "This goal appears more than once in the sheet.",
+      };
+    }
+    seenGoalIds.add(row.GoalID);
+  });
+  if (rowErrors.some(Boolean)) {
+    return sendGoalSheetRowErrors(
+      res,
+      rowErrors,
+      "Some goals have errors. Fix the highlighted cells and try again.",
+    );
+  }
+
+  const pool = await poolPromise;
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    await transaction.begin();
+
+    const quarterGoals = await lockUserQuarterGoals(
+      transaction,
+      userId,
+      bounds.label,
+    );
+    const quarterGoalsById = new Map(
+      quarterGoals.map((goal) => [Number(goal.GoalID), goal]),
+    );
+
+    // Existing rows must still be this user's Draft goals in the quarter.
+    for (let index = 0; index < rows.length; index++) {
+      const { GoalID } = rows[index];
+      if (!GoalID) continue;
+
+      const existing = quarterGoalsById.get(GoalID);
+      if (existing?.GoalStatus === "Draft") continue;
+
+      const { status, message } = await getSheetGoalAccessError(
+        transaction,
+        GoalID,
+        existing,
+        userId,
+        bounds.label,
+      );
+      await transaction.rollback();
+      const accessErrors = rows.map(() => null);
+      accessErrors[index] = { GoalID: message };
+      return sendGoalSheetRowErrors(
+        res,
+        accessErrors,
+        `Goal ${index + 1}: ${message}`,
+        status,
+      );
+    }
+
+    const otherQuarterGoals = quarterGoals.filter(
+      (goal) => !seenGoalIds.has(Number(goal.GoalID)),
+    );
+
+    if (rows.length > getSheetGoalSlots(otherQuarterGoals)) {
+      await transaction.rollback();
+      const message = `A maximum of ${MAX_GOALS_PER_QUARTER} goals can be added per quarter. You can add ${getSheetGoalSlots(otherQuarterGoals)} more for ${bounds.label}.`;
+      return res.status(400).json({
+        success: false,
+        message,
+        errors: { GoalCount: message },
+      });
+    }
+
+    if (GoalStatus === "Submitted") {
+      // SMART criteria apply only on submission (same as createGoal).
+      const smartErrors = await Promise.all(
+        rows.map(async ({ goal, GoalID, timelineKey }) => {
+          const { valid, errors } = await validateSmartGoal({
+            GoalTitle: goal.GoalTitle,
+            GoalDescription: goal.GoalDescription,
+            Measurability: goal.Measurability,
+            MeetPerformance: goal.MeetPerformance,
+            ExceedPerformance: goal.ExceedPerformance,
+            Weightage: goal.Weightage,
+            GoalCategory: goal.GoalCategory,
+            Timeline: timelineKey,
+            CreatedDate: GoalID
+              ? quarterGoalsById.get(GoalID).CreatedDate
+              : new Date(),
+          });
+          return valid ? null : errors;
+        }),
+      );
+      if (smartErrors.some(Boolean)) {
+        await transaction.rollback();
+        return sendGoalSheetRowErrors(
+          res,
+          smartErrors,
+          "Some goals do not meet the SMART criteria required for submission.",
+        );
+      }
+
+      const otherActiveHundredths = getActiveWeightageHundredths(otherQuarterGoals);
+      const sheetHundredths = rows.reduce(
+        (total, { goal }) => total + toWeightageHundredths(goal.Weightage),
+        0,
+      );
+      const totalHundredths = otherActiveHundredths + sheetHundredths;
+      if (totalHundredths !== FULL_ALLOCATION_HUNDREDTHS) {
+        await transaction.rollback();
+        const message =
+          otherActiveHundredths > 0
+            ? `Your active ${bounds.label} goals already total ${formatWeightageHundredths(otherActiveHundredths)}%. With these goals (${formatWeightageHundredths(sheetHundredths)}%) the quarter would total ${formatWeightageHundredths(totalHundredths)}%, but it must be exactly 100.00%.`
+            : `The goals being submitted total ${formatWeightageHundredths(sheetHundredths)}%. A quarter's goals must total exactly 100.00% to submit.`;
+        return res.status(400).json({
+          success: false,
+          message,
+          errors: { Weightage: message },
+        });
+      }
+    }
+
+    const goalNumberStart = getSheetGoalNumberStart(otherQuarterGoals);
+    const savedGoals = [];
+
+    for (let index = 0; index < rows.length; index++) {
+      const { goal, GoalID, startDateKey, timelineKey, validSubGoals } =
+        rows[index];
+      // Quarter is always derived from StartDate on the server.
+      const { label: quarter, endKey: quarterEndDate } =
+        getFiscalQuarterBounds(startDateKey);
+      const existing = GoalID ? quarterGoalsById.get(GoalID) : null;
+      const values = {
+        GoalNumber: goalNumberStart + index,
+        GoalTitle: String(goal.GoalTitle).trim(),
+        GoalDescription: goal.GoalDescription || null,
+        Measurability: goal.Measurability || null,
+        JointAccountability: goal.JointAccountability || null,
+        Weightage: Number(goal.Weightage),
+        Priority: goal.Priority,
+        StartDate: startDateKey,
+        Timeline: timelineKey,
+        MeetPerformance: goal.MeetPerformance || null,
+        ExceedPerformance: goal.ExceedPerformance || null,
+        ValidationSource:
+          goal.ValidationSource !== undefined
+            ? goal.ValidationSource || null
+            : existing?.ValidationSource ?? null,
+        CrossFunctionalGoal:
+          goal.CrossFunctionalGoal !== undefined
+            ? goal.CrossFunctionalGoal
+              ? 1
+              : 0
+            : existing?.CrossFunctionalGoal
+              ? 1
+              : 0,
+        GoalCategory: goal.GoalCategory || null,
+      };
+
+      let goalId = GoalID;
+      if (existing) {
+        await new sql.Request(transaction)
+          .input("GoalID", sql.BigInt, GoalID)
+          .input("GoalNumber", sql.Int, values.GoalNumber)
+          .input("GoalTitle", sql.NVarChar, values.GoalTitle)
+          .input("GoalDescription", sql.NVarChar, values.GoalDescription)
+          .input("Measurability", sql.NVarChar, values.Measurability)
+          .input("JointAccountability", sql.NVarChar, values.JointAccountability)
+          .input("Weightage", sql.Decimal(5, 2), values.Weightage)
+          .input("Priority", sql.VarChar, values.Priority)
+          .input("StartDate", sql.Date, values.StartDate)
+          .input("Timeline", sql.Date, values.Timeline)
+          .input("Quarter", sql.VarChar, quarter)
+          .input("QuarterEndDate", sql.Date, quarterEndDate)
+          .input("MeetPerformance", sql.NVarChar, values.MeetPerformance)
+          .input("ExceedPerformance", sql.NVarChar, values.ExceedPerformance)
+          .input("ValidationSource", sql.NVarChar, values.ValidationSource)
+          .input("CrossFunctionalGoal", sql.Bit, values.CrossFunctionalGoal)
+          .input("GoalCategory", sql.NVarChar, values.GoalCategory)
+          .input("GoalStatus", sql.VarChar, GoalStatus).query(`
+            UPDATE dbo.Goals SET
+                GoalNumber = @GoalNumber, GoalTitle = @GoalTitle, GoalDescription = @GoalDescription,
+                Measurability = @Measurability, JointAccountability = @JointAccountability, Weightage = @Weightage,
+                Priority = @Priority, StartDate = @StartDate, Timeline = @Timeline,
+                Quarter = @Quarter, QuarterEndDate = @QuarterEndDate, MeetPerformance = @MeetPerformance,
+                ExceedPerformance = @ExceedPerformance, ValidationSource = @ValidationSource,
+                CrossFunctionalGoal = @CrossFunctionalGoal, GoalCategory = @GoalCategory,
+                GoalStatus = @GoalStatus,
+                SubmittedDate = CASE WHEN @GoalStatus = 'Submitted' THEN GETDATE() ELSE SubmittedDate END,
+                ModifiedDate = GETDATE()
+            WHERE GoalID = @GoalID AND GoalStatus = 'Draft'
+          `);
+
+        const { oldValues, newValues } = buildGoalDiff(existing, {
+          ...values,
+          GoalStatus,
+        });
+        const changedFields = Object.keys(oldValues);
+        if (changedFields.length > 0) {
+          await logGoalHistory(
+            transaction,
+            GoalID,
+            "UPDATE",
+            JSON.stringify(oldValues),
+            JSON.stringify(newValues),
+            `Updated: ${changedFields.join(", ")}`,
+            userId,
+          );
+        }
+
+        await replaceSubGoals(transaction, GoalID, validSubGoals);
+      } else {
+        goalId = await insertGoalRow(transaction, {
+          ...values,
+          UserID: userId,
+          Quarter: quarter,
+          QuarterEndDate: quarterEndDate,
+          GoalStatus,
+        });
+        await logGoalHistory(
+          transaction,
+          goalId,
+          "CREATE",
+          null,
+          GoalStatus,
+          "Goal created",
+          userId,
+        );
+        // New sub-goals always start Pending; status is ticked after approval.
+        await insertSubGoals(transaction, goalId, validSubGoals);
+      }
+
+      await jointAccountabilityModel.syncJointAccountabilities(
+        goalId,
+        goal.JointAccountabilities,
+        transaction,
+      );
+
+      savedGoals.push({
+        GoalID: goalId,
+        GoalNumber: values.GoalNumber,
+        GoalTitle: values.GoalTitle,
+      });
+    }
+
+    await transaction.commit();
+
+    let notifiedGoals = 0;
+    if (GoalStatus === "Submitted") {
+      for (const savedGoal of savedGoals) {
+        try {
+          const notifiedEmails = await notifyGoalHierarchy(
+            userId,
+            savedGoal.GoalID,
+            savedGoal.GoalTitle,
+            GoalStatus,
+          );
+          if (notifiedEmails.length > 0) notifiedGoals += 1;
+        } catch (notificationError) {
+          // The goals are already submitted; a notification outage should
+          // not report the request as failed.
+          console.error(
+            `[NOTIF FAILED] saveGoalSheet submit notification. goalId=${savedGoal.GoalID}:`,
+            notificationError,
+          );
+        }
+      }
+    }
+
+    const goalCountLabel = `${savedGoals.length} goal${savedGoals.length === 1 ? "" : "s"}`;
+    return res.status(200).json({
+      success: true,
+      message:
+        GoalStatus === "Submitted"
+          ? notifiedGoals > 0
+            ? `${goalCountLabel} submitted and your reporting hierarchy has been notified.`
+            : `${goalCountLabel} submitted successfully.`
+          : `${goalCountLabel} saved as draft.`,
+      data: {
+        quarter: bounds.label,
+        goals: savedGoals.map(({ GoalID, GoalNumber }) => ({
+          GoalID,
+          GoalNumber,
+        })),
+      },
+    });
+  } catch (error) {
+    if (transaction._aborted === false && transaction._acquiredConnection) {
+      try {
+        await transaction.rollback();
+      } catch (rbErr) {}
+    }
+    console.error("Save Goal Sheet Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while saving goals. No goals were saved.",
       errors: error.message,
     });
   }
@@ -3583,12 +4188,231 @@ const getPendingCompletionRequests = async (req, res) => {
   }
 };
 
+// 'YYYY-MM-DD' -> 'DD/MM/YYYY' for messages shown to the user.
+const formatDisplayDateKey = (dateKey) => dateKey.split("-").reverse().join("/");
+
+// The goal-entry window that is open now, or else the next one to open (the
+// next quarter's days 1-7), with the quarter its goals are added for: the
+// quarter after the window's own.
+const getRelevantGoalCreationWindow = (now = new Date()) => {
+  const currentWindow = getGoalCreationWindow(now);
+  const window = currentWindow.isOpen
+    ? currentWindow
+    : getGoalCreationWindow(
+        getQuarterStartDate(
+          getNextFiscalQuarter(getFiscalQuarter(now).quarterEndDate)
+            .quarterEndDate,
+        ),
+      );
+
+  return {
+    isOpen: currentWindow.isOpen,
+    startDate: formatLocalDateKey(window.startDate),
+    endDate: formatLocalDateKey(window.endDate),
+    targetQuarter: getNextFiscalQuarter(
+      getFiscalQuarter(window.startDate).quarterEndDate,
+    ).label,
+  };
+};
+
+// 7. Whether the user can add goals now (Goal Management "Add Goal").
+// Blocked while the goal-entry window is closed, or once the target
+// quarter's active goals (every status except Draft, Rejected and
+// Cancelled) total 100%.
+const getAddGoalStatus = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+  const window = getRelevantGoalCreationWindow();
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .input("Quarter", sql.VarChar, window.targetQuarter).query(`
+        SELECT ISNULL(SUM(Weightage), 0) AS TotalWeightage
+        FROM dbo.Goals
+        WHERE UserID = @UserID
+          AND Quarter = @Quarter
+          AND GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+      `);
+
+    const activeHundredths = toWeightageHundredths(
+      result.recordset[0]?.TotalWeightage,
+    );
+    const isFullyAllocated = activeHundredths >= FULL_ALLOCATION_HUNDREDTHS;
+
+    let reason = null;
+    if (!window.isOpen) {
+      reason = `Goals for ${window.targetQuarter} can be added from ${formatDisplayDateKey(window.startDate)} to ${formatDisplayDateKey(window.endDate)}.`;
+    } else if (isFullyAllocated) {
+      reason = `${window.targetQuarter} goals already total 100%.`;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        targetQuarter: window.targetQuarter,
+        window: {
+          isOpen: window.isOpen,
+          startDate: window.startDate,
+          endDate: window.endDate,
+        },
+        activeWeightage: Number(formatWeightageHundredths(activeHundredths)),
+        isFullyAllocated,
+        canAddGoal: reason === null,
+        reason,
+      },
+    });
+  } catch (error) {
+    console.error("Get Add Goal Status Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while checking whether goals can be added.",
+      errors: error.message,
+    });
+  }
+};
+
+// 8. The user's goals that can be brought forward: finally Approved (not
+// pending, rejected, completion submitted, completed or cancelled) and
+// ending on or before the current quarter's last day. Submitting an End
+// Date change moves a goal out of 'Approved', so it drops off this list.
+const getBringForwardGoals = async (req, res) => {
+  const userId = req.user?.UserID || req.user?.userId;
+  const currentQuarter = getFiscalQuarterBounds();
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .input("QuarterEndDate", sql.Date, currentQuarter.endKey).query(`
+        SELECT GoalID, GoalNumber, GoalTitle, Quarter, Weightage, Timeline
+        FROM dbo.Goals
+        WHERE UserID = @UserID
+          AND GoalStatus = 'Approved'
+          AND Timeline <= @QuarterEndDate
+        ORDER BY Timeline, GoalNumber, GoalID
+      `);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        currentQuarter: currentQuarter.label,
+        quarterEndDate: currentQuarter.endKey,
+        goals: result.recordset.map((goal) => ({
+          ...goal,
+          Timeline: toDateKey(goal.Timeline),
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("Get Bring Forward Goals Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching goals to bring forward.",
+      errors: error.message,
+    });
+  }
+};
+
+// 9. Bring a goal forward: a new End Date in the target quarter, submitted
+// through the existing carry-forward path in updateGoal (approval reset to
+// Submitted, CarryForwardCount and GoalCarryForwardHistory). Only the End
+// Date changes; the goal keeps its Quarter. This adds the bring-forward
+// checks: the caller owns the goal, it is still on the bring-forward list,
+// the goal-entry window is open and the End Date is in the target quarter.
+const bringForwardGoal = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.UserID || req.user?.userId;
+  const timelineKey = toDateKey(req.body?.Timeline);
+
+  const window = getRelevantGoalCreationWindow();
+  if (!window.isOpen) {
+    return res.status(400).json({
+      success: false,
+      message: `Goals can be brought forward only while the goal-entry window is open (next: ${formatDisplayDateKey(window.startDate)} to ${formatDisplayDateKey(window.endDate)}).`,
+    });
+  }
+
+  const target = getFiscalQuarterBoundsFromLabel(window.targetQuarter);
+  if (!timelineKey || timelineKey < target.startKey || timelineKey > target.endKey) {
+    const message = `End Date must be within ${target.label} (${formatDisplayDateKey(target.startKey)} to ${formatDisplayDateKey(target.endKey)}).`;
+    return res
+      .status(400)
+      .json({ success: false, message, errors: { Timeline: message } });
+  }
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("GoalID", sql.BigInt, id)
+      .query(`
+        SELECT GoalID, UserID, GoalStatus, Timeline, CarryForwardCount
+        FROM dbo.Goals
+        WHERE GoalID = @GoalID
+      `);
+    const goal = result.recordset[0];
+
+    if (!goal) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Goal not found." });
+    }
+    if (Number(goal.UserID) !== Number(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "You can bring forward only your own goals.",
+      });
+    }
+
+    // The same rule as getBringForwardGoals.
+    const currentQuarter = getFiscalQuarterBounds();
+    const goalTimelineKey = toDateKey(goal.Timeline);
+    if (
+      goal.GoalStatus !== "Approved" ||
+      !goalTimelineKey ||
+      goalTimelineKey > currentQuarter.endKey
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "This goal can no longer be brought forward.",
+      });
+    }
+    if (Number(goal.CarryForwardCount || 0) !== 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This goal has already been carried forward once and cannot be brought forward again.",
+      });
+    }
+  } catch (error) {
+    console.error("Bring Forward Goal Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while bringing the goal forward.",
+      errors: error.message,
+    });
+  }
+
+  // Only the End Date is sent on, so updateGoal keeps every other field.
+  req.body = { Timeline: timelineKey };
+  req.isBringForward = true;
+  return updateGoal(req, res);
+};
+
 module.exports = {
   getGoals,
   getMyQuarterSummary,
+  getAddGoalStatus,
+  getBringForwardGoals,
+  bringForwardGoal,
   getJointAccountabilityUsers,
   getGoalById,
   createGoal,
+  getGoalSheet,
+  saveGoalSheet,
   updateGoal,
   deleteGoal,
   changeGoalStatus,

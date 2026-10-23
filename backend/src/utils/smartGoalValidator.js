@@ -167,11 +167,11 @@ const validateSmartGoal = async (goalData = {}, options = {}) => {
         !Number.isNaN(weightageNum) &&
         Number.isFinite(weightageNum) &&
         weightageNum >= 5 &&
-        weightageNum <= 30 &&
+        weightageNum <= 100 &&
         Math.abs(weightageNum * 100 - Math.round(weightageNum * 100)) <= 1e-8;
 
     if (!weightageIsValidNumber) {
-        errors.Weightage = 'Goal must be Achievable: Weightage must be from 5% to 30%, with no more than two decimal places.';
+        errors.Weightage = 'Goal must be Achievable: Weightage must be from 5% to 100%, with no more than two decimal places.';
     }
     // TODO: re-enable after testing
     // else if (options.pool && options.userId) {

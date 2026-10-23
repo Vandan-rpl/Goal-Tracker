@@ -182,6 +182,7 @@ module.exports = {
   getFiscalQuarterBoundsFromLabel,
   getFiscalYearQuarters,
   toDateKey,
+  formatLocalDateKey,
   getNextFiscalQuarter,
   getQuarterStartDate,
   getQuarterDayWindow,
