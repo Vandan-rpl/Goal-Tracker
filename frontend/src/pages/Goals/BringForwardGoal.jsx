@@ -134,7 +134,7 @@ const BringForwardGoal = () => {
       await api.put(`/goals/${id}/bring-forward`, {
         Timeline: parseDateInput(row.Timeline),
       });
-      navigate("/goals");
+      navigate("/goals/add");
     } catch (err) {
       const data = err.response?.data;
       setError(data?.message || "Server error. The goal was not submitted.");
@@ -191,7 +191,7 @@ const BringForwardGoal = () => {
               </div>
               <button
                 type="button"
-                onClick={() => navigate("/goals")}
+                onClick={() => navigate("/goals/add")}
                 className="inline-flex cursor-pointer items-center gap-1.5 self-start text-sm font-medium text-slate-600 transition-colors hover:text-[#2c3e82] sm:self-auto"
               >
                 <svg
@@ -207,7 +207,7 @@ const BringForwardGoal = () => {
                     d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
                   />
                 </svg>
-                Back to Goals
+                Back to Add Goals
               </button>
             </div>
 
@@ -277,7 +277,7 @@ const BringForwardGoal = () => {
                     <div className="flex flex-col-reverse items-center justify-end gap-3 sm:flex-row">
                       <button
                         type="button"
-                        onClick={() => navigate("/goals")}
+                        onClick={() => navigate("/goals/add")}
                         className="w-full cursor-pointer border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
                       >
                         Cancel

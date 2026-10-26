@@ -16,6 +16,7 @@ import {
 import GoalSheetRow, {
   GoalWorksheet,
 } from "../../components/GoalWorksheet/GoalWorksheet";
+import BringForwardSheet from "./BringForwardSheet";
 
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
@@ -26,7 +27,6 @@ const getWeightageHundredths = (weightage) =>
   Math.round(Number(weightage || 0) * 100);
 
 const formatHundredths = (hundredths) => (hundredths / 100).toFixed(2);
-
 
 const getTitledSubGoals = (row) =>
   row.SubGoals.filter((subGoal) => subGoal.SubGoalTitle.trim());
@@ -98,6 +98,8 @@ const AddGoal = () => {
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(null);
   const [removingKey, setRemovingKey] = useState(null);
+  const [bringForwardGoals, setBringForwardGoals] = useState([]);
+  const [bringForwardOpen, setBringForwardOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -146,6 +148,24 @@ const AddGoal = () => {
     };
 
     loadJointAccountabilityUsers();
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadBringForwardGoals = async () => {
+      try {
+        const response = await api.get("/goals/bring-forward");
+        if (!ignore) setBringForwardGoals(response.data?.data?.goals || []);
+      } catch (err) {
+        console.error("Failed to load goals to bring forward", err);
+      }
+    };
+
+    loadBringForwardGoals();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const totalHundredths = rows.reduce(
@@ -576,6 +596,16 @@ const AddGoal = () => {
                 <div className="flex flex-col-reverse items-center justify-end gap-3 sm:flex-row">
                   <button
                     type="button"
+                    onClick={() => setBringForwardOpen((open) => !open)}
+                    disabled={!bringForwardOpen && bringForwardGoals.length === 0}
+                    aria-expanded={bringForwardOpen}
+                    className="w-full cursor-pointer border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 sm:mr-auto sm:w-auto"
+                  >
+                    {bringForwardOpen ? "Hide" : "Bring forward goals"} (
+                    {bringForwardGoals.length})
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => navigate("/goals")}
                     className="w-full cursor-pointer border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
                   >
@@ -604,6 +634,18 @@ const AddGoal = () => {
                 )}
               </div>
             </form>
+
+            {goalCreationWindow.isOpen && bringForwardOpen && (
+              <BringForwardSheet
+                goals={bringForwardGoals}
+                targetRange={currentQuarterRange}
+                onBroughtForward={(goalIds) =>
+                  setBringForwardGoals((previous) =>
+                    previous.filter((goal) => !goalIds.includes(goal.GoalID)),
+                  )
+                }
+              />
+            )}
             <div
               className="-mx-3 mt-4.5 flex min-h-10.5 items-stretch gap-4.5 border-t border-[#d5dce5] bg-[#f4f6fa] px-3 sm:-mx-8 sm:px-6"
               aria-hidden="true"

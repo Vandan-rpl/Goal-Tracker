@@ -32,7 +32,7 @@ export const getQuarterDayWindow = (startDay, endDay, date = new Date()) => {
 
 export const getGoalCreationWindow = (date = new Date()) => {
   const reopeningStart = new Date(2026, 9, 14);
-  const reopeningEnd = new Date(2026, 9, 25);
+  const reopeningEnd = new Date(2026, 9, 30);
   const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   if (today >= reopeningStart && today <= reopeningEnd) {
