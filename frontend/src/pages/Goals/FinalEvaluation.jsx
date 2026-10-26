@@ -170,7 +170,22 @@ const FinalEvaluation = () => {
     countedGoalCount: quarter.CountedGoalCount,
     broughtForwardPending: quarter.BroughtForwardPending,
     broughtForwardAchieved: quarter.BroughtForwardAchieved,
+    quarterCompletion: quarter.QuarterCompletionPercentage,
   }));
+
+  // Manager/HOD view only; display only, calculated on the server.
+  const quarterCompletionColumn = isSelf
+    ? undefined
+    : {
+        label: 'Quarter Completion',
+        title: 'Share of all work due in this quarter (new + brought forward) that was completed. Not used in the Year Score.',
+        getValue: (quarter) => {
+          if (quarter.isFuture) return '–';
+          return quarter.quarterCompletion == null
+            ? '—'
+            : `${Number(quarter.quarterCompletion).toFixed(2)}%`;
+        },
+      };
 
   if (loading) {
     return (
@@ -258,6 +273,7 @@ const FinalEvaluation = () => {
               currentQuarter={getCurrentFiscalQuarterValue()}
               employeeId={targetUserId}
               achievementRule="evaluation"
+              extraColumn={quarterCompletionColumn}
             >
               <tr className="bg-indigo-50/60">
                 <th
@@ -273,6 +289,7 @@ const FinalEvaluation = () => {
                     : `${Number(evaluation.YearlyPerformance.YearScorePercentage).toFixed(2)}%`}
                 </td>
                 <td colSpan={3} className="px-3 py-3 text-xs text-gray-500">(Achieved + Brought forward achieved) ÷ Allocated</td>
+                {quarterCompletionColumn && <td className="px-3 py-3" />}
               </tr>
             </QuarterSummaryTable>
           </div>

@@ -13,6 +13,7 @@ import QuarterGoalDetails from "../QuarterGoalDetails/QuarterGoalDetails";
 //              countedGoalCount, broughtForwardPending, broughtForwardAchieved }]
 // employeeId / achievementRule: passed to QuarterGoalDetails.
 // children: extra rows rendered after the quarters (e.g. a yearly average).
+// extraColumn: optional { label, title, getValue(quarter) } shown last.
 const QUARTER_SUMMARY_COLUMNS = [
   "Allocated",
   "Achieved",
@@ -30,8 +31,10 @@ export default function QuarterSummaryTable({
   currentQuarter,
   employeeId,
   achievementRule,
+  extraColumn,
   children,
 }) {
+  const columnCount = QUARTER_SUMMARY_COLUMNS.length + (extraColumn ? 1 : 0);
   const [searchParams, setSearchParams] = useSearchParams();
   const expandedQuarter = searchParams.get("quarter");
   const toggleQuarter = useCallback(
@@ -59,6 +62,11 @@ export default function QuarterSummaryTable({
                 {column}
               </th>
             ))}
+            {extraColumn && (
+              <th className="pb-2 px-3 font-medium last:pr-0" title={extraColumn.title}>
+                {extraColumn.label}
+              </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
@@ -120,10 +128,15 @@ export default function QuarterSummaryTable({
                       {value}
                     </td>
                   ))}
+                  {extraColumn && (
+                    <td className="px-3 py-3 whitespace-nowrap text-gray-600">
+                      {extraColumn.getValue(quarter)}
+                    </td>
+                  )}
                 </tr>
                 {isExpanded && (
                   <tr>
-                    <td colSpan={QUARTER_SUMMARY_COLUMNS.length + 1} className="bg-gray-50 p-0">
+                    <td colSpan={columnCount + 1} className="bg-gray-50 p-0">
                       <QuarterGoalDetails
                         quarter={quarter.quarter}
                         employeeId={employeeId}

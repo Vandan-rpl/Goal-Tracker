@@ -337,7 +337,8 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
             AllocatedPercentage: performance.allocatedPercentage,
             AchievedPercentage: performance.achievedPercentage,
             GoalCount: quarterGoals.length,
-            ...quarterSummary
+            ...quarterSummary,
+            QuarterCompletionPercentage: calculateQuarterCompletion(quarterSummary)
         };
     });
 
@@ -346,6 +347,21 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
         Quarters: quarters,
         YearScorePercentage: calculateYearScore(quarters)
     };
+};
+
+// Quarter Completion % = (Achieved + Brought forward achieved) ÷ (Allocated +
+// Brought forward pending + Brought forward achieved) × 100, from the values
+// shown in that quarter's row. Display only: never used in the Year Score.
+// Returns null when the denominator is 0. Rounded to 2 decimal places.
+const calculateQuarterCompletion = (quarter) => {
+    const allocated = Number(quarter?.SummaryAllocated || 0);
+    const achieved = Number(quarter?.SummaryAchieved || 0);
+    const broughtForwardPending = Number(quarter?.BroughtForwardPending || 0);
+    const broughtForwardAchieved = Number(quarter?.BroughtForwardAchieved || 0);
+    const due = allocated + broughtForwardPending + broughtForwardAchieved;
+
+    if (due <= 0) return null;
+    return Math.round(((achieved + broughtForwardAchieved) / due) * 100 * 100) / 100;
 };
 
 // Year Score % = (total Achieved + total Brought forward achieved) ÷ total
