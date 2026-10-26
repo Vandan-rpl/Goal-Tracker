@@ -260,14 +260,19 @@ const FinalEvaluation = () => {
               achievementRule="evaluation"
             >
               <tr className="bg-indigo-50/60">
-                <th className="py-3 pl-2 pr-4 font-bold text-gray-900 whitespace-nowrap">Yearly average achieved</th>
+                <th
+                  className="py-3 pl-2 pr-4 font-bold text-gray-900 whitespace-nowrap"
+                  title="(Achieved + Brought forward achieved) ÷ Allocated"
+                >
+                  Year Score
+                </th>
                 <td className="px-3 py-3" />
                 <td className="px-3 py-3 font-bold text-indigo-800 whitespace-nowrap">
-                  {evaluation.YearlyPerformance.AveragePercentage == null
+                  {evaluation.YearlyPerformance.YearScorePercentage == null
                     ? '—'
-                    : `${Number(evaluation.YearlyPerformance.AveragePercentage).toFixed(2)}%`}
+                    : `${Number(evaluation.YearlyPerformance.YearScorePercentage).toFixed(2)}%`}
                 </td>
-                <td colSpan={3} className="px-3 py-3 text-xs text-gray-500">Average of quarters with goals</td>
+                <td colSpan={3} className="px-3 py-3 text-xs text-gray-500">(Achieved + Brought forward achieved) ÷ Allocated</td>
               </tr>
             </QuarterSummaryTable>
           </div>

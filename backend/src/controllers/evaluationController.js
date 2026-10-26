@@ -222,7 +222,9 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
     const fiscalQuarters = [1, 2, 3, 4].map((quarterNumber) =>
         getFiscalQuarterBoundsFromLabel(`Q${quarterNumber}-${fiscalYear}`),
     );
-    const quarterSummaryRequest = pool.request().input('UserID', sql.Int, userId);
+    const quarterSummaryRequest = pool.request()
+        .input('UserID', sql.Int, userId)
+        .input('FiscalYearStart', sql.Date, fiscalQuarters[0].startKey);
     fiscalQuarters.forEach((quarter, index) => {
         quarterSummaryRequest
             .input(`Q${index}Label`, sql.VarChar, quarter.label)
@@ -245,6 +247,7 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                ISNULL(own.CompletedCount, 0) AS CompletedCount,
                ISNULL(own.CountedGoalCount, 0) AS CountedGoalCount,
                ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
+               ISNULL(broughtForward.InYearAchieved, 0) AS InYearBroughtForwardAchieved,
                ISNULL(broughtForwardPending.Pending, 0) AS BroughtForwardPending,
                ISNULL(carried.CarriedForwardCount, 0) AS CarriedForwardCount
         FROM FiscalQuarters q
@@ -264,7 +267,14 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
               AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
         ) own
         OUTER APPLY (
-            SELECT SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved
+            SELECT SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved,
+                   -- Only goals whose own quarter is in this fiscal year; used
+                   -- by the Year Score so it never counts last year's goals.
+                   SUM(CASE
+                           WHEN g.QuarterEndDate >= @FiscalYearStart
+                           THEN COALESCE(g.AchievedWeightage, 0)
+                           ELSE 0
+                       END) AS InYearAchieved
             FROM dbo.Goals g
             WHERE g.UserID = @UserID
               AND g.QuarterEndDate < q.StartDate
@@ -331,24 +341,34 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
         };
     });
 
-    // Average the Achieved column shown in the table, over quarters that have
-    // started and have counted goals.
-    const availableQuarters = quarters.filter(
-        (quarter) => !quarter.isFuture && quarter.CountedGoalCount > 0,
-    );
-
     return {
         FiscalYear: fiscalYear,
         Quarters: quarters,
-        AveragePercentage: availableQuarters.length > 0
-            ? Math.round(
-                (availableQuarters.reduce(
-                    (total, quarter) => total + Number(quarter.SummaryAchieved || 0),
-                    0,
-                ) / availableQuarters.length) * 100,
-            ) / 100
-            : null
+        YearScorePercentage: calculateYearScore(quarters)
     };
+};
+
+// Year Score % = (total Achieved + total Brought forward achieved) ÷ total
+// Allocated × 100, over the quarter rows of one fiscal year that have started
+// (future rows show no Achieved). Brought forward achieved counts only goals
+// whose own quarter is in the same fiscal year, so the score stays <= 100%.
+// Divides by the real Allocated (not 4 or 400%) so new joiners are fair.
+// Returns null when nothing is allocated. Rounded to 2 decimal places.
+const calculateYearScore = (quarters) => {
+    const totals = quarters
+        .filter((quarter) => !quarter.isFuture)
+        .reduce(
+            (sum, quarter) => ({
+                allocated: sum.allocated + Number(quarter.SummaryAllocated || 0),
+                achieved: sum.achieved
+                    + Number(quarter.SummaryAchieved || 0)
+                    + Number(quarter.InYearBroughtForwardAchieved || 0)
+            }),
+            { allocated: 0, achieved: 0 },
+        );
+
+    if (totals.allocated <= 0) return null;
+    return Math.round((totals.achieved / totals.allocated) * 100 * 100) / 100;
 };
 
 /**
