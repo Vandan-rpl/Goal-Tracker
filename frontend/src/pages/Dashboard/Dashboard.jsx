@@ -31,6 +31,7 @@ import {
   isGoalAwaitingStart,
 } from "../../utils/goalStatus";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
+import QuarterSummaryTable from "../../components/QuarterSummaryTable/QuarterSummaryTable";
 
 const MAX_GOALS_PER_QUARTER = 8;
 const STATUS_GROUPS = {
@@ -121,102 +122,6 @@ function formatDate(dateStr) {
   return new Date(date.year, date.month - 1, date.day).toLocaleDateString(
     "en-IN",
     { day: "numeric", month: "short", year: "numeric" },
-  );
-}
-
-function formatPercent(value) {
-  return `${Number(Number(value || 0).toFixed(2))}%`;
-}
-
-// ---------------------------------------------------------------------------
-// QUARTER SUMMARY — Q1–Q4 of the current fiscal year, calculated on the server.
-// Future quarters show only Allocated and Brought forward (pending).
-// Brought forward achieved is display only.
-// ---------------------------------------------------------------------------
-const QUARTER_SUMMARY_COLUMNS = [
-  "Allocated",
-  "Achieved",
-  "Completed",
-  "Brought forward (pending)",
-  "Brought forward achieved",
-];
-
-function QuarterSummaryTable({ quarters, currentQuarter }) {
-  return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <h2 className="text-sm font-semibold text-gray-800">Quarter summary</h2>
-      {quarters.length ? (
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-gray-100 text-xs text-gray-400">
-              <tr>
-                <th className="pb-2 pr-4 font-medium">Quarter</th>
-                {QUARTER_SUMMARY_COLUMNS.map((column) => (
-                  <th key={column} className="pb-2 px-3 font-medium last:pr-0">
-                    {column}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {quarters.map((quarter) => {
-                const isCurrent = quarter.quarter === currentQuarter;
-                // Goals can be set (or moved) before a quarter starts, so a
-                // future quarter still shows its allocation and pending
-                // brought-forward weightage; the rest is "–".
-                const cells = quarter.isFuture
-                  ? [
-                      formatPercent(quarter.allocated),
-                      "–",
-                      "–",
-                      formatPercent(quarter.broughtForwardPending),
-                      "–",
-                    ]
-                  : [
-                      formatPercent(quarter.allocated),
-                      formatPercent(quarter.achieved),
-                      `${quarter.completedCount} of ${quarter.countedGoalCount}`,
-                      formatPercent(quarter.broughtForwardPending),
-                      formatPercent(quarter.broughtForwardAchieved),
-                    ];
-                return (
-                  <tr
-                    key={quarter.quarter}
-                    className={isCurrent ? "bg-indigo-50/60" : ""}
-                    aria-current={isCurrent ? "true" : undefined}
-                  >
-                    <th className="py-3 pl-2 pr-4 font-medium text-gray-700 whitespace-nowrap">
-                      {quarter.quarter}
-                      {isCurrent && (
-                        <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                          Current
-                        </span>
-                      )}
-                    </th>
-                    {cells.map((value, index) => (
-                      <td
-                        key={QUARTER_SUMMARY_COLUMNS[index]}
-                        className={`px-3 py-3 whitespace-nowrap ${
-                          index === 1 && !quarter.isFuture
-                            ? "font-medium text-indigo-700"
-                            : "text-gray-600"
-                        }`}
-                      >
-                        {value}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
-          Quarter summary will appear when you have goals.
-        </p>
-      )}
-    </section>
   );
 }
 
@@ -660,10 +565,22 @@ export default function GoalDashboard() {
           </div>
         )}
 
-        <QuarterSummaryTable
-          quarters={quarterSummary?.quarters || []}
-          currentQuarter={currentQuarterLabel}
-        />
+        {/* Q1–Q4 of the current fiscal year, calculated on the server. */}
+        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-800">Quarter summary</h2>
+          {quarterSummary?.quarters?.length ? (
+            <div className="mt-4">
+              <QuarterSummaryTable
+                quarters={quarterSummary.quarters}
+                currentQuarter={currentQuarterLabel}
+              />
+            </div>
+          ) : (
+            <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+              Quarter summary will appear when you have goals.
+            </p>
+          )}
+        </section>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

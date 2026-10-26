@@ -245,6 +245,7 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                ISNULL(own.CompletedCount, 0) AS CompletedCount,
                ISNULL(own.CountedGoalCount, 0) AS CountedGoalCount,
                ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
+               ISNULL(broughtForwardPending.Pending, 0) AS BroughtForwardPending,
                ISNULL(carried.CarriedForwardCount, 0) AS CarriedForwardCount
         FROM FiscalQuarters q
         OUTER APPLY (
@@ -270,6 +271,17 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
               AND g.CompletedDate >= q.StartDate
               AND g.CompletedDate < DATEADD(DAY, 1, q.EndDate)
         ) broughtForward
+        -- Same as the employee dashboard: goals from an earlier quarter whose
+        -- End Date is in this quarter and that are still open.
+        OUTER APPLY (
+            SELECT SUM(g.Weightage) AS Pending
+            FROM dbo.Goals g
+            WHERE g.UserID = @UserID
+              AND g.QuarterEndDate < q.StartDate
+              AND g.Timeline >= q.StartDate
+              AND g.Timeline < DATEADD(DAY, 1, q.EndDate)
+              AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
+        ) broughtForwardPending
         OUTER APPLY (
             SELECT COUNT(DISTINCT g.GoalID) AS CarriedForwardCount
             FROM dbo.Goals g
@@ -567,5 +579,6 @@ const finalizeFinalEvaluation = async (req, res) => {
 module.exports = {
     getFinalEvaluation,
     viewFinalEvaluation,
-    finalizeFinalEvaluation
+    finalizeFinalEvaluation,
+    canAccessEvaluation
 };

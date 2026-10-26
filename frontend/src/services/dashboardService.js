@@ -37,6 +37,21 @@ export async function getEmployeeQuarterSummary() {
 }
 
 /**
+ * Fetch the goals behind one row of the quarter summary.
+ * Route: GET /api/v1/goals/dashboard/quarter-details -> getQuarterGoalDetails
+ * userId is optional (defaults to the logged-in user; managers/HODs may pass
+ * a team member's id). achievementRule "evaluation" totals Achieved the way
+ * the Final Evaluation summary does. Returns { quarter, ownGoals, broughtForward }.
+ */
+export async function getQuarterGoalDetails(quarter, userId, achievementRule) {
+  const res = await api.get(`${BASE}/dashboard/quarter-details`, {
+    params: { quarter, userId, achievementRule },
+    headers: { "Cache-Control": "no-cache" },
+  });
+  return res.data.data;
+}
+
+/**
  * Fetch a single goal by id.
  * Route: GET /api/v1/goals/:id -> getGoalById
  * Unconfirmed whether this controller joins GoalSubGoal rows or not —

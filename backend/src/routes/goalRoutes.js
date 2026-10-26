@@ -3,6 +3,7 @@ const router = express.Router();
 const {
     getGoals,
     getMyQuarterSummary,
+    getQuarterGoalDetails,
     getAddGoalStatus,
     getBringForwardGoals,
     bringForwardGoal,
@@ -37,6 +38,7 @@ router.get('/', getGoals);
 
 // Employee dashboard quarter summary. Keep above router.get('/:id').
 router.get('/dashboard/quarters', getMyQuarterSummary);
+router.get('/dashboard/quarter-details', getQuarterGoalDetails);
 
 // Add Goal sheet: the user's Draft goals for the target quarter, saved
 // together. Keep above the '/:id' routes.

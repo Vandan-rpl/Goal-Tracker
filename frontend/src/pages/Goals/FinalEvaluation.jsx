@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../../services/api';
 import { getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
+import QuarterSummaryTable from '../../components/QuarterSummaryTable/QuarterSummaryTable';
 
 // Simple hand-rolled SVG gauge — no charting library needed, keeps this
 // page consistent with the rest of the (plain Tailwind, zero-extra-deps)
@@ -62,12 +63,17 @@ const isValidFiscalYear = (year) =>
 const FinalEvaluation = () => {
   const { userId: userIdParam } = useParams();
   const navigate = useNavigate();
+  // An expanded quarter (?quarter=Q3-2027) also picks the fiscal year, so
+  // coming back from a goal reopens the same year and quarter.
+  const [searchParams] = useSearchParams();
 
   const [evaluation, setEvaluation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [fiscalYear, setFiscalYear] = useState(
-    () => getCurrentFiscalQuarterValue().split('-')[1],
+    () =>
+      /^Q[1-4]-(\d{4})$/.exec(searchParams.get('quarter') || '')?.[1] ||
+      getCurrentFiscalQuarterValue().split('-')[1],
   );
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeMessage, setFinalizeMessage] = useState('');
@@ -154,6 +160,18 @@ const FinalEvaluation = () => {
     return evaluation.Goals.filter((g) => g.Rating != null).reduce((sum, g) => sum + g.Weightage, 0);
   }, [evaluation]);
 
+  // Same shape as the employee dashboard's quarter summary.
+  const summaryQuarters = (evaluation?.YearlyPerformance?.Quarters || []).map((quarter) => ({
+    quarter: `${quarter.Quarter}-${evaluation.YearlyPerformance.FiscalYear}`,
+    isFuture: quarter.isFuture,
+    allocated: quarter.SummaryAllocated,
+    achieved: quarter.SummaryAchieved,
+    completedCount: quarter.CompletedCount,
+    countedGoalCount: quarter.CountedGoalCount,
+    broughtForwardPending: quarter.BroughtForwardPending,
+    broughtForwardAchieved: quarter.BroughtForwardAchieved,
+  }));
+
   if (loading) {
     return (
       <div className="flex-1 bg-gray-50 min-h-screen flex items-center justify-center text-gray-500">
@@ -234,53 +252,24 @@ const FinalEvaluation = () => {
           {/* <p className="mb-3 text-sm text-gray-600">
             This is the sum of each goal's achieved weightage, using the same calculation as the employee dashboard. Rejected and cancelled goals are excluded.
           </p> */}
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Quarter</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Allocated</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Achieved</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Brought forward achieved</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Completed</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Carried forward</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {evaluation.YearlyPerformance.Quarters.map((quarter) => (
-                  <tr key={quarter.Quarter}>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-800 whitespace-nowrap">
-                      {`${quarter.Quarter}-${evaluation.YearlyPerformance.FiscalYear}`}
-                    </th>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {`${Number(quarter.SummaryAllocated || 0).toFixed(2)}%`}
-                    </td>
-                    <td className={`px-4 py-3 text-sm ${quarter.isFuture ? 'text-gray-600' : 'font-semibold text-indigo-700'}`}>
-                      {quarter.isFuture ? '–' : `${Number(quarter.SummaryAchieved || 0).toFixed(2)}%`}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {quarter.isFuture ? '–' : `${Number(quarter.BroughtForwardAchieved || 0).toFixed(2)}%`}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {quarter.isFuture ? '–' : `${quarter.CompletedCount} of ${quarter.CountedGoalCount}`}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {quarter.isFuture ? '–' : quarter.CarriedForwardCount}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-indigo-50/60">
-                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900 whitespace-nowrap">Yearly average achieved</th>
-                  <td className="px-4 py-3 text-sm text-gray-600" />
-                  <td className="px-4 py-3 text-sm font-bold text-indigo-800">
-                    {evaluation.YearlyPerformance.AveragePercentage == null
-                      ? '—'
-                      : `${Number(evaluation.YearlyPerformance.AveragePercentage).toFixed(2)}%`}
-                  </td>
-                  <td colSpan={3} className="px-4 py-3 text-xs text-gray-500">Average of quarters with goals</td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <QuarterSummaryTable
+              quarters={summaryQuarters}
+              currentQuarter={getCurrentFiscalQuarterValue()}
+              employeeId={targetUserId}
+              achievementRule="evaluation"
+            >
+              <tr className="bg-indigo-50/60">
+                <th className="py-3 pl-2 pr-4 font-bold text-gray-900 whitespace-nowrap">Yearly average achieved</th>
+                <td className="px-3 py-3" />
+                <td className="px-3 py-3 font-bold text-indigo-800 whitespace-nowrap">
+                  {evaluation.YearlyPerformance.AveragePercentage == null
+                    ? '—'
+                    : `${Number(evaluation.YearlyPerformance.AveragePercentage).toFixed(2)}%`}
+                </td>
+                <td colSpan={3} className="px-3 py-3 text-xs text-gray-500">Average of quarters with goals</td>
+              </tr>
+            </QuarterSummaryTable>
           </div>
         </section>
 
@@ -308,7 +297,7 @@ const FinalEvaluation = () => {
         </div> */}
 
         {/* Goal Breakdown Table */}
-        <div>
+        {/* <div>
           <h3 className="text-lg font-bold text-gray-800 mb-4">Goal Breakdown</h3>
           <div className="overflow-x-auto border border-gray-200 rounded-xl">
             <table className="min-w-full divide-y divide-gray-200">
@@ -354,7 +343,7 @@ const FinalEvaluation = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        </div> */}
 
         {/* Overall Feedback */}
         <div>

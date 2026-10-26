@@ -21,6 +21,7 @@ const {
   getCfoApprovalWindow,
   isWithinCarryForwardWindow,
 } = require("../utils/fiscalQuarter");
+const { canAccessEvaluation } = require("./evaluationController");
 
 // These statuses are set only by the completion request/approve endpoints.
 const COMPLETION_STATUSES = ["Completion Submitted", "Completed"];
@@ -808,6 +809,160 @@ const getMyQuarterSummary = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error while fetching your quarterly goals.",
+      errors: error.message,
+    });
+  }
+};
+
+// The goals behind one row of the quarter summary, for an employee (default:
+// the caller). The WHERE clauses repeat getMyQuarterSummary's exactly, so the
+// totals returned here always equal that row's figures.
+//   ownGoals:      Allocated / Achieved / Completed
+//   broughtForward: Brought forward (pending) / Brought forward achieved
+// achievementRule=evaluation matches the Final Evaluation summary instead:
+// an own goal completed after its quarter ended adds nothing to Achieved
+// (it is counted only as brought forward achieved where it was completed).
+const getQuarterGoalDetails = async (req, res) => {
+  const requesterId = req.user?.UserID || req.user?.userId;
+  const targetUserId =
+    req.query.userId == null ? Number(requesterId) : Number(req.query.userId);
+  const quarterBounds = getFiscalQuarterBoundsFromLabel(req.query.quarter);
+  const useEvaluationRule = req.query.achievementRule === "evaluation";
+
+  if (!quarterBounds) {
+    return res
+      .status(400)
+      .json({ success: false, message: "A valid quarter such as Q3-2027 is required." });
+  }
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid employee." });
+  }
+
+  try {
+    const pool = await poolPromise;
+    if (!(await canAccessEvaluation(pool, requesterId, targetUserId))) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have access to this employee's goals.",
+      });
+    }
+
+    const result = await pool
+      .request()
+      .input("UserID", sql.Int, targetUserId)
+      .input("Quarter", sql.VarChar, quarterBounds.label)
+      .input("QStart", sql.Date, quarterBounds.startKey)
+      .input("QEnd", sql.Date, quarterBounds.endKey)
+      .query(`
+        SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Weightage,
+               g.AchievedWeightage, g.Timeline, g.GoalStatus,
+               g.CompletedDate, g.CompletionRemark, g.Quarter,
+               g.QuarterEndDate, ISNULL(g.CarryForwardCount, 0) AS CarryForwardCount,
+               progress.CompletedSubGoalCount, progress.TotalSubGoalCount,
+               CASE WHEN g.Quarter = @Quarter
+                     AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+                    THEN 1 ELSE 0 END AS IsOwnGoal,
+               CASE WHEN g.QuarterEndDate < @QStart
+                     AND g.Timeline >= @QStart
+                     AND g.Timeline < DATEADD(DAY, 1, @QEnd)
+                     AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
+                    THEN 1 ELSE 0 END AS IsBroughtForwardPending,
+               CASE WHEN g.QuarterEndDate < @QStart
+                     AND g.CompletedDate >= @QStart
+                     AND g.CompletedDate < DATEADD(DAY, 1, @QEnd)
+                    THEN 1 ELSE 0 END AS IsBroughtForwardAchieved
+        FROM dbo.Goals g
+        OUTER APPLY (
+          SELECT ISNULL(SUM(CASE WHEN sg.Status = 'Completed' THEN 1 ELSE 0 END), 0) AS CompletedSubGoalCount,
+                 COUNT(sg.SubGoalID) AS TotalSubGoalCount
+          FROM dbo.GoalSubGoals sg
+          WHERE sg.GoalID = g.GoalID
+        ) progress
+        WHERE g.UserID = @UserID
+          AND (
+            (g.Quarter = @Quarter
+              AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled'))
+            OR (g.QuarterEndDate < @QStart
+              AND g.Timeline >= @QStart
+              AND g.Timeline < DATEADD(DAY, 1, @QEnd)
+              AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled'))
+            OR (g.QuarterEndDate < @QStart
+              AND g.CompletedDate >= @QStart
+              AND g.CompletedDate < DATEADD(DAY, 1, @QEnd))
+          )
+        ORDER BY g.GoalNumber, g.GoalID
+      `);
+
+    const roundPercent = (value) => Math.round(Number(value || 0) * 100) / 100;
+    const sumBy = (rows, pick) =>
+      roundPercent(rows.reduce((total, row) => total + Number(pick(row) || 0), 0));
+
+    const toGoal = (row) => {
+      const timelineKey = toDateKey(row.Timeline);
+      const quarterEndKey = toDateKey(row.QuarterEndDate);
+      return {
+        goalId: row.GoalID,
+        goalNumber: row.GoalNumber,
+        title: row.GoalTitle,
+        weightage: roundPercent(row.Weightage),
+        endDate: timelineKey,
+        status: row.GoalStatus,
+        completedDate: toDateKey(row.CompletedDate),
+        completionRemark: row.CompletionRemark || null,
+        fromQuarter: row.Quarter,
+        carryForwardCount: Number(row.CarryForwardCount || 0),
+        // End Date moved past the goal's own quarter by a carry-forward.
+        // A goal created with an End Date in a later quarter was not moved.
+        // (Date keys compare correctly as strings; quarter labels do not.)
+        movedToQuarter:
+          Number(row.CarryForwardCount || 0) > 0 &&
+          timelineKey && quarterEndKey && timelineKey > quarterEndKey
+            ? getFiscalQuarter(timelineKey).label
+            : null,
+        completedSubGoals: Number(row.CompletedSubGoalCount || 0),
+        totalSubGoals: Number(row.TotalSubGoalCount || 0),
+      };
+    };
+
+    const ownRows = result.recordset.filter((row) => row.IsOwnGoal === 1);
+    const pendingRows = result.recordset.filter(
+      (row) => row.IsBroughtForwardPending === 1,
+    );
+    const achievedRows = result.recordset.filter(
+      (row) => row.IsBroughtForwardAchieved === 1,
+    );
+    const broughtForwardRows = result.recordset.filter(
+      (row) => row.IsBroughtForwardPending === 1 || row.IsBroughtForwardAchieved === 1,
+    );
+
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({
+      success: true,
+      data: {
+        quarter: quarterBounds.label,
+        ownGoals: {
+          goals: ownRows.map(toGoal),
+          allocated: sumBy(ownRows, (row) => row.Weightage),
+          achieved: sumBy(ownRows, (row) =>
+            useEvaluationRule &&
+            toDateKey(row.CompletedDate) > toDateKey(row.QuarterEndDate)
+              ? 0
+              : row.AchievedWeightage,
+          ),
+          completedCount: ownRows.filter((row) => row.GoalStatus === "Completed").length,
+        },
+        broughtForward: {
+          goals: broughtForwardRows.map(toGoal),
+          pending: sumBy(pendingRows, (row) => row.Weightage),
+          achieved: sumBy(achievedRows, (row) => row.AchievedWeightage),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get Quarter Goal Details Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching the quarter's goals.",
       errors: error.message,
     });
   }
@@ -4405,6 +4560,7 @@ const bringForwardGoal = async (req, res) => {
 module.exports = {
   getGoals,
   getMyQuarterSummary,
+  getQuarterGoalDetails,
   getAddGoalStatus,
   getBringForwardGoals,
   bringForwardGoal,
