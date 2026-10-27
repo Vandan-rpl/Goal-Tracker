@@ -20,7 +20,8 @@ import {
   toSummaryQuarters,
 } from "../../utils/yearlyPerformance";
 
-// Manager/HOD view of Reports & Analytics, limited to active direct reports.
+// Manager/HOD/Business Head view of Reports & Analytics, limited to their
+// active direct reports (for a Business Head, active employees under them).
 // Every quarter and Quarter Average figure comes from the server's Final
 // Evaluation calculation (GET analytics/team-performance).
 
@@ -137,7 +138,7 @@ const TeamView = ({ members, fiscalYear, onSelect }) => {
   if (members.length === 0) {
     return (
       <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <SectionMessage>You have no active direct reports.</SectionMessage>
+        <SectionMessage>You have no active team members.</SectionMessage>
       </section>
     );
   }
@@ -391,9 +392,11 @@ const TeamReports = () => {
   // null = the server's current fiscal year (it owns "today").
   const [fiscalYear, setFiscalYear] = useState(null);
   const [employeeId, setEmployeeId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [report, setReport] = useState(null);
   const [filterOptions, setFilterOptions] = useState({
     employees: [],
+    departments: [],
     fiscalYears: [],
     currentFiscalYear: null,
   });
@@ -409,6 +412,7 @@ const TeamReports = () => {
         const res = await api.get("analytics/team-performance", {
           params: {
             fiscalYear: fiscalYear ?? undefined,
+            departmentId: departmentId || undefined,
             employeeId: employeeId || undefined,
           },
         });
@@ -418,6 +422,7 @@ const TeamReports = () => {
           setReport(data);
           setFilterOptions({
             employees: data.Employees,
+            departments: data.Departments || [],
             fiscalYears: data.FiscalYearOptions,
             currentFiscalYear: data.CurrentFiscalYear,
           });
@@ -439,17 +444,45 @@ const TeamReports = () => {
     return () => {
       ignore = true;
     };
-  }, [fiscalYear, employeeId]);
+  }, [fiscalYear, departmentId, employeeId]);
 
   const selectEmployee = (id) => setEmployeeId(id == null ? "" : String(id));
   const summary = report?.Summary;
   const selectedEmployee = filterOptions.employees.find(
     (employee) => String(employee.UserID) === employeeId,
   );
+  const departmentEmployees = departmentId
+    ? filterOptions.employees.filter(
+        (employee) => String(employee.DepartmentID) === departmentId,
+      )
+    : filterOptions.employees;
+
+  // Clears the employee when they are not in the new department.
+  const selectDepartment = (id) => {
+    setDepartmentId(id);
+    if (id && selectedEmployee && String(selectedEmployee.DepartmentID) !== id) {
+      setEmployeeId("");
+    }
+  };
 
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row">
+        <label className="flex flex-col gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Department
+          <select
+            value={departmentId}
+            onChange={(e) => selectDepartment(e.target.value)}
+            className="min-w-56 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-800 focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All departments</option>
+            {filterOptions.departments.map((department) => (
+              <option key={department.DepartmentID} value={String(department.DepartmentID)}>
+                {department.DepartmentName}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
           Employee
           <select
@@ -458,7 +491,7 @@ const TeamReports = () => {
             className="min-w-56 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-800 focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">All team members</option>
-            {filterOptions.employees.map((employee) => (
+            {departmentEmployees.map((employee) => (
               <option key={employee.UserID} value={String(employee.UserID)}>
                 {employee.employeeName}
               </option>

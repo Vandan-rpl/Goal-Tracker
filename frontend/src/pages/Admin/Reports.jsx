@@ -41,8 +41,12 @@ const PageLayout = ({ subtitle, children }) => (
   </div>
 );
 
-// Admin / CFO organisation view.
-const OrganisationReports = () => {
+// Departments left out of the Business Head's "Goals by Department" chart.
+const BUSINESS_HEAD_HIDDEN_DEPARTMENTS = ["human resources", "hr"];
+
+// Admin / CFO organisation view. Also the Business Head's "Organisation
+// overview" tab, which passes hiddenDepartments.
+const OrganisationReports = ({ hiddenDepartments = [] }) => {
   const [dashboardStats, setDashboardStats] = useState(null);
   const [departmentStats, setDepartmentStats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +65,14 @@ const OrganisationReports = () => {
 
         if (statsRes.data.success) setDashboardStats(statsRes.data.data);
         if (breakdownRes.data.success) {
-          setDepartmentStats(breakdownRes.data.data || []);
+          setDepartmentStats(
+            (breakdownRes.data.data || []).filter(
+              (row) =>
+                !hiddenDepartments.includes(
+                  String(row.department || "").trim().toLowerCase(),
+                ),
+            ),
+          );
         }
       } catch (err) {
         console.error("Failed to load reports", err);
@@ -78,14 +89,14 @@ const OrganisationReports = () => {
 
   if (loading) {
     return (
-      <div className="flex-1 bg-gray-50 min-h-screen flex items-center justify-center text-gray-500">
+      <div className="py-24 flex items-center justify-center text-gray-500">
         Loading reports...
       </div>
     );
   }
 
   return (
-    <PageLayout subtitle="Organization-wide goal reporting and completion trends.">
+    <>
       {error && (
         <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium">
           {error}
@@ -154,6 +165,57 @@ const OrganisationReports = () => {
           </div>
         )}
       </section>
+    </>
+  );
+};
+
+const BUSINESS_HEAD_TABS = [
+  {
+    key: "team",
+    label: "Team performance",
+    subtitle:
+      "Team goal progress by member, limited to active employees under you.",
+  },
+  {
+    key: "organisation",
+    label: "Organisation overview",
+    subtitle: "Organization-wide goal reporting and completion trends.",
+  },
+];
+
+// Business Head: the Manager/HOD team report, with the original
+// organisation view kept as a second tab.
+const BusinessHeadReports = () => {
+  const [activeTab, setActiveTab] = useState("team");
+  const tab = BUSINESS_HEAD_TABS.find((t) => t.key === activeTab);
+
+  return (
+    <PageLayout subtitle={tab.subtitle}>
+      <div className="flex gap-2 border-b border-gray-200" role="tablist">
+        {BUSINESS_HEAD_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={t.key === activeTab}
+            onClick={() => setActiveTab(t.key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${
+              t.key === activeTab
+                ? "border-indigo-600 text-indigo-700"
+                : "border-transparent text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {activeTab === "team" ? (
+        <TeamReports />
+      ) : (
+        <OrganisationReports
+          hiddenDepartments={BUSINESS_HEAD_HIDDEN_DEPARTMENTS}
+        />
+      )}
     </PageLayout>
   );
 };
@@ -172,7 +234,15 @@ const Reports = () => {
     );
   }
 
-  return <OrganisationReports />;
+  if (role === "BUSINESSHEAD") {
+    return <BusinessHeadReports />;
+  }
+
+  return (
+    <PageLayout subtitle="Organization-wide goal reporting and completion trends.">
+      <OrganisationReports />
+    </PageLayout>
+  );
 };
 
 export default Reports;

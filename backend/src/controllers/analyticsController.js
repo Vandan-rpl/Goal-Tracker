@@ -216,15 +216,27 @@ const getTeamStats = async (req, res) => {
     }
 };
 
-// Active direct reports of a Manager (ReportingManagerID) or HOD (HODID).
+// Active direct reports of a Manager (ReportingManagerID) or HOD (HODID),
+// or the active employees under a Business Head (BusinessHeadID). The
+// Business Head's viewing scope elsewhere is company-wide, so their team is
+// looked up here rather than through getAnalyticsUserIds.
 const getActiveDirectReports = async (pool, userId, role) => {
-    const scopedUserIds = await getAnalyticsUserIds(pool, userId, role);
     const request = pool.request();
-    const filter = buildUserIdFilter(request, scopedUserIds, 'u.UserID');
+    let filter;
+    if (String(role || '').trim().toUpperCase() === 'BUSINESSHEAD') {
+        request.input('BusinessHeadID', sql.Int, userId);
+        filter = 'u.BusinessHeadID = @BusinessHeadID AND u.UserID <> @BusinessHeadID';
+    } else {
+        const scopedUserIds = await getAnalyticsUserIds(pool, userId, role);
+        filter = buildUserIdFilter(request, scopedUserIds, 'u.UserID');
+    }
     const result = await request.query(`
         SELECT u.UserID,
-               LTRIM(RTRIM(CONCAT(u.FirstName, ' ', u.LastName))) AS employeeName
+               LTRIM(RTRIM(CONCAT(u.FirstName, ' ', u.LastName))) AS employeeName,
+               u.DepartmentID,
+               d.DepartmentName
         FROM dbo.Users u
+        LEFT JOIN dbo.Departments d ON d.DepartmentID = u.DepartmentID
         WHERE ${filter} AND u.IsActive = 1
         ORDER BY u.FirstName, u.LastName
     `);
@@ -285,8 +297,10 @@ const getFiscalYearOptions = async (pool, userIds, currentFiscalYear) => {
 };
 
 /**
- * GET /api/v1/analytics/team-performance?fiscalYear=YYYY&employeeId=N
- * Manager/HOD only. Without employeeId: one row per active direct report.
+ * GET /api/v1/analytics/team-performance?fiscalYear=YYYY&departmentId=N&employeeId=N
+ * Manager/HOD/Business Head only. Without employeeId: one row per active
+ * direct report (for a Business Head, per active employee under them),
+ * narrowed to departmentId when given.
  * With employeeId (must be an active direct report): that employee's
  * quarter rows. Every quarter and Quarter Average figure comes from
  * getYearlyPerformance, the calculation behind the Final Evaluation page.
@@ -296,10 +310,10 @@ const getTeamPerformance = async (req, res) => {
     const role = req.user?.role || req.user?.Role;
     const normalizedRole = String(role || '').trim().toUpperCase();
 
-    if (!['MANAGER', 'HOD'].includes(normalizedRole)) {
+    if (!['MANAGER', 'HOD', 'BUSINESSHEAD'].includes(normalizedRole)) {
         return res.status(403).json({
             success: false,
-            message: 'Team analytics are available to managers and HODs only.'
+            message: 'Team analytics are available to managers, HODs and Business Heads only.'
         });
     }
 
@@ -318,6 +332,13 @@ const getTeamPerformance = async (req, res) => {
     }
     const employeeId = hasEmployee ? Number(rawEmployeeId) : null;
 
+    const rawDepartmentId = req.query.departmentId;
+    const hasDepartment = rawDepartmentId != null && rawDepartmentId !== '';
+    if (hasDepartment && !/^\d+$/.test(String(rawDepartmentId))) {
+        return res.status(400).json({ success: false, message: 'Department ID must be a number.' });
+    }
+    const departmentId = hasDepartment ? Number(rawDepartmentId) : null;
+
     try {
         const pool = await poolPromise;
         const employees = await getActiveDirectReports(pool, userId, role);
@@ -329,9 +350,9 @@ const getTeamPerformance = async (req, res) => {
             });
         }
 
-        const targetEmployees = employeeId != null
-            ? employees.filter((e) => Number(e.UserID) === employeeId)
-            : employees;
+        const targetEmployees = employees.filter((e) =>
+            (employeeId == null || Number(e.UserID) === employeeId)
+            && (departmentId == null || Number(e.DepartmentID) === departmentId));
         const targetIds = targetEmployees.map((e) => e.UserID);
         const currentFiscalYear = parseFiscalYear(undefined);
 
@@ -340,12 +361,21 @@ const getTeamPerformance = async (req, res) => {
             Promise.all(targetIds.map((id) => getYearlyPerformance(pool, id, fiscalYear)))
         ]);
 
+        // Departments of the whole team, for the department filter.
+        const departments = [...new Map(
+            employees
+                .filter((e) => e.DepartmentID != null)
+                .map((e) => [e.DepartmentID, { DepartmentID: e.DepartmentID, DepartmentName: e.DepartmentName }])
+        ).values()].sort((a, b) => String(a.DepartmentName).localeCompare(String(b.DepartmentName)));
+
         const baseData = {
             FiscalYear: fiscalYear,
             CurrentFiscalYear: currentFiscalYear,
             FiscalYearOptions: fiscalYearOptions,
             Employees: employees,
-            SelectedEmployeeID: employeeId
+            Departments: departments,
+            SelectedEmployeeID: employeeId,
+            SelectedDepartmentID: departmentId
         };
 
         if (performances.length === 0) {
