@@ -1,5 +1,21 @@
 const { poolPromise, sql } = require('../config/db');
 const { getScopedUserIds, buildUserIdFilter } = require('../utils/goalScope');
+const { getFiscalQuarter, getFiscalQuarterBoundsFromLabel } = require('../utils/fiscalQuarter');
+const {
+    parseFiscalYear,
+    getYearlyPerformance
+} = require('./evaluationController');
+
+// Final-approved goals that are still being worked on (same set as the
+// "In progress" column of getTeamStats).
+const IN_PROGRESS_STATUSES = ['Running', 'Approved', 'Postpone', 'Completion Submitted'];
+
+const bindStatusList = (request, prefix, statuses) => statuses
+    .map((status, i) => {
+        request.input(`${prefix}${i}`, sql.VarChar(50), status);
+        return `@${prefix}${i}`;
+    })
+    .join(', ');
 
 const getAnalyticsUserIds = async (pool, userId, role) => {
     const scopedUserIds = await getScopedUserIds(pool, userId, role);
@@ -200,6 +216,205 @@ const getTeamStats = async (req, res) => {
     }
 };
 
+// Active direct reports of a Manager (ReportingManagerID) or HOD (HODID).
+const getActiveDirectReports = async (pool, userId, role) => {
+    const scopedUserIds = await getAnalyticsUserIds(pool, userId, role);
+    const request = pool.request();
+    const filter = buildUserIdFilter(request, scopedUserIds, 'u.UserID');
+    const result = await request.query(`
+        SELECT u.UserID,
+               LTRIM(RTRIM(CONCAT(u.FirstName, ' ', u.LastName))) AS employeeName
+        FROM dbo.Users u
+        WHERE ${filter} AND u.IsActive = 1
+        ORDER BY u.FirstName, u.LastName
+    `);
+    return result.recordset;
+};
+
+// Goal counts for the summary cards, over the given employees.
+//   InProgress: approved, not completed, goals of `inProgressQuarter`.
+//   Completed: completed within the fiscal year.
+//   BroughtForwardPending: still-open goals whose End Date is past their own
+//     quarter and falls in this fiscal year — the goals behind the Final
+//     Evaluation "Brought forward (pending)" column, summed over Q1-Q4.
+const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
+    const request = pool.request()
+        .input('FiscalYearStart', sql.Date, getFiscalQuarterBoundsFromLabel(`Q1-${fiscalYear}`).startKey)
+        .input('FiscalYearEnd', sql.Date, getFiscalQuarterBoundsFromLabel(`Q4-${fiscalYear}`).endKey)
+        .input('InProgressQuarter', sql.VarChar(10), inProgressQuarter);
+    const filter = buildUserIdFilter(request, userIds, 'g.UserID');
+    const inProgressStatuses = bindStatusList(request, 'InProgressStatus', IN_PROGRESS_STATUSES);
+
+    const result = await request.query(`
+        SELECT
+            SUM(CASE WHEN g.Quarter = @InProgressQuarter
+                      AND g.GoalStatus IN (${inProgressStatuses})
+                     THEN 1 ELSE 0 END) AS InProgressGoals,
+            SUM(CASE WHEN g.GoalStatus = 'Completed'
+                      AND g.CompletedDate >= @FiscalYearStart
+                      AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
+                     THEN 1 ELSE 0 END) AS CompletedGoals,
+            SUM(CASE WHEN g.Timeline > g.QuarterEndDate
+                      AND g.Timeline >= @FiscalYearStart
+                      AND g.Timeline < DATEADD(DAY, 1, @FiscalYearEnd)
+                      AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
+                     THEN 1 ELSE 0 END) AS BroughtForwardPendingGoals
+        FROM dbo.Goals g
+        WHERE ${filter}
+    `);
+    const row = result.recordset[0] || {};
+    return {
+        InProgressGoals: row.InProgressGoals || 0,
+        CompletedGoals: row.CompletedGoals || 0,
+        BroughtForwardPendingGoals: row.BroughtForwardPendingGoals || 0
+    };
+};
+
+// Fiscal years (FY end year) with any goal for these employees, plus the
+// current one, newest first.
+const getFiscalYearOptions = async (pool, userIds, currentFiscalYear) => {
+    const request = pool.request();
+    const filter = buildUserIdFilter(request, userIds, 'UserID');
+    const result = await request.query(`
+        SELECT DISTINCT RIGHT(Quarter, 4) AS FiscalYear
+        FROM dbo.Goals
+        WHERE ${filter} AND Quarter LIKE 'Q[1-4]-[0-9][0-9][0-9][0-9]'
+    `);
+    const years = new Set([currentFiscalYear, ...result.recordset.map((row) => Number(row.FiscalYear))]);
+    return [...years].sort((a, b) => b - a);
+};
+
+/**
+ * GET /api/v1/analytics/team-performance?fiscalYear=YYYY&employeeId=N
+ * Manager/HOD only. Without employeeId: one row per active direct report.
+ * With employeeId (must be an active direct report): that employee's
+ * quarter rows. Every quarter and Quarter Average figure comes from
+ * getYearlyPerformance, the calculation behind the Final Evaluation page.
+ */
+const getTeamPerformance = async (req, res) => {
+    const userId = req.user?.UserID || req.user?.userId;
+    const role = req.user?.role || req.user?.Role;
+    const normalizedRole = String(role || '').trim().toUpperCase();
+
+    if (!['MANAGER', 'HOD'].includes(normalizedRole)) {
+        return res.status(403).json({
+            success: false,
+            message: 'Team analytics are available to managers and HODs only.'
+        });
+    }
+
+    const fiscalYear = parseFiscalYear(req.query.fiscalYear);
+    if (fiscalYear == null) {
+        return res.status(400).json({
+            success: false,
+            message: 'Fiscal year must be a valid four-digit year.'
+        });
+    }
+
+    const rawEmployeeId = req.query.employeeId;
+    const hasEmployee = rawEmployeeId != null && rawEmployeeId !== '';
+    if (hasEmployee && !/^\d+$/.test(String(rawEmployeeId))) {
+        return res.status(400).json({ success: false, message: 'Employee ID must be a number.' });
+    }
+    const employeeId = hasEmployee ? Number(rawEmployeeId) : null;
+
+    try {
+        const pool = await poolPromise;
+        const employees = await getActiveDirectReports(pool, userId, role);
+
+        if (employeeId != null && !employees.some((e) => Number(e.UserID) === employeeId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only view reports for your active direct reports.'
+            });
+        }
+
+        const targetEmployees = employeeId != null
+            ? employees.filter((e) => Number(e.UserID) === employeeId)
+            : employees;
+        const targetIds = targetEmployees.map((e) => e.UserID);
+        const currentFiscalYear = parseFiscalYear(undefined);
+
+        const [fiscalYearOptions, performances] = await Promise.all([
+            getFiscalYearOptions(pool, employees.map((e) => e.UserID), currentFiscalYear),
+            Promise.all(targetIds.map((id) => getYearlyPerformance(pool, id, fiscalYear)))
+        ]);
+
+        const baseData = {
+            FiscalYear: fiscalYear,
+            CurrentFiscalYear: currentFiscalYear,
+            FiscalYearOptions: fiscalYearOptions,
+            Employees: employees,
+            SelectedEmployeeID: employeeId
+        };
+
+        if (performances.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: 'Team performance fetched successfully.',
+                data: { ...baseData, Summary: null, Members: [], YearlyPerformance: null }
+            });
+        }
+
+        // In progress uses the real current quarter (not the Final Evaluation
+        // future-quarters testing flag): today's quarter in the current year,
+        // Q4 for a past year, none for a future year.
+        const inProgressQuarter = fiscalYear === currentFiscalYear
+            ? getFiscalQuarter().label
+            : fiscalYear < currentFiscalYear ? `Q4-${fiscalYear}` : null;
+
+        const counts = await getGoalCounts(pool, targetIds, fiscalYear, inProgressQuarter);
+
+        // Goals in Q1-Q4 of the year, excluding Draft, Rejected and Cancelled
+        // (the "y" of each quarter's "x of y" Completed column).
+        const totalGoals = performances.reduce(
+            (sum, performance) => sum + performance.Quarters.reduce(
+                (quarterSum, quarter) => quarterSum + Number(quarter.CountedGoalCount || 0), 0,
+            ),
+            0,
+        );
+
+        const members = targetEmployees.map((employee, index) => {
+            const performance = performances[index];
+            const started = performance.Quarters.filter((quarter) => !quarter.isFuture);
+            return {
+                UserID: employee.UserID,
+                employeeName: employee.employeeName,
+                Quarters: performance.Quarters.map((quarter) => ({
+                    Quarter: quarter.SummaryQuarter,
+                    isFuture: quarter.isFuture,
+                    QuarterCompletionPercentage: quarter.QuarterCompletionPercentage
+                })),
+                CompletedCount: started.reduce((sum, quarter) => sum + Number(quarter.CompletedCount || 0), 0),
+                CountedGoalCount: started.reduce((sum, quarter) => sum + Number(quarter.CountedGoalCount || 0), 0),
+                QuarterAveragePercentage: performance.QuarterAveragePercentage
+            };
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Team performance fetched successfully.',
+            data: {
+                ...baseData,
+                Summary: {
+                    TotalGoals: totalGoals,
+                    InProgressQuarter: inProgressQuarter,
+                    ...counts
+                },
+                Members: members,
+                YearlyPerformance: employeeId != null ? performances[0] : null
+            }
+        });
+    } catch (error) {
+        console.error('Team Performance Error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error while fetching team performance.',
+            errors: error.message
+        });
+    }
+};
+
 // Get quarter completion trend metrics
 const getQuarterCompletionTrend = async (req, res) => {
     const userId = req.user?.UserID || req.user?.userId;
@@ -250,5 +465,6 @@ module.exports = {
     getDashboardStats,
     getDepartmentStats,
     getTeamStats,
+    getTeamPerformance,
     getQuarterCompletionTrend
 };

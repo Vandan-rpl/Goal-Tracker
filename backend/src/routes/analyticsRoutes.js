@@ -7,6 +7,7 @@ const { verifyToken } = require('../middleware/authMiddleware');
 router.get('/dashboard-stats', verifyToken, analyticsController.getDashboardStats);
 router.get('/department-stats', verifyToken, analyticsController.getDepartmentStats);
 router.get('/team-stats', verifyToken, analyticsController.getTeamStats);
+router.get('/team-performance', verifyToken, analyticsController.getTeamPerformance);
 router.get('/quarter-trends', verifyToken, analyticsController.getQuarterCompletionTrend);
 
 module.exports = router;

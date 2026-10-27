@@ -349,7 +349,9 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
     return {
         FiscalYear: fiscalYear,
         Quarters: quarters,
-        YearScorePercentage: calculateYearScore(quarters)
+        YearScorePercentage: calculateYearScore(quarters),
+        QuarterAveragePercentage: calculateQuarterAverage(quarters),
+        ToDateLabel: getToDateLabel(quarters)
     };
 };
 
@@ -366,6 +368,20 @@ const calculateQuarterCompletion = (quarter) => {
 
     if (due <= 0) return null;
     return Math.round(((achieved + broughtForwardAchieved) / due) * 100 * 100) / 100;
+};
+
+// Quarter Average % = mean of the Quarter Completion % of the quarters that
+// have started, skipping quarters with nothing due (Quarter Completion "—").
+// Display only (Reports & Analytics); not the Year Score. Returns null when
+// no started quarter has anything due. Rounded to 2 decimal places.
+const calculateQuarterAverage = (quarters) => {
+    const completions = quarters
+        .filter((quarter) => !quarter.isFuture && quarter.QuarterCompletionPercentage != null)
+        .map((quarter) => Number(quarter.QuarterCompletionPercentage));
+
+    if (completions.length === 0) return null;
+    const total = completions.reduce((sum, value) => sum + value, 0);
+    return Math.round((total / completions.length) * 100) / 100;
 };
 
 // Year Score % = (total Achieved + total Brought forward achieved) ÷ total
@@ -389,6 +405,15 @@ const calculateYearScore = (quarters) => {
 
     if (totals.allocated <= 0) return null;
     return Math.round((totals.achieved / totals.allocated) * 100 * 100) / 100;
+};
+
+// Which quarters have started, e.g. "Q1–Q3 to date" or "Full year".
+// Started quarters are always a run from Q1, so the last one names the range.
+const getToDateLabel = (quarters) => {
+    const startedCount = quarters.filter((quarter) => !quarter.isFuture).length;
+    if (startedCount === 0) return 'No quarter started';
+    if (startedCount === quarters.length) return 'Full year';
+    return startedCount === 1 ? 'Q1 to date' : `Q1–Q${startedCount} to date`;
 };
 
 /**
@@ -617,6 +642,8 @@ const finalizeFinalEvaluation = async (req, res) => {
 };
 
 module.exports = {
+    parseFiscalYear,
+    getYearlyPerformance,
     getFinalEvaluation,
     viewFinalEvaluation,
     finalizeFinalEvaluation,

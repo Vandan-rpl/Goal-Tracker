@@ -4,6 +4,11 @@ import { jwtDecode } from 'jwt-decode';
 import api from '../../services/api';
 import { getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
 import QuarterSummaryTable from '../../components/QuarterSummaryTable/QuarterSummaryTable';
+import {
+  QUARTER_COMPLETION_TITLE,
+  formatScorePercent,
+  toSummaryQuarters,
+} from '../../utils/yearlyPerformance';
 
 // Simple hand-rolled SVG gauge — no charting library needed, keeps this
 // page consistent with the rest of the (plain Tailwind, zero-extra-deps)
@@ -64,7 +69,8 @@ const FinalEvaluation = () => {
   const { userId: userIdParam } = useParams();
   const navigate = useNavigate();
   // An expanded quarter (?quarter=Q3-2027) also picks the fiscal year, so
-  // coming back from a goal reopens the same year and quarter.
+  // coming back from a goal reopens the same year and quarter. Otherwise
+  // ?fiscalYear=YYYY (from Reports & Analytics) picks it.
   const [searchParams] = useSearchParams();
 
   const [evaluation, setEvaluation] = useState(null);
@@ -73,6 +79,7 @@ const FinalEvaluation = () => {
   const [fiscalYear, setFiscalYear] = useState(
     () =>
       /^Q[1-4]-(\d{4})$/.exec(searchParams.get('quarter') || '')?.[1] ||
+      /^\d{4}$/.exec(searchParams.get('fiscalYear') || '')?.[0] ||
       getCurrentFiscalQuarterValue().split('-')[1],
   );
   const [finalizing, setFinalizing] = useState(false);
@@ -161,28 +168,15 @@ const FinalEvaluation = () => {
   }, [evaluation]);
 
   // Same shape as the employee dashboard's quarter summary.
-  const summaryQuarters = (evaluation?.YearlyPerformance?.Quarters || []).map((quarter) => ({
-    quarter: `${quarter.Quarter}-${evaluation.YearlyPerformance.FiscalYear}`,
-    isFuture: quarter.isFuture,
-    allocated: quarter.SummaryAllocated,
-    achieved: quarter.SummaryAchieved,
-    completedCount: quarter.CompletedCount,
-    countedGoalCount: quarter.CountedGoalCount,
-    broughtForwardPending: quarter.BroughtForwardPending,
-    broughtForwardAchieved: quarter.BroughtForwardAchieved,
-    quarterCompletion: quarter.QuarterCompletionPercentage,
-  }));
+  const summaryQuarters = toSummaryQuarters(evaluation?.YearlyPerformance);
 
   // Manager/HOD view only; display only, calculated on the server.
   const quarterCompletionColumn = isSelf
     ? undefined
     : {
         label: 'Quarter Completion',
-        title: 'Share of all work due in this quarter (new + brought forward) that was completed. Not used in the Year Score.',
-        getValue: (quarter) =>
-          quarter.quarterCompletion == null
-            ? '—'
-            : `${Number(quarter.quarterCompletion).toFixed(2)}%`,
+        title: QUARTER_COMPLETION_TITLE,
+        getValue: (quarter) => formatScorePercent(quarter.quarterCompletion),
       };
 
   if (loading) {
