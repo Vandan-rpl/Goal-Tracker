@@ -179,12 +179,10 @@ const FinalEvaluation = () => {
     : {
         label: 'Quarter Completion',
         title: 'Share of all work due in this quarter (new + brought forward) that was completed. Not used in the Year Score.',
-        getValue: (quarter) => {
-          if (quarter.isFuture) return '–';
-          return quarter.quarterCompletion == null
+        getValue: (quarter) =>
+          quarter.quarterCompletion == null
             ? '—'
-            : `${Number(quarter.quarterCompletion).toFixed(2)}%`;
-        },
+            : `${Number(quarter.quarterCompletion).toFixed(2)}%`,
       };
 
   if (loading) {

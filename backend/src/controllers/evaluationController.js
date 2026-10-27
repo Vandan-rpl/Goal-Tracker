@@ -304,12 +304,16 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
         ORDER BY q.EndDate
     `);
     const currentQuarterEnd = getFiscalQuarterBounds().endKey;
+    // TEMPORARY (testing only): EVALUATION_SHOW_FUTURE_QUARTERS=true in .env
+    // treats future quarters as started on this page. Remove after testing.
+    const showFutureQuarters = process.env.EVALUATION_SHOW_FUTURE_QUARTERS === 'true';
     const quarterSummaries = new Map(
         quarterSummaryResult.recordset.map((quarter) => [
             quarter.SummaryQuarter,
             {
                 ...quarter,
-                isFuture: fiscalQuarters.find((bounds) => bounds.label === quarter.SummaryQuarter).endKey >
+                isFuture: !showFutureQuarters &&
+                    fiscalQuarters.find((bounds) => bounds.label === quarter.SummaryQuarter).endKey >
                     currentQuarterEnd
             }
         ]),
