@@ -44,18 +44,36 @@ exports.getProfile = async (userId) => {
     }
 };
 
-exports.getDepartmentApprovers = async (userId) => {
+// Roles that can be picked as Reporting Manager or HOD (any department).
+const APPROVER_ROLES = "'Manager', 'HOD', 'BusinessHead'";
+
+/**
+ * Reporting Manager / HOD options for a user: active Managers, HODs and Business Heads from any
+ * department (IsEligible = 1), plus the user's currently assigned Reporting Manager and HOD even
+ * if they no longer qualify. The user themselves is never listed.
+ */
+exports.getApprovers = async (userId) => {
     const pool = await poolPromise;
     const result = await pool.request().input("UserId", sql.Int, userId).query(`
-        SELECT colleague.UserID, colleague.FirstName, colleague.LastName, colleague.Designation
+        SELECT candidate.UserID, candidate.FirstName, candidate.LastName, candidate.Designation,
+               candidate.Role, candidate.IsActive, dept.DepartmentName,
+               CAST(CASE WHEN candidate.IsActive = 1 AND candidate.Role IN (${APPROVER_ROLES})
+                         THEN 1 ELSE 0 END AS BIT) AS IsEligible
         FROM dbo.Users owner
-        INNER JOIN dbo.Users colleague ON colleague.DepartmentID = owner.DepartmentID
-        WHERE owner.UserID = @UserId AND colleague.UserID <> @UserId AND colleague.IsActive = 1
-        ORDER BY colleague.FirstName, colleague.LastName
+        INNER JOIN dbo.Users candidate ON candidate.UserID <> owner.UserID
+            AND (
+                (candidate.IsActive = 1 AND candidate.Role IN (${APPROVER_ROLES}))
+                OR candidate.UserID = owner.ReportingManagerID
+                OR candidate.UserID = owner.HODID
+            )
+        LEFT JOIN dbo.Departments dept ON dept.DepartmentID = candidate.DepartmentID
+        WHERE owner.UserID = @UserId
+        ORDER BY candidate.FirstName, candidate.LastName
     `);
     return result.recordset;
 };
 
+// Each choice must be an active Manager / HOD / Business Head, or the person already assigned.
 exports.updateHierarchy = async (userId, reportingManagerId, hodId) => {
     const pool = await poolPromise;
     const result = await pool.request()
@@ -69,17 +87,17 @@ exports.updateHierarchy = async (userId, reportingManagerId, hodId) => {
                 ModifiedDate = GETDATE()
             FROM dbo.Users employee
             WHERE employee.UserID = @UserId
-              AND (@ReportingManagerID IS NULL OR EXISTS (
+              AND (@ReportingManagerID IS NULL OR @ReportingManagerID = employee.ReportingManagerID OR EXISTS (
                   SELECT 1 FROM dbo.Users candidate
                   WHERE candidate.UserID = @ReportingManagerID
-                    AND candidate.DepartmentID = employee.DepartmentID
-                    AND candidate.IsActive = 1 AND candidate.UserID <> employee.UserID
+                    AND candidate.IsActive = 1 AND candidate.Role IN (${APPROVER_ROLES})
+                    AND candidate.UserID <> employee.UserID
               ))
-              AND (@HODID IS NULL OR EXISTS (
+              AND (@HODID IS NULL OR @HODID = employee.HODID OR EXISTS (
                   SELECT 1 FROM dbo.Users candidate
                   WHERE candidate.UserID = @HODID
-                    AND candidate.DepartmentID = employee.DepartmentID
-                    AND candidate.IsActive = 1 AND candidate.UserID <> employee.UserID
+                    AND candidate.IsActive = 1 AND candidate.Role IN (${APPROVER_ROLES})
+                    AND candidate.UserID <> employee.UserID
               ))
         `);
     return result.rowsAffected?.[0] > 0;

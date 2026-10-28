@@ -188,7 +188,7 @@ const Sidebar = () => {
               Upload Employees (Excel)
             </Link>
 
-            <Link
+            {/* <Link
               to="/admin/upload-excel"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/admin/upload-excel")
@@ -200,7 +200,7 @@ const Sidebar = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
               Upload Excel
-            </Link>
+            </Link> */}
 
             <Link
               to="/admin/reports"

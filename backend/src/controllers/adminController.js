@@ -857,7 +857,7 @@ const importEmployees = async (req, res) => {
       success: true,
       message: dryRun
         ? "Preview generated. No changes were saved."
-        : `Import completed. Inserted: ${report.inserted}, Updated: ${report.updated}, Deactivated: ${report.deactivated}.`,
+        : `Import completed. Created: ${report.inserted}, Updated: ${report.updated}, Not uploaded: ${report.notUploaded.length}, Manager not linked: ${report.managerNotLinked.length}, Skipped (not active): ${report.skippedInactive.length}, Deactivated: ${report.deactivated}.`,
       ...report,
     });
   } catch (error) {

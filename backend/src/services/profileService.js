@@ -35,10 +35,10 @@ const getProfile = async (userData) => {
     return profile;
 };
 
-const getDepartmentApprovers = async (userData) => {
+const getApprovers = async (userData) => {
     const userId = extractUserId(userData);
     if (!userId) throw new Error("User Id is required.");
-    return profileModel.getDepartmentApprovers(userId);
+    return profileModel.getApprovers(userId);
 };
 
 const updateHierarchy = async (userData, data) => {
@@ -56,7 +56,7 @@ const updateHierarchy = async (userData, data) => {
         throw new Error("You cannot select yourself as your manager or HOD.");
     }
     const updated = await profileModel.updateHierarchy(userId, managerId, hodId);
-    if (!updated) throw new Error("Select active users from your department.");
+    if (!updated) throw new Error("Select an active user with role Manager, HOD or BusinessHead.");
     return profileModel.getProfile(userId);
 };
 
@@ -204,7 +204,7 @@ const getLoginHistory = async (userData) => {
 
 module.exports = {
     getProfile,
-    getDepartmentApprovers,
+    getApprovers,
     updateHierarchy,
     updateProfile,
     changePassword,

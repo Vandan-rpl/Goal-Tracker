@@ -6,7 +6,7 @@ const upload = require('../middleware/uploadMiddleware');
 
 // Get Logged-in User Profile
 router.get('/', verifyToken, profileController.getProfile);
-router.get('/department-approvers', verifyToken, profileController.getDepartmentApprovers);
+router.get('/approvers', verifyToken, profileController.getApprovers);
 router.put('/hierarchy', verifyToken, profileController.updateHierarchy);
 
 // Update Profile

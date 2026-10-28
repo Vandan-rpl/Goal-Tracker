@@ -3,14 +3,12 @@ const { poolPromise, sql } = require("../config/db");
 const { DEFAULT_PASSWORD } = require("../constants/constants");
 const {
   parseEmployeeWorkbook,
-  splitEmployeeName,
   baseUsername,
   normaliseMobile,
   normaliseEmail,
   departmentCandidates,
-  personNameKey,
-  firstLastKey,
-  codeCandidates,
+  parseManagerName,
+  matchKey,
   EMAIL_RE,
 } = require("../utils/employeeImportParser");
 
@@ -27,12 +25,7 @@ const MAX_LENGTHS = {
   MobileNo: 20,
   Username: 100,
 };
-
-const HIERARCHY_FIELDS = [
-  { key: "reportingManager", column: "ReportingManagerID", label: "Reporting Manager" },
-  { key: "hod", column: "HODID", label: "Division Head / HOD" },
-  { key: "businessHead", column: "BusinessHeadID", label: "Business Head" },
-];
+const POST_MAX_LENGTH = 100;
 
 // Thrown to roll back and answer 400 with row-numbered errors.
 class ImportValidationError extends Error {
@@ -44,6 +37,7 @@ class ImportValidationError extends Error {
 
 const lower = (v) => String(v ?? "").trim().toLowerCase();
 const fullName = (u) => [u.FirstName, u.LastName].filter(Boolean).join(" ");
+const rowName = (r) => r.displayName || [r.firstName, r.lastName].filter(Boolean).join(" ");
 
 /**
  * Department name -> lowest DepartmentID, case-insensitive.
@@ -52,7 +46,7 @@ const fullName = (u) => [u.FirstName, u.LastName].filter(Boolean).join(" ");
 const buildDepartmentMap = (departments) => {
   const map = new Map();
   departments.forEach((d) => {
-    const key = lower(d.DepartmentName).replace(/\s+/g, " ");
+    const key = matchKey(d.DepartmentName);
     if (!key) return;
     const existing = map.get(key);
     if (!existing || d.DepartmentID < existing.DepartmentID) map.set(key, d);
@@ -62,133 +56,130 @@ const buildDepartmentMap = (departments) => {
 
 const findDepartment = (map, raw) => {
   for (const candidate of departmentCandidates(raw)) {
-    const dept = map.get(lower(candidate));
+    const dept = map.get(matchKey(candidate));
     if (dept) return dept;
   }
   return null;
 };
 
-/** Validate and normalise every row; returns { records, errors }. */
-const validateRows = (rows, { deptMap, usersByEmail }) => {
-  const errors = [];
+const pushTo = (map, key, value) => {
+  if (!key) return;
+  if (!map.has(key)) map.set(key, []);
+  if (!map.get(key).some((v) => v.UserID === value.UserID)) map.get(key).push(value);
+};
+
+// "first|last" match key; empty when either part is blank.
+const nameKey = (first, last) => {
+  const f = matchKey(first);
+  const l = matchKey(last);
+  return f && l ? `${f}|${l}` : "";
+};
+
+/**
+ * Narrow same first + last name candidates by middle name:
+ * equal middle names, or the same first letter (initials like "B").
+ * With no middle name to compare, nothing is narrowed.
+ */
+const narrowByMiddleName = (candidates, middle) => {
+  const target = matchKey(middle);
+  if (!target) return candidates;
+  return candidates.filter((c) => {
+    const own = matchKey(c.middle);
+    return own && (own === target || own[0] === target[0]);
+  });
+};
+
+/**
+ * Split rows into records to upload, rows not uploaded (with reason) and non-active rows.
+ * A row whose email belongs to the Business Head is treated as the Business Head's row.
+ */
+const validateRows = (rows, { deptMap, existingByCode, usersByEmail, businessHead }) => {
   const records = [];
+  const notUploaded = [];
+  const skippedInactive = [];
+  const mobileNotSaved = [];
   const seenCodes = new Map();
   const seenEmails = new Map();
 
   rows.forEach((r) => {
-    const rowErrors = [];
     const employeeCode = r.employeeCode || "";
+    const name = rowName(r);
+
+    if (lower(r.status) !== "active") {
+      skippedInactive.push({ row: r.row, employeeCode, name, status: r.status });
+      return;
+    }
+
+    const reasons = [];
     const email = normaliseEmail(r.email);
-    const name = splitEmployeeName(r.employeeName);
-    const mobile = normaliseMobile(r.mobile);
 
-    if (!employeeCode) rowErrors.push("Employee Code is required.");
-    if (!r.employeeName || !name.firstName) rowErrors.push("Employee Name is required.");
-    if (!email) rowErrors.push("Official Email ID is required.");
-    if (!r.department) rowErrors.push("Department is required.");
+    if (!employeeCode) reasons.push("User/Employee ID is blank.");
+    if (!r.firstName) reasons.push("First Name is blank.");
+    if (!email) reasons.push("Business email is blank.");
+    else if (!EMAIL_RE.test(email)) reasons.push(`Business email '${email}' is not a valid email.`);
 
-    if (email && !EMAIL_RE.test(email)) rowErrors.push(`Official Email ID '${email}' is not a valid email.`);
-    if (mobile.value !== null && mobile.digits < 10)
-      rowErrors.push(`Mobile Number '${r.mobile}' has fewer than 10 digits.`);
-
+    let existing = employeeCode ? existingByCode.get(lower(employeeCode)) : null;
     if (employeeCode) {
       const codeKey = lower(employeeCode);
       if (seenCodes.has(codeKey))
-        rowErrors.push(`Duplicate Employee Code '${employeeCode}' (also on row ${seenCodes.get(codeKey)}).`);
+        reasons.push(`Duplicate User/Employee ID '${employeeCode}' (also on row ${seenCodes.get(codeKey)}).`);
       else seenCodes.set(codeKey, r.row);
     }
     if (email) {
       const emailKey = lower(email);
       if (seenEmails.has(emailKey))
-        rowErrors.push(`Duplicate Official Email ID '${email}' (also on row ${seenEmails.get(emailKey)}).`);
+        reasons.push(`Duplicate business email '${email}' (also on row ${seenEmails.get(emailKey)}).`);
       else seenEmails.set(emailKey, r.row);
 
       const owner = usersByEmail.get(emailKey);
-      if (owner && lower(owner.EmployeeCode) !== lower(employeeCode))
-        rowErrors.push(`Official Email ID '${email}' already belongs to Employee Code '${owner.EmployeeCode}'.`);
+      if (owner && !existing && owner.UserID === businessHead.UserID) existing = businessHead;
+      if (owner && owner !== existing)
+        reasons.push(`Business email '${email}' already belongs to Employee Code '${owner.EmployeeCode}'.`);
     }
 
     const values = {
       EmployeeCode: employeeCode,
       Email: email,
-      FirstName: name.firstName,
-      LastName: name.lastName,
+      FirstName: r.firstName,
+      LastName: r.lastName || null,
       Designation: r.designation || null,
       Grade: r.grade || null,
-      MobileNo: mobile.value,
     };
     Object.entries(values).forEach(([column, value]) => {
       if (value && value.length > MAX_LENGTHS[column])
-        rowErrors.push(`${column} is longer than ${MAX_LENGTHS[column]} characters.`);
+        reasons.push(`${column} is longer than ${MAX_LENGTHS[column]} characters.`);
     });
 
-    let department = null;
-    if (r.department) {
-      department = findDepartment(deptMap, r.department);
-      if (!department) rowErrors.push(`Department '${r.department}' was not found.`);
+    const department = r.department ? findDepartment(deptMap, r.department) : null;
+    if (!department) reasons.push(`Department not found: ${r.department || "(blank)"}`);
+
+    if (reasons.length) {
+      notUploaded.push({ row: r.row, employeeCode, name, reason: reasons.join(" ") });
+      return;
     }
 
-    if (rowErrors.length) {
-      errors.push({ row: r.row, employeeCode, errors: rowErrors });
-      return;
+    // Personal phone first, then official; too long for the column -> saved without a mobile number.
+    const phoneFromFile = r.personalPhone || r.officialPhone;
+    let mobileNo = normaliseMobile(phoneFromFile);
+    if (mobileNo && mobileNo.length > MAX_LENGTHS.MobileNo) {
+      mobileNotSaved.push({ row: r.row, employeeCode, name, value: phoneFromFile });
+      mobileNo = null;
     }
 
     records.push({
       row: r.row,
       ...values,
+      MobileNo: mobileNo,
+      Post: values.Designation ? values.Designation.slice(0, POST_MAX_LENGTH) : null,
       DepartmentID: department.DepartmentID,
-      nameWords: name.words,
-      hierarchyRaw: {
-        reportingManager: r.reportingManager || "",
-        hod: r.hod || "",
-        businessHead: r.businessHead || "",
-      },
+      middleName: r.middleName,
+      name,
+      reportingManager: r.reportingManager,
+      existing: existing || null,
     });
   });
 
-  return { records, errors };
-};
-
-/** Lookup of active users for hierarchy resolution. */
-const buildPersonIndex = (users) => {
-  const byCode = new Map();
-  const byFullName = new Map();
-  const byFirstLast = new Map();
-  const push = (map, key, user) => {
-    if (!key) return;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(user);
-  };
-  users.forEach((u) => {
-    byCode.set(lower(u.EmployeeCode), u);
-    const key = personNameKey(fullName(u));
-    push(byFullName, key, u);
-    push(byFirstLast, firstLastKey(key), u);
-  });
-  return { byCode, byFullName, byFirstLast };
-};
-
-/**
- * Resolve a hierarchy cell to a user:
- * 1. Employee Code (whole value or code in brackets)  2. exact full name  3. first + last word (unique only)
- * Returns { user } or { error }.
- */
-const resolvePerson = (raw, index) => {
-  for (const code of codeCandidates(raw)) {
-    const user = index.byCode.get(lower(code));
-    if (user) return { user };
-  }
-  const key = personNameKey(raw);
-  if (!key) return { error: "not found" };
-
-  const exact = index.byFullName.get(key) || [];
-  if (exact.length === 1) return { user: exact[0] };
-  if (exact.length > 1) return { error: `ambiguous (matches ${exact.length} users)` };
-
-  const partial = index.byFirstLast.get(firstLastKey(key)) || [];
-  if (partial.length === 1) return { user: partial[0] };
-  if (partial.length > 1) return { error: `ambiguous (matches ${partial.length} users by first and last name)` };
-  return { error: "not found" };
+  return { records, notUploaded, skippedInactive, mobileNotSaved };
 };
 
 /**
@@ -206,13 +197,16 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
   }
 
   if (!parsed.headerRow || parsed.missingHeaders.length) {
-    throw new ImportValidationError("Required columns are missing.", [
-      {
-        row: parsed.headerRow,
-        employeeCode: null,
-        errors: [`Missing columns: ${parsed.missingHeaders.join(", ")}.`],
-      },
-    ]);
+    throw new ImportValidationError(
+      `Required column(s) missing: ${parsed.missingHeaders.join(", ")}. Nothing was saved.`,
+      [
+        {
+          row: parsed.headerRow,
+          employeeCode: null,
+          errors: [`Missing columns: ${parsed.missingHeaders.join(", ")}.`],
+        },
+      ],
+    );
   }
   if (!parsed.rows.length) {
     throw new ImportValidationError("The Excel sheet has no employee rows.", []);
@@ -224,55 +218,75 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
   const request = () => new sql.Request(transaction);
 
   try {
+    // ---------- Business Head: exactly one active user with Role BusinessHead ----------
+    const bhResult = await request().query(`
+      SELECT UserID, EmployeeCode, Email, FirstName, LastName
+      FROM dbo.Users WHERE Role = 'BusinessHead' AND IsActive = 1
+    `);
+    if (bhResult.recordset.length !== 1) {
+      const found = bhResult.recordset.length;
+      throw new ImportValidationError(
+        found === 0
+          ? "No active user with role BusinessHead exists. Create the Business Head before uploading. Nothing was saved."
+          : `${found} active users have role BusinessHead (${bhResult.recordset
+              .map((u) => `${fullName(u)} [${u.EmployeeCode}]`)
+              .join(", ")}); exactly one is required. Nothing was saved.`,
+        [],
+      );
+    }
+
     const deptResult = await request().query(
       "SELECT DepartmentID, DepartmentName FROM dbo.Departments",
     );
     const usersResult = await request().query(`
-      SELECT UserID, EmployeeCode, Username, Email, ReportingManagerID, HODID, BusinessHeadID, Role
+      SELECT UserID, EmployeeCode, Username, Email, FirstName, LastName, Role
       FROM dbo.Users
     `);
 
     const existingByCode = new Map();
     const usersByEmail = new Map();
     const takenUsernames = new Set();
+    let businessHead = null;
     usersResult.recordset.forEach((u) => {
       existingByCode.set(lower(u.EmployeeCode), u);
       if (u.Email) usersByEmail.set(lower(u.Email), u);
       takenUsernames.add(lower(u.Username));
+      if (u.UserID === bhResult.recordset[0].UserID) businessHead = u;
     });
 
-    const { records, errors } = validateRows(parsed.rows, {
+    const { records, notUploaded, skippedInactive, mobileNotSaved } = validateRows(parsed.rows, {
       deptMap: buildDepartmentMap(deptResult.recordset),
+      existingByCode,
       usersByEmail,
+      businessHead,
     });
-    if (errors.length) {
-      throw new ImportValidationError(
-        `Validation failed for ${errors.length} row(s). Nothing was saved.`,
-        errors,
-      );
-    }
 
-    // ---------- Insert / update ----------
     const report = {
       dryRun,
-      totalRows: records.length,
+      totalRows: parsed.rows.length,
       inserted: 0,
       updated: 0,
       deactivated: 0,
-      ignoredColumns: parsed.ignoredColumns,
+      businessHead: { name: fullName(businessHead), employeeCode: businessHead.EmployeeCode },
       newUsers: [],
-      warnings: [],
+      notUploaded,
+      managerNotLinked: [],
+      skippedInactive,
+      mobileNotSaved,
       hierarchy: [],
     };
 
-    const needsPassword = records.some((rec) => !existingByCode.has(lower(rec.EmployeeCode)));
+    // ---------- Pass 1: insert / update ----------
+    const needsPassword = records.some((rec) => !rec.existing);
     // One hash for the shared default password; each user is forced to change it on first login.
     const passwordHash = needsPassword
       ? await bcrypt.hash(process.env.DEFAULT_EMPLOYEE_PASSWORD || DEFAULT_PASSWORD, SALT_ROUNDS)
       : null;
 
+    // First + Last Name (from the file) -> [{ UserID, middle }], for manager linking in pass 2.
+    const fileNames = new Map();
+
     for (const rec of records) {
-      const existing = existingByCode.get(lower(rec.EmployeeCode));
       const req = request()
         .input("EmployeeCode", sql.VarChar(20), rec.EmployeeCode)
         .input("Email", sql.NVarChar(150), rec.Email)
@@ -281,11 +295,12 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
         .input("MobileNo", sql.VarChar(20), rec.MobileNo)
         .input("DepartmentID", sql.Int, rec.DepartmentID)
         .input("Designation", sql.NVarChar(150), rec.Designation)
-        .input("Grade", sql.NVarChar(50), rec.Grade);
+        .input("Grade", sql.NVarChar(50), rec.Grade)
+        .input("Post", sql.NVarChar(100), rec.Post);
 
-      if (existing) {
-        // Empty Excel cells never overwrite existing data. Username, passwords, Post and Role untouched.
-        await req.input("UserID", sql.Int, existing.UserID).query(`
+      if (rec.existing) {
+        // Empty Excel cells never overwrite existing data. EmployeeCode, Username, passwords and Role untouched.
+        await req.input("UserID", sql.Int, rec.existing.UserID).query(`
           UPDATE dbo.Users SET
             FirstName = COALESCE(@FirstName, FirstName),
             LastName = COALESCE(@LastName, LastName),
@@ -293,100 +308,127 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
             MobileNo = COALESCE(@MobileNo, MobileNo),
             DepartmentID = COALESCE(@DepartmentID, DepartmentID),
             Designation = COALESCE(@Designation, Designation),
+            Post = COALESCE(@Post, Post),
             Grade = COALESCE(@Grade, Grade),
             IsActive = 1,
             ModifiedDate = GETDATE()
           WHERE UserID = @UserID
         `);
-        rec.UserID = existing.UserID;
-        rec.existing = existing;
+        rec.UserID = rec.existing.UserID;
         report.updated++;
-        continue;
+      } else {
+        const base = baseUsername(rec.FirstName, rec.LastName).slice(0, MAX_LENGTHS.Username - 3);
+        let username = base;
+        for (let n = 2; takenUsernames.has(username); n++) username = `${base}${n}`;
+        takenUsernames.add(username);
+
+        const result = await req
+          .input("Username", sql.VarChar(100), username)
+          .input("PasswordHash", sql.NVarChar(sql.MAX), passwordHash)
+          .query(`
+            INSERT INTO dbo.Users (
+              EmployeeCode, Username, PasswordHash, Email, FirstName, LastName, MobileNo,
+              DepartmentID, Designation, Grade, Post, Role, IsActive, CreatedDate, ModifiedDate,
+              DefaultPasswordFlag, PasswordChangedDate, FailedLoginCount, IsLocked, IsPasswordChanged
+            )
+            OUTPUT INSERTED.UserID
+            VALUES (
+              @EmployeeCode, @Username, @PasswordHash, @Email, @FirstName, @LastName, @MobileNo,
+              @DepartmentID, @Designation, @Grade, @Post, 'Employee', 1, GETDATE(), GETDATE(),
+              1, NULL, 0, 0, 0
+            )
+          `);
+        rec.UserID = result.recordset[0].UserID;
+        report.inserted++;
+        report.newUsers.push({ row: rec.row, employeeCode: rec.EmployeeCode, name: rec.name, username });
       }
 
-      const base = baseUsername(rec.nameWords, rec.EmployeeCode).slice(0, MAX_LENGTHS.Username - 3);
-      let username = base;
-      for (let n = 2; takenUsernames.has(username); n++) username = `${base}${n}`;
-      takenUsernames.add(username);
-
-      const result = await req
-        .input("Username", sql.VarChar(100), username)
-        .input("PasswordHash", sql.NVarChar(sql.MAX), passwordHash)
-        .query(`
-          INSERT INTO dbo.Users (
-            EmployeeCode, Username, PasswordHash, Email, FirstName, LastName, MobileNo,
-            DepartmentID, Designation, Grade, Post, Role, IsActive, CreatedDate, ModifiedDate,
-            DefaultPasswordFlag, PasswordChangedDate, FailedLoginCount, IsLocked, IsPasswordChanged
-          )
-          OUTPUT INSERTED.UserID
-          VALUES (
-            @EmployeeCode, @Username, @PasswordHash, @Email, @FirstName, @LastName, @MobileNo,
-            @DepartmentID, @Designation, @Grade, NULL, 'Employee', 1, GETDATE(), GETDATE(),
-            1, NULL, 0, 0, 0
-          )
-        `);
-      rec.UserID = result.recordset[0].UserID;
-      rec.existing = null;
-      report.inserted++;
-      report.newUsers.push({ row: rec.row, employeeCode: rec.EmployeeCode, username });
+      pushTo(fileNames, nameKey(rec.FirstName, rec.LastName), { UserID: rec.UserID, middle: rec.middleName });
     }
 
-    // ---------- Deactivate users missing from the file (never Admins) ----------
+    // ---------- Deactivate users missing from the file (never Admins or the Business Head) ----------
     if (deactivateMissing) {
+      const keepCodes = [...records, ...notUploaded].map((r) => r.EmployeeCode || r.employeeCode).filter(Boolean);
       const result = await request()
-        .input("Codes", sql.NVarChar(sql.MAX), JSON.stringify(records.map((rec) => rec.EmployeeCode)))
+        .input("Codes", sql.NVarChar(sql.MAX), JSON.stringify(keepCodes))
+        .input("BusinessHeadID", sql.Int, businessHead.UserID)
         .query(`
           UPDATE dbo.Users SET IsActive = 0, ModifiedDate = GETDATE()
           WHERE IsActive = 1
             AND Role <> 'Admin'
+            AND UserID <> @BusinessHeadID
             AND EmployeeCode NOT IN (SELECT value COLLATE DATABASE_DEFAULT FROM OPENJSON(@Codes))
         `);
       report.deactivated = result.rowsAffected[0];
     }
 
-    // ---------- Hierarchy (after all rows exist, so managers further down the sheet resolve) ----------
+    // ---------- Pass 2: link managers (after all rows exist, so managers further down the sheet resolve) ----------
     const activeUsers = await request().query(`
       SELECT UserID, EmployeeCode, FirstName, LastName FROM dbo.Users WHERE IsActive = 1
     `);
-    const index = buildPersonIndex(activeUsers.recordset);
+    const dbNames = new Map();
+    activeUsers.recordset.forEach((u) => pushTo(dbNames, nameKey(u.FirstName, u.LastName), { UserID: u.UserID, middle: "" }));
     const usersById = new Map(activeUsers.recordset.map((u) => [u.UserID, u]));
     const nameOf = (id) => (id && usersById.has(id) ? fullName(usersById.get(id)) : null);
 
     for (const rec of records) {
-      const resolved = {};
-      const warn = (message) => report.warnings.push({ row: rec.row, employeeCode: rec.EmployeeCode, message });
+      const entry = { row: rec.row, employeeCode: rec.EmployeeCode, userId: rec.UserID, name: rec.name };
+      report.hierarchy.push(entry);
 
-      for (const field of HIERARCHY_FIELDS) {
-        const raw = rec.hierarchyRaw[field.key];
-        const existingId = rec.existing ? rec.existing[field.column] : null;
-        if (!raw) {
-          resolved[field.key] = { id: null, source: "empty", found: false };
-          continue;
+      // The Business Head's own row: details were updated in pass 1; hierarchy and role stay as they are.
+      if (rec.UserID === businessHead.UserID) {
+        entry.reportingManager = { name: null, source: "unchanged" };
+        continue;
+      }
+
+      let managerId = null;
+      let source;
+      if (!rec.reportingManager) {
+        managerId = businessHead.UserID;
+        source = "businessHead";
+      } else {
+        const parsedName = parseManagerName(rec.reportingManager);
+        const key = nameKey(parsedName.first, parsedName.last);
+        let candidates = fileNames.get(key) || [];
+        source = "file";
+        if (!candidates.length) {
+          candidates = dbNames.get(key) || [];
+          source = "database";
         }
-        const match = resolvePerson(raw, index);
-        if (match.user && match.user.UserID === rec.UserID) {
-          warn(`${field.label} '${raw}' is the employee themselves; left empty.`);
-          resolved[field.key] = { id: null, source: "empty", found: false };
-        } else if (match.user) {
-          resolved[field.key] = { id: match.user.UserID, source: "excel", found: true };
+        const multiple = candidates.length > 1;
+        if (multiple) candidates = narrowByMiddleName(candidates, parsedName.middle);
+
+        if (candidates.length === 1 && candidates[0].UserID !== rec.UserID) {
+          managerId = candidates[0].UserID;
         } else {
-          warn(`${field.label} '${raw}' ${match.error}; kept existing value.`);
-          resolved[field.key] = { id: existingId, source: "unchanged", found: false };
+          source = "notLinked";
+          report.managerNotLinked.push({
+            row: rec.row,
+            employeeCode: rec.EmployeeCode,
+            name: rec.name,
+            reportingManager: rec.reportingManager,
+            parsedFirstName: parsedName.first,
+            parsedLastName: parsedName.last,
+            reason:
+              candidates.length > 1 || (multiple && !candidates.length)
+                ? "multiple matches"
+                : candidates.length === 1
+                  ? "matches the employee themselves"
+                  : "no matching user",
+          });
         }
       }
 
-      // Reporting Manager empty or not found -> Business Head, unless that is the employee themselves.
-      const rm = resolved.reportingManager;
-      const bh = resolved.businessHead;
-      if (!rm.found && bh.found && bh.id !== rec.UserID) {
-        resolved.reportingManager = { id: bh.id, source: "businessHead", found: true };
-      }
+      // Reporting to the Business Head is stored as empty ReportingManagerID / HODID with BusinessHeadID set,
+      // which is what the existing one-time Business Head approval (isDirectBusinessHeadReport) expects.
+      const reportsToBusinessHead = managerId === businessHead.UserID;
+      const linkedId = reportsToBusinessHead ? null : managerId;
 
       await request()
         .input("UserID", sql.Int, rec.UserID)
-        .input("ReportingManagerID", sql.Int, resolved.reportingManager.id)
-        .input("HODID", sql.Int, resolved.hod.id)
-        .input("BusinessHeadID", sql.Int, resolved.businessHead.id)
+        .input("ReportingManagerID", sql.Int, linkedId)
+        .input("HODID", sql.Int, linkedId)
+        .input("BusinessHeadID", sql.Int, businessHead.UserID)
         .query(`
           UPDATE dbo.Users SET
             ReportingManagerID = @ReportingManagerID,
@@ -396,33 +438,30 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
           WHERE UserID = @UserID
         `);
 
-      const entry = (r) => ({ name: nameOf(r.id), source: r.source });
-      report.hierarchy.push({
-        row: rec.row,
-        employeeCode: rec.EmployeeCode,
-        userId: rec.UserID,
-        name: fullName(rec),
-        reportingManager: entry(resolved.reportingManager),
-        hod: entry(resolved.hod),
-        businessHead: entry(resolved.businessHead),
-      });
+      entry.reportingManager = {
+        name: reportsToBusinessHead ? fullName(businessHead) : nameOf(managerId),
+        source: reportsToBusinessHead && source !== "businessHead" ? "businessHeadMatched" : source,
+      };
     }
 
-    // ---------- Role: derived from who is named as BusinessHead / HOD / Manager among active users ----------
+    // ---------- Role: users with at least one active direct report become Manager ----------
+    // HODID always equals ReportingManagerID in this import, so there is no separate HOD signal.
+    // The Business Head keeps their role.
+    const roleUserIds = JSON.stringify(
+      records.map((rec) => rec.UserID).filter((id) => id !== businessHead.UserID),
+    );
     const roleResult = await request()
-      .input("UserIDs", sql.NVarChar(sql.MAX), JSON.stringify(records.map((rec) => rec.UserID)))
+      .input("UserIDs", sql.NVarChar(sql.MAX), roleUserIds)
       .query(`
         ;WITH Derived AS (
           SELECT u.UserID, u.Role,
             CASE
-              WHEN EXISTS (SELECT 1 FROM dbo.Users x WHERE x.IsActive = 1 AND x.UserID <> u.UserID AND x.BusinessHeadID = u.UserID) THEN 'BusinessHead'
-              WHEN EXISTS (SELECT 1 FROM dbo.Users x WHERE x.IsActive = 1 AND x.UserID <> u.UserID AND x.HODID = u.UserID) THEN 'HOD'
               WHEN EXISTS (SELECT 1 FROM dbo.Users x WHERE x.IsActive = 1 AND x.UserID <> u.UserID AND x.ReportingManagerID = u.UserID) THEN 'Manager'
               ELSE 'Employee'
             END AS NewRole
           FROM dbo.Users u
           WHERE u.UserID IN (SELECT CAST(value AS INT) FROM OPENJSON(@UserIDs))
-            AND u.Role <> 'Admin'
+            AND u.Role NOT IN ('Admin', 'BusinessHead')
         )
         UPDATE u SET u.Role = d.NewRole, u.ModifiedDate = GETDATE()
         OUTPUT INSERTED.UserID, INSERTED.Role

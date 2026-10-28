@@ -2,40 +2,9 @@ const ExcelJS = require("exceljs");
 
 /**
  * Parsing and normalisation helpers for the HR employee Excel import.
+ * The file is HR's full system export (200+ columns); only the columns below are read.
  * No DB access here; see services/employeeImportService.js.
  */
-
-// Header match key: case, spaces and punctuation ignored.
-const headerKey = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-
-// Known HR headers -> field name. `null` = recognised but ignored.
-const HEADER_FIELDS = {
-  employeecode: "employeeCode",
-  employeename: "employeeName",
-  officialemailid: "email",
-  mobilenumber: "mobile",
-  designation: "designation",
-  grade: "grade",
-  department: "department",
-  reportingmanager: "reportingManager",
-  divisionheadhod: "hod",
-  businesshead: "businessHead",
-  profitcenter: null,
-  companycode: null,
-  plantlocation: null,
-};
-
-const REQUIRED_HEADERS = {
-  employeeCode: "Employee Code",
-  employeeName: "Employee Name",
-  email: "Official Email ID",
-  department: "Department",
-};
-
-const HEADER_SCAN_ROWS = 10;
 
 // Trim, collapse whitespace (incl. non-breaking spaces).
 const cleanText = (value) =>
@@ -44,68 +13,100 @@ const cleanText = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const TITLE_RE = /^(mr|mrs|ms|miss|dr|shri|smt)\.?$/i;
+// Header / name match key: trimmed, repeated spaces collapsed, case ignored.
+const matchKey = (value) => cleanText(value).toLowerCase();
 
-// "Last, First Middle" -> "First Middle Last"
-const flipComma = (name) => {
-  const idx = name.indexOf(",");
-  if (idx === -1) return name;
-  const last = name.slice(0, idx).trim();
-  const first = name.slice(idx + 1).trim();
-  return cleanText(`${first} ${last}`);
+// Export headers (matchKey form) -> field name. Every other column is ignored.
+const HEADER_FIELDS = {
+  "user/employee id": "employeeCode",
+  "display name": "displayName",
+  "first name": "firstName",
+  "middle name": "middleName",
+  "last name": "lastName",
+  "business email information email address": "email",
+  "personal formatted phone number": "personalPhone",
+  "official phone information phone number": "officialPhone",
+  designation: "designation",
+  "pay grade": "grade",
+  department: "department",
+  "reporting manager": "reportingManager",
+  "employee status": "status",
 };
 
-const stripTitles = (words) => {
-  const result = [...words];
-  while (result.length > 1 && TITLE_RE.test(result[0])) result.shift();
-  return result;
+const REQUIRED_HEADERS = {
+  employeeCode: "User/Employee ID",
+  displayName: "Display Name",
+  firstName: "First Name",
+  lastName: "Last Name",
+  email: "Business Email Information Email Address",
+  department: "Department",
+  designation: "Designation",
+  reportingManager: "Reporting Manager",
+  status: "Employee Status",
 };
 
-const toTitleCase = (word) =>
-  word.toLowerCase().replace(/(^|[-'])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
+const HEADER_SCAN_ROWS = 10;
+
+// lowercase first + "." + lowercase last, spaces inside the names removed.
+const baseUsername = (firstName, lastName) => {
+  const first = String(firstName || "").replace(/\s+/g, "").toLowerCase();
+  const last = String(lastName || "").replace(/\s+/g, "").toLowerCase();
+  return last ? `${first}.${last}` : first;
+};
+
+// Phone columns are read with cellText so numbers keep every digit.
+const PHONE_FIELDS = new Set(["personalPhone", "officialPhone"]);
 
 /**
- * Employee Name -> { firstName, lastName, words }.
- * Strips titles, flips "Last, First", converts ALL CAPS to Title Case.
+ * Cell value as text, never as a number: whole numbers are written out in full
+ * (no 9.87654E+09), and rich text / hyperlink / formula objects give their text.
  */
-const splitEmployeeName = (rawName) => {
-  const name = flipComma(cleanText(rawName));
-  let words = stripTitles(name.split(" ").filter(Boolean));
+const cellText = (cell) => {
+  const value = cell.value;
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number") {
+    return Number.isInteger(value)
+      ? value.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 0 })
+      : String(value);
+  }
+  if (typeof value === "string") return value;
+  if (Array.isArray(value.richText)) return value.richText.map((part) => part.text).join("");
+  if (value.text !== undefined) return String(value.text);
+  if (value.result !== undefined) return cellText({ value: value.result });
+  return cell.text;
+};
 
-  const letters = words.join("").replace(/[^\p{L}]/gu, "");
-  const isAllCaps = letters.length > 1 && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
-  if (isAllCaps) words = words.map(toTitleCase);
+// Trim, drop spaces, dashes, dots and brackets; a leading "+" stays ("+91 98765-43210" -> "+919876543210").
+const normaliseMobile = (raw) => {
+  const value = String(raw || "").trim().replace(/[\s\-.()[\]{}]/g, "");
+  return value || null;
+};
 
+/**
+ * Reporting Manager cell -> { first, middle, last }.
+ * "Upadhyay, Ajaykumar Dhananjay" -> last before the comma, first word after it, rest = middle.
+ * "Ajaykumar Dhananjay Upadhyay"  -> first word, last word, words between = middle.
+ */
+const parseManagerName = (raw) => {
+  const value = cleanText(raw);
+  const commaAt = value.indexOf(",");
+  if (commaAt !== -1) {
+    const words = cleanText(value.slice(commaAt + 1)).split(" ").filter(Boolean);
+    return {
+      first: words[0] || "",
+      middle: words.slice(1).join(" "),
+      last: cleanText(value.slice(0, commaAt)),
+    };
+  }
+  const words = value.split(" ").filter(Boolean);
   return {
-    firstName: words[0] || "",
-    lastName: words.length > 1 ? words.slice(1).join(" ") : null,
-    words,
+    first: words[0] || "",
+    middle: words.slice(1, -1).join(" "),
+    last: words.length > 1 ? words[words.length - 1] : "",
   };
 };
 
-// Same slug rule as the Add Employee form.
-const slugify = (str) =>
-  String(str || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]/g, "");
-
-// first word + "." + last word ("Kamlesh Hasmuklal Ajmeri" -> kamlesh.ajmeri)
-const baseUsername = (words, employeeCode) => {
-  const first = slugify(words[0]);
-  const last = words.length > 1 ? slugify(words[words.length - 1]) : "";
-  if (first && last) return `${first}.${last}`;
-  return first || last || `emp${slugify(employeeCode)}`;
-};
-
-// Digits only, then the last 10 (drops +91 / leading 0).
-const normaliseMobile = (raw) => {
-  const digits = String(raw || "").replace(/\D/g, "");
-  if (!digits) return { value: null, digits: 0 };
-  return { value: digits.length > 10 ? digits.slice(-10) : digits, digits: digits.length };
-};
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_RE =/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const normaliseEmail = (raw) => cleanText(raw).replace(/^mailto:/i, "");
 
@@ -119,41 +120,10 @@ const departmentCandidates = (raw) => {
 };
 
 /**
- * Key used to match a person's name against Users:
- * strips "(code)", flips "Last, First", removes titles, dots and punctuation, lowercases.
- */
-const personNameKey = (raw) => {
-  let name = cleanText(raw).replace(/\([^)]*\)\s*$/, "");
-  name = flipComma(cleanText(name)).replace(/\./g, " ");
-  const words = stripTitles(
-    name
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, "")
-      .split(/\s+/)
-      .filter(Boolean),
-  );
-  return words.join(" ");
-};
-
-const firstLastKey = (nameKey) => {
-  const words = nameKey.split(" ").filter(Boolean);
-  if (words.length < 2) return nameKey;
-  return `${words[0]} ${words[words.length - 1]}`;
-};
-
-// Employee code candidates in a hierarchy cell: whole value, or the code inside brackets.
-const codeCandidates = (raw) => {
-  const value = cleanText(raw);
-  const candidates = [value];
-  const bracket = value.match(/\(([^)]+)\)\s*$/);
-  if (bracket) candidates.unshift(cleanText(bracket[1]));
-  return candidates.filter(Boolean);
-};
-
-/**
  * Read the first worksheet of an .xlsx buffer.
  * Header row = the row within the first 10 that matches the most known headers.
- * Returns { headerRow, ignoredColumns, missingHeaders, rows: [{ row, ...fields }] }.
+ * Columns are found by header name; when a header repeats, the first column wins.
+ * Returns { headerRow, missingHeaders, rows: [{ row, ...fields }] }.
  */
 const parseEmployeeWorkbook = async (buffer) => {
   const workbook = new ExcelJS.Workbook();
@@ -166,24 +136,21 @@ const parseEmployeeWorkbook = async (buffer) => {
   for (let r = 1; r <= lastScanRow; r++) {
     const columns = [];
     sheet.getRow(r).eachCell({ includeEmpty: false }, (cell, col) => {
-      const text = cleanText(cell.text);
-      const key = headerKey(text);
-      if (key) columns.push({ col, key, text });
+      const key = matchKey(cell.text);
+      if (key) columns.push({ col, key });
     });
     const matches = columns.filter((c) => c.key in HEADER_FIELDS).length;
     if (matches > best.matches) best = { rowNumber: r, matches, columns };
   }
 
   if (!best.matches) {
-    return { headerRow: null, ignoredColumns: [], missingHeaders: Object.values(REQUIRED_HEADERS), rows: [] };
+    return { headerRow: null, missingHeaders: Object.values(REQUIRED_HEADERS), rows: [] };
   }
 
   const fieldColumns = {};
-  const ignoredColumns = [];
-  best.columns.forEach(({ col, key, text }) => {
+  best.columns.forEach(({ col, key }) => {
     const field = HEADER_FIELDS[key];
     if (field && !(field in fieldColumns)) fieldColumns[field] = col;
-    else ignoredColumns.push(text);
   });
 
   const missingHeaders = Object.entries(REQUIRED_HEADERS)
@@ -195,27 +162,28 @@ const parseEmployeeWorkbook = async (buffer) => {
     const excelRow = sheet.getRow(r);
     const record = { row: r };
     let hasValue = false;
-    Object.entries(fieldColumns).forEach(([field, col]) => {
-      const text = cleanText(excelRow.getCell(col).text);
+    Object.keys(HEADER_FIELDS).forEach((key) => {
+      const field = HEADER_FIELDS[key];
+      const col = fieldColumns[field];
+      const cell = col ? excelRow.getCell(col) : null;
+      const text = cell ? cleanText(PHONE_FIELDS.has(field) ? cellText(cell) : cell.text) : "";
       record[field] = text;
       if (text) hasValue = true;
     });
     if (hasValue) rows.push(record);
   }
 
-  return { headerRow: best.rowNumber, ignoredColumns, missingHeaders, rows };
+  return { headerRow: best.rowNumber, missingHeaders, rows };
 };
 
 module.exports = {
   parseEmployeeWorkbook,
-  splitEmployeeName,
   baseUsername,
   normaliseMobile,
   normaliseEmail,
   departmentCandidates,
-  personNameKey,
-  firstLastKey,
-  codeCandidates,
+  parseManagerName,
+  matchKey,
   cleanText,
   EMAIL_RE,
 };

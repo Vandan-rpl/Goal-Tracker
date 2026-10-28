@@ -2,23 +2,24 @@ import React, { useState } from 'react';
 import api from '../../services/api';
 
 const SOURCE_STYLES = {
-  excel: 'text-slate-700',
-  empty: 'text-slate-400',
+  file: 'text-slate-700',
+  database: 'text-slate-700',
   businessHead: 'text-amber-700 font-medium',
-  unchanged: 'text-rose-700 font-medium',
+  businessHeadMatched: 'text-slate-700',
+  notLinked: 'text-rose-700 font-medium',
+  unchanged: 'text-slate-400',
 };
 
 const SOURCE_LABELS = {
-  excel: 'Excel',
-  empty: 'Empty',
-  businessHead: 'Business Head (fallback)',
-  unchanged: 'Unchanged (not matched)',
+  file: 'Matched in file',
+  database: 'Matched existing user',
+  businessHead: 'Blank — reports to Business Head',
+  businessHeadMatched: 'Business Head',
+  notLinked: 'Not linked',
+  unchanged: 'Business Head (unchanged)',
 };
 
-const isHighlighted = (h) =>
-  [h.reportingManager, h.hod, h.businessHead].some(
-    (x) => x.source === 'businessHead' || x.source === 'unchanged'
-  );
+const isHighlighted = (h) => ['businessHead', 'notLinked'].includes(h.reportingManager?.source);
 
 const HierarchyCell = ({ value }) => (
   <td className="px-3 py-2 align-top">
@@ -115,7 +116,7 @@ const ImportEmployees = () => {
         <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
         <h2 className="text-2xl font-bold tracking-tight text-white">Upload Employees (Excel)</h2>
         <p className="text-slate-300 text-sm mt-1">
-          Upload HR's employee export as-is. Preview the changes first, then confirm the import.
+          Upload HR's full employee export as-is. Only rows with Employee Status "Active" are uploaded. Preview the changes first, then confirm the import.
         </p>
         <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs text-indigo-200">
           <span>New employees get the default password:</span>
@@ -140,7 +141,7 @@ const ImportEmployees = () => {
           <SectionTitle>Employee File</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-end">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1.5">Excel File (.xlsx, max 5 MB)</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">Excel File (.xlsx, max 20 MB)</label>
               <input
                 type="file"
                 accept=".xlsx"
@@ -211,14 +212,15 @@ const ImportEmployees = () => {
           <>
             {/* Counts */}
             <div className="space-y-4">
-              <SectionTitle>{report.dryRun ? 'Preview (not saved yet)' : 'Import Result'}</SectionTitle>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+              <SectionTitle>{report.dryRun ? 'Preview (not saved yet)' : 'Upload Summary'}</SectionTitle>
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
                 {[
-                  ['Rows', report.totalRows],
-                  ['New', report.inserted],
-                  ['Updated', report.updated],
+                  ['Users created', report.inserted],
+                  ['Users updated', report.updated],
+                  ['Not uploaded', report.notUploaded.length],
+                  ['Manager not linked', report.managerNotLinked.length],
+                  ['Skipped (not active)', report.skippedInactive.length],
                   ['Deactivated', report.deactivated],
-                  ['Warnings', report.warnings.length],
                 ].map(([label, value]) => (
                   <div key={label} className="p-4 rounded-xl bg-slate-50 border border-slate-100">
                     <div className="text-xs text-slate-500">{label}</div>
@@ -226,37 +228,92 @@ const ImportEmployees = () => {
                   </div>
                 ))}
               </div>
-              {report.ignoredColumns.length > 0 && (
-                <p className="text-xs text-slate-500">
-                  Ignored columns: {report.ignoredColumns.join(', ')}
-                </p>
-              )}
+              <p className="text-xs text-slate-500">
+                Business Head for all uploaded employees: {report.businessHead.name} ({report.businessHead.employeeCode}).
+                HOD is set to the same user as the Reporting Manager.
+              </p>
             </div>
 
-            {report.newUsers.length > 0 && (
+            {report.notUploaded.length > 0 && (
               <div className="space-y-4">
-                <SectionTitle>New Users</SectionTitle>
-                <TableShell headers={['Row', 'Employee Code', 'Username']}>
-                  {report.newUsers.map((u) => (
-                    <tr key={u.employeeCode}>
-                      <td className="px-3 py-2">{u.row}</td>
-                      <td className="px-3 py-2 font-mono">{u.employeeCode}</td>
-                      <td className="px-3 py-2 font-mono">{u.username}</td>
+                <SectionTitle>Users not uploaded</SectionTitle>
+                <TableShell headers={['Row', 'Employee Code', 'Name', 'Reason']}>
+                  {report.notUploaded.map((u) => (
+                    <tr key={u.row} className="bg-rose-50/40">
+                      <td className="px-3 py-2 align-top">{u.row}</td>
+                      <td className="px-3 py-2 align-top font-mono">{u.employeeCode || '—'}</td>
+                      <td className="px-3 py-2 align-top text-slate-900">{u.name || '—'}</td>
+                      <td className="px-3 py-2 text-rose-800">{u.reason}</td>
                     </tr>
                   ))}
                 </TableShell>
               </div>
             )}
 
-            {report.warnings.length > 0 && (
+            {report.managerNotLinked.length > 0 && (
               <div className="space-y-4">
-                <SectionTitle>Warnings</SectionTitle>
-                <TableShell headers={['Row', 'Employee Code', 'Message']}>
-                  {report.warnings.map((w, idx) => (
-                    <tr key={`${w.row}-${idx}`} className="bg-amber-50/40">
-                      <td className="px-3 py-2">{w.row}</td>
-                      <td className="px-3 py-2 font-mono">{w.employeeCode}</td>
-                      <td className="px-3 py-2 text-amber-800">{w.message}</td>
+                <SectionTitle>Manager not linked</SectionTitle>
+                <TableShell headers={['Row', 'Employee Code', 'Name', 'Reporting Manager (from file)', 'Parsed First Name', 'Parsed Last Name', 'Reason']}>
+                  {report.managerNotLinked.map((u) => (
+                    <tr key={u.row} className="bg-amber-50/40">
+                      <td className="px-3 py-2 align-top">{u.row}</td>
+                      <td className="px-3 py-2 align-top font-mono">{u.employeeCode}</td>
+                      <td className="px-3 py-2 align-top text-slate-900">{u.name}</td>
+                      <td className="px-3 py-2 align-top">{u.reportingManager}</td>
+                      <td className="px-3 py-2 align-top">{u.parsedFirstName || '—'}</td>
+                      <td className="px-3 py-2 align-top">{u.parsedLastName || '—'}</td>
+                      <td className="px-3 py-2 text-amber-800">{u.reason}</td>
+                    </tr>
+                  ))}
+                </TableShell>
+              </div>
+            )}
+
+            {report.mobileNotSaved.length > 0 && (
+              <div className="space-y-4">
+                <SectionTitle>Mobile number not saved</SectionTitle>
+                <p className="text-xs text-slate-500">
+                  These users were uploaded without a mobile number because the value is longer than 20 characters.
+                </p>
+                <TableShell headers={['Row', 'Employee Code', 'Name', 'Value from file']}>
+                  {report.mobileNotSaved.map((u) => (
+                    <tr key={u.row} className="bg-amber-50/40">
+                      <td className="px-3 py-2">{u.row}</td>
+                      <td className="px-3 py-2 font-mono">{u.employeeCode}</td>
+                      <td className="px-3 py-2 text-slate-900">{u.name}</td>
+                      <td className="px-3 py-2 font-mono">{u.value}</td>
+                    </tr>
+                  ))}
+                </TableShell>
+              </div>
+            )}
+
+            {report.skippedInactive.length > 0 && (
+              <div className="space-y-4">
+                <SectionTitle>Skipped (not active)</SectionTitle>
+                <TableShell headers={['Row', 'Employee Code', 'Name', 'Employee Status']}>
+                  {report.skippedInactive.map((u) => (
+                    <tr key={u.row}>
+                      <td className="px-3 py-2">{u.row}</td>
+                      <td className="px-3 py-2 font-mono">{u.employeeCode || '—'}</td>
+                      <td className="px-3 py-2 text-slate-900">{u.name || '—'}</td>
+                      <td className="px-3 py-2">{u.status || '(blank)'}</td>
+                    </tr>
+                  ))}
+                </TableShell>
+              </div>
+            )}
+
+            {report.newUsers.length > 0 && (
+              <div className="space-y-4">
+                <SectionTitle>New Users</SectionTitle>
+                <TableShell headers={['Row', 'Employee Code', 'Name', 'Username']}>
+                  {report.newUsers.map((u) => (
+                    <tr key={u.employeeCode}>
+                      <td className="px-3 py-2">{u.row}</td>
+                      <td className="px-3 py-2 font-mono">{u.employeeCode}</td>
+                      <td className="px-3 py-2 text-slate-900">{u.name}</td>
+                      <td className="px-3 py-2 font-mono">{u.username}</td>
                     </tr>
                   ))}
                 </TableShell>
@@ -266,17 +323,15 @@ const ImportEmployees = () => {
             <div className="space-y-4">
               <SectionTitle>Hierarchy</SectionTitle>
               <p className="text-xs text-slate-500">
-                Highlighted rows use the Business Head as Reporting Manager, or kept an existing value because a name was not matched.
+                Highlighted rows report to the Business Head because Reporting Manager was blank, or their manager could not be linked.
               </p>
-              <TableShell headers={['Row', 'Employee Code', 'Name', 'Reporting Manager', 'Division Head / HOD', 'Business Head', 'Role']}>
+              <TableShell headers={['Row', 'Employee Code', 'Name', 'Reporting Manager / HOD', 'Role']}>
                 {report.hierarchy.map((h) => (
                   <tr key={h.employeeCode} className={isHighlighted(h) ? 'bg-amber-50/60' : ''}>
                     <td className="px-3 py-2 align-top">{h.row}</td>
                     <td className="px-3 py-2 align-top font-mono">{h.employeeCode}</td>
                     <td className="px-3 py-2 align-top text-slate-900">{h.name}</td>
                     <HierarchyCell value={h.reportingManager} />
-                    <HierarchyCell value={h.hod} />
-                    <HierarchyCell value={h.businessHead} />
                     <td className="px-3 py-2 align-top">
                       {h.role}
                       {h.roleChanged && <span className="ml-1 text-[11px] text-indigo-600">(changed)</span>}

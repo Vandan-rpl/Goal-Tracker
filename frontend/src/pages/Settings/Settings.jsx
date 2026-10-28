@@ -12,6 +12,101 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 
+// IDs from the API are numbers; <select> values are strings. Compare everything as strings.
+const toId = (value) => (value === null || value === undefined ? "" : String(value));
+
+const fullName = (person) => `${person.FirstName || ""} ${person.LastName || ""}`.trim();
+
+const personLabel = (person) =>
+  [fullName(person), person.DepartmentName, person.IsActive ? null : "inactive"].filter(Boolean).join(" · ");
+
+/**
+ * Shows the currently assigned person. "Change" opens a name search and a list of
+ * eligible people (the assigned person stays in the list even if no longer eligible).
+ */
+const PersonPicker = ({ label, emptyLabel, people, value, assignedId, editing, onEdit, onCancel, onChange, disabled }) => {
+  const [search, setSearch] = useState("");
+  const current = people.find((person) => toId(person.UserID) === assignedId);
+  const term = search.trim().toLowerCase();
+  const options = people.filter((person) => {
+    const id = toId(person.UserID);
+    if (id === value) return true;
+    if (!person.IsEligible && id !== assignedId) return false;
+    return !term || fullName(person).toLowerCase().includes(term);
+  });
+
+  return (
+    <div className="rounded-xl border border-slate-200 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+          {current ? (
+            <>
+              <div className="mt-1 text-sm font-semibold text-slate-900">{fullName(current)}</div>
+              <div className="text-xs text-slate-500">
+                {[current.Designation, current.DepartmentName, current.IsActive ? null : "inactive"]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            </>
+          ) : (
+            <div className="mt-1 text-sm text-slate-500">{emptyLabel}</div>
+          )}
+        </div>
+        {!editing && (
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={disabled}
+            className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Change
+          </button>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Type a name to search"
+            aria-label={`Search ${label}`}
+            disabled={disabled}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+          />
+          <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
+            aria-label={`New ${label}`}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+          >
+            <option value="">{emptyLabel}</option>
+            {options.map((person) => (
+              <option key={person.UserID} value={toId(person.UserID)}>
+                {personLabel(person)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              onCancel();
+            }}
+            disabled={disabled}
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Settings = () => {
   const navigate = useNavigate();
 
@@ -19,6 +114,10 @@ const Settings = () => {
   const [browserNotification, setBrowserNotification] = useState(true);
   const [approvers, setApprovers] = useState([]);
   const [hierarchy, setHierarchy] = useState({ reportingManagerId: "", hodId: "" });
+  // Assigned values as last loaded from the database; these stay listed even if no longer eligible.
+  const [assigned, setAssigned] = useState({ reportingManagerId: "", hodId: "" });
+  const [ownUserId, setOwnUserId] = useState("");
+  const [editing, setEditing] = useState({ reportingManagerId: false, hodId: false });
   const [hierarchyLoading, setHierarchyLoading] = useState(true);
   const [hierarchySaving, setHierarchySaving] = useState(false);
   const [hierarchyMessage, setHierarchyMessage] = useState("");
@@ -28,13 +127,16 @@ const Settings = () => {
       try {
         const [profileResponse, approversResponse] = await Promise.all([
           api.get("/profile"),
-          api.get("/profile/department-approvers"),
+          api.get("/profile/approvers"),
         ]);
         const profile = profileResponse.data?.data || {};
-        setHierarchy({
-          reportingManagerId: profile.ReportingManagerID ?? "",
-          hodId: profile.HODID ?? "",
-        });
+        const current = {
+          reportingManagerId: toId(profile.ReportingManagerID),
+          hodId: toId(profile.HODID),
+        };
+        setHierarchy(current);
+        setAssigned(current);
+        setOwnUserId(toId(profile.UserID));
         setApprovers(approversResponse.data?.data || []);
       } catch (error) {
         setHierarchyMessage(error.response?.data?.message || "Unable to load reporting details.");
@@ -52,10 +154,13 @@ const Settings = () => {
     try {
       const response = await api.put("/profile/hierarchy", hierarchy);
       const profile = response.data?.data || {};
-      setHierarchy({
-        reportingManagerId: profile.ReportingManagerID ?? "",
-        hodId: profile.HODID ?? "",
-      });
+      const current = {
+        reportingManagerId: toId(profile.ReportingManagerID),
+        hodId: toId(profile.HODID),
+      };
+      setHierarchy(current);
+      setAssigned(current);
+      setEditing({ reportingManagerId: false, hodId: false });
       setHierarchyMessage("Reporting details updated successfully.");
     } catch (error) {
       setHierarchyMessage(error.response?.data?.message || "Unable to update reporting details.");
@@ -63,6 +168,28 @@ const Settings = () => {
       setHierarchySaving(false);
     }
   };
+
+  // A user can never pick themselves.
+  const selectablePeople = approvers.filter((person) => toId(person.UserID) !== ownUserId);
+  const hasChanges =
+    hierarchy.reportingManagerId !== assigned.reportingManagerId || hierarchy.hodId !== assigned.hodId;
+
+  const pickerProps = (field) => ({
+    people: selectablePeople,
+    value: hierarchy[field],
+    assignedId: assigned[field],
+    editing: editing[field],
+    onEdit: () => {
+      setHierarchyMessage("");
+      setEditing((current) => ({ ...current, [field]: true }));
+    },
+    onCancel: () => {
+      setHierarchy((current) => ({ ...current, [field]: assigned[field] }));
+      setEditing((current) => ({ ...current, [field]: false }));
+    },
+    onChange: (id) => setHierarchy((current) => ({ ...current, [field]: id })),
+    disabled: hierarchyLoading || hierarchySaving,
+  });
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -97,27 +224,17 @@ const Settings = () => {
           <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-6 border-b border-slate-100">
               <h2 className="text-lg font-semibold text-slate-900">Reporting Manager &amp; HOD</h2>
-              <p className="text-xs text-slate-500 mt-1">Choose active users from your department.</p>
+              <p className="text-xs text-slate-500 mt-1">Your current Reporting Manager and HOD. Click Change to pick someone else.</p>
             </div>
             <form onSubmit={saveHierarchy} className="p-6 space-y-4">
-              <label className="block text-sm font-medium text-slate-700">
-                Reporting Manager
-                <select value={hierarchy.reportingManagerId} onChange={(event) => setHierarchy((current) => ({ ...current, reportingManagerId: event.target.value }))} disabled={hierarchyLoading || hierarchySaving} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm">
-                  <option value="">No reporting manager</option>
-                  {approvers.map((person) => <option key={person.UserID} value={person.UserID}>{person.FirstName} {person.LastName}{person.Designation ? ` · ${person.Designation}` : ""}</option>)}
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                HOD
-                <select value={hierarchy.hodId} onChange={(event) => setHierarchy((current) => ({ ...current, hodId: event.target.value }))} disabled={hierarchyLoading || hierarchySaving} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm">
-                  <option value="">No HOD</option>
-                  {approvers.map((person) => <option key={person.UserID} value={person.UserID}>{person.FirstName} {person.LastName}{person.Designation ? ` · ${person.Designation}` : ""}</option>)}
-                </select>
-              </label>
+              <PersonPicker label="Reporting Manager" emptyLabel="Not assigned" {...pickerProps("reportingManagerId")} />
+              <PersonPicker label="HOD" emptyLabel="Not assigned" {...pickerProps("hodId")} />
               {hierarchyMessage && <p role="status" className="text-sm text-slate-600">{hierarchyMessage}</p>}
-              <button type="submit" disabled={hierarchyLoading || hierarchySaving} className="rounded-lg bg-[#1976d2] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {hierarchySaving ? "Saving…" : "Save reporting details"}
-              </button>
+              {hasChanges && (
+                <button type="submit" disabled={hierarchyLoading || hierarchySaving} className="rounded-lg bg-[#1976d2] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                  {hierarchySaving ? "Saving…" : "Save changes"}
+                </button>
+              )}
             </form>
           </section>
 
