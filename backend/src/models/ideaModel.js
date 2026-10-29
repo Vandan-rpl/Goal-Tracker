@@ -1,5 +1,5 @@
 const { sql } = require("../config/db");
-const { IDEA_CLOSED_STATUSES } = require("../constants/ideaConstants");
+const { IDEA_OVERDUE_STATUSES, IDEA_LEAD_ROLES } = require("../constants/ideaConstants");
 
 /**
  * ============================================================
@@ -14,17 +14,34 @@ const { IDEA_CLOSED_STATUSES } = require("../constants/ideaConstants");
 const fullName = (alias) =>
     `LTRIM(RTRIM(CONCAT(${alias}.FirstName, ' ', ${alias}.LastName)))`;
 
-// Overdue: target date has passed and the idea isn't closed.
+const TODAY = "CAST(SYSDATETIME() AS DATE)";
+
+const OVERDUE_STATUS_LIST = IDEA_OVERDUE_STATUSES.map((s) => `N'${s}'`).join(", ");
+
+const LEAD_ROLE_LIST = IDEA_LEAD_ROLES.map((r) => `N'${r}'`).join(", ");
+
+// Overdue: Accepted / In Implementation and TargetDate before today (dates
+// only). The single definition used by every query below.
 const IS_OVERDUE = `
     CAST(CASE
-        WHEN i.TargetDate < CAST(SYSDATETIME() AS DATE)
-         AND i.Status NOT IN (${IDEA_CLOSED_STATUSES.map((s) => `N'${s}'`).join(", ")})
+        WHEN i.Status IN (${OVERDUE_STATUS_LIST})
+         AND i.TargetDate < ${TODAY}
         THEN 1 ELSE 0
     END AS BIT)
 `;
 
+// Days until the target date (negative when overdue). Only for ideas that
+// are still being worked on; NULL otherwise.
+const DAYS_REMAINING = `
+    CASE
+        WHEN i.Status IN (${OVERDUE_STATUS_LIST})
+        THEN DATEDIFF(DAY, ${TODAY}, i.TargetDate)
+    END
+`;
+
 /**
- * Active users for the Lead dropdown, excluding the logged-in user
+ * Active users with a lead role for the Lead dropdown, excluding the
+ * logged-in user
  */
 const getLeadOptions = async (db, excludeUserId) => {
 
@@ -41,6 +58,7 @@ const getLeadOptions = async (db, excludeUserId) => {
             LEFT JOIN dbo.Departments d
                 ON d.DepartmentID = u.DepartmentID
             WHERE u.IsActive = 1
+              AND u.Role IN (${LEAD_ROLE_LIST})
               AND u.UserID <> @UserID
             ORDER BY u.FirstName, u.LastName;
         `);
@@ -49,9 +67,9 @@ const getLeadOptions = async (db, excludeUserId) => {
 };
 
 /**
- * Active user by id, or null
+ * Active user with a lead role by id, or null
  */
-const getActiveUser = async (db, userId) => {
+const getLeadUser = async (db, userId) => {
 
     const result = await db.request()
         .input("UserID", sql.Int, userId)
@@ -59,7 +77,8 @@ const getActiveUser = async (db, userId) => {
             SELECT UserID
             FROM dbo.Users
             WHERE UserID = @UserID
-              AND IsActive = 1;
+              AND IsActive = 1
+              AND Role IN (${LEAD_ROLE_LIST});
         `);
 
     return result.recordset[0] || null;
@@ -75,16 +94,21 @@ const getIdeaRow = async (db, ideaId, lock = false) => {
         .input("IdeaID", sql.Int, ideaId)
         .query(`
             SELECT
-                IdeaID,
-                IdeaNumber,
-                UserID,
-                Title,
-                Description,
-                Purpose,
-                AssignedLeadID,
-                Status
-            FROM dbo.Ideas ${lock ? "WITH (UPDLOCK, ROWLOCK)" : ""}
-            WHERE IdeaID = @IdeaID;
+                i.IdeaID,
+                i.IdeaNumber,
+                i.UserID,
+                i.Title,
+                i.Description,
+                i.Purpose,
+                i.AssignedLeadID,
+                i.Status,
+                i.TimelineDays,
+                i.TargetDate,
+                ${IS_OVERDUE} AS IsOverdue,
+                -- Days from TargetDate to today (positive when it has passed)
+                DATEDIFF(DAY, i.TargetDate, ${TODAY}) AS DaysPastTarget
+            FROM dbo.Ideas i ${lock ? "WITH (UPDLOCK, ROWLOCK)" : ""}
+            WHERE i.IdeaID = @IdeaID;
         `);
 
     return result.recordset[0] || null;
@@ -233,6 +257,399 @@ const getIdeasByUser = async (db, userId, status) => {
 };
 
 /**
+ * Ideas where the user is the lead (Drafts excluded), newest submission first
+ */
+const getIdeasByLead = async (db, leadId) => {
+
+    const result = await db.request()
+        .input("LeadID", sql.Int, leadId)
+        .query(`
+            SELECT
+                i.IdeaID,
+                i.IdeaNumber,
+                i.Title,
+                i.Purpose,
+                i.UserID AS SubmittedByID,
+                ${fullName("submitter")} AS SubmitterName,
+                submitterDept.DepartmentName AS SubmitterDepartment,
+                i.SubmittedDate,
+                i.Status,
+                i.TimelineDays,
+                i.TargetDate,
+                ${IS_OVERDUE} AS IsOverdue,
+                ${DAYS_REMAINING} AS DaysRemaining
+            FROM dbo.Ideas i
+            INNER JOIN dbo.Users submitter
+                ON submitter.UserID = i.UserID
+            LEFT JOIN dbo.Departments submitterDept
+                ON submitterDept.DepartmentID = submitter.DepartmentID
+            WHERE i.AssignedLeadID = @LeadID
+              AND i.Status <> N'Draft'
+            ORDER BY i.SubmittedDate DESC, i.IdeaID DESC;
+        `);
+
+    return result.recordset;
+};
+
+/**
+ * ------------------------------------------------------------
+ * Team Ideas / All Ideas (server-side filters, sorting, paging)
+ * ------------------------------------------------------------
+ */
+
+// The Goal Tracker's direct-report relationship (see teamController /
+// analyticsController): active users whose Reporting Manager or HOD is the
+// viewer, one level only.
+const DIRECT_REPORT_CONDITION = (alias) => `
+    ${alias}.IsActive = 1
+    AND ${alias}.UserID <> @ViewerID
+    AND (${alias}.ReportingManagerID = @ViewerID OR ${alias}.HODID = @ViewerID)
+`;
+
+// sortBy values the API accepts -> ORDER BY expression
+const IDEA_SORT_COLUMNS = {
+    submittedDate: "i.SubmittedDate",
+    ideaNumber: "i.IdeaID",
+    title: "i.Title",
+    submitter: fullName("submitter"),
+    targetDate: "i.TargetDate",
+    status: "i.Status",
+};
+
+const IDEA_LIST_FROM = `
+    FROM dbo.Ideas i
+    INNER JOIN dbo.Users submitter
+        ON submitter.UserID = i.UserID
+    LEFT JOIN dbo.Departments submitterDept
+        ON submitterDept.DepartmentID = submitter.DepartmentID
+    LEFT JOIN dbo.Users lead
+        ON lead.UserID = i.AssignedLeadID
+    LEFT JOIN dbo.Departments leadDept
+        ON leadDept.DepartmentID = lead.DepartmentID
+`;
+
+// LIKE pattern for a literal substring (escapes %, _ and [).
+const likeContains = (text) => `%${text.replace(/[[%_]/g, "[$&]")}%`;
+
+/**
+ * WHERE conditions for a list scope + filters. Returns { conditions, bind },
+ * where bind(request) adds the parameters. `includeStatus = false` leaves
+ * out the status filter (used for the count boxes).
+ */
+const buildIdeaListWhere = ({ scope, viewerId, filters }, { includeStatus }) => {
+    const conditions = ["i.Status <> N'Draft'"];
+    const params = [["ViewerID", sql.Int, viewerId]];
+
+    if (scope === "team") {
+        conditions.push(DIRECT_REPORT_CONDITION("submitter"));
+    }
+
+    if (filters.search) {
+        conditions.push("(i.IdeaNumber LIKE @Search OR i.Title LIKE @Search)");
+        params.push(["Search", sql.NVarChar(210), likeContains(filters.search)]);
+    }
+
+    if (includeStatus && filters.status) {
+        conditions.push("i.Status = @Status");
+        params.push(["Status", sql.NVarChar(30), filters.status]);
+    }
+
+    if (filters.purpose) {
+        conditions.push("i.Purpose = @Purpose");
+        params.push(["Purpose", sql.NVarChar(100), filters.purpose]);
+    }
+
+    if (filters.overdueOnly) {
+        conditions.push(`i.Status IN (${OVERDUE_STATUS_LIST}) AND i.TargetDate < ${TODAY}`);
+    }
+
+    if (filters.submittedFrom) {
+        conditions.push("CAST(i.SubmittedDate AS DATE) >= @SubmittedFrom");
+        params.push(["SubmittedFrom", sql.Date, filters.submittedFrom]);
+    }
+
+    if (filters.submittedTo) {
+        conditions.push("CAST(i.SubmittedDate AS DATE) <= @SubmittedTo");
+        params.push(["SubmittedTo", sql.Date, filters.submittedTo]);
+    }
+
+    if (filters.memberId) {
+        conditions.push("i.UserID = @MemberID");
+        params.push(["MemberID", sql.Int, filters.memberId]);
+    }
+
+    if (filters.department) {
+        conditions.push("submitterDept.DepartmentName = @Department");
+        params.push(["Department", sql.NVarChar(150), filters.department]);
+    }
+
+    if (filters.leadId) {
+        conditions.push("i.AssignedLeadID = @LeadID");
+        params.push(["LeadID", sql.Int, filters.leadId]);
+    }
+
+    return {
+        where: conditions.map((condition) => `(${condition})`).join("\n AND "),
+        bind: (request) => {
+            params.forEach(([name, type, value]) => request.input(name, type, value));
+            return request;
+        },
+    };
+};
+
+/**
+ * One page of ideas plus per-status counts.
+ *
+ * @param {object} options
+ * @param {"team"|"all"} options.scope
+ * @param {number} options.viewerId
+ * @param {object} options.filters  - see buildIdeaListWhere
+ * @param {string} options.sortBy   - key of IDEA_SORT_COLUMNS
+ * @param {"asc"|"desc"} options.sortDir
+ * @param {number} options.page     - 1-based
+ * @param {number} options.pageSize
+ * @returns {Promise<{ items: object[], statusCounts: object[] }>}
+ *   statusCounts: [{ Status, IdeaCount, OverdueCount }] for every filter
+ *   except status.
+ */
+const searchIdeas = async (db, { scope, viewerId, filters, sortBy, sortDir, page, pageSize }) => {
+
+    const listWhere = buildIdeaListWhere({ scope, viewerId, filters }, { includeStatus: true });
+    const countWhere = buildIdeaListWhere({ scope, viewerId, filters }, { includeStatus: false });
+
+    // i.IdeaID breaks ties so paging is stable (unless it's already the sort).
+    const sortColumn = IDEA_SORT_COLUMNS[sortBy];
+    const orderBy = `${sortColumn} ${sortDir === "asc" ? "ASC" : "DESC"}${
+        sortColumn === "i.IdeaID" ? "" : ", i.IdeaID DESC"
+    }`;
+
+    const itemsRequest = listWhere.bind(db.request())
+        .input("Offset", sql.Int, (page - 1) * pageSize)
+        .input("PageSize", sql.Int, pageSize);
+
+    const [itemsResult, countsResult] = await Promise.all([
+        itemsRequest.query(`
+            SELECT
+                i.IdeaID,
+                i.IdeaNumber,
+                i.Title,
+                i.Purpose,
+                i.UserID AS SubmittedByID,
+                ${fullName("submitter")} AS SubmitterName,
+                submitterDept.DepartmentName AS SubmitterDepartment,
+                i.AssignedLeadID,
+                ${fullName("lead")} AS LeadName,
+                leadDept.DepartmentName AS LeadDepartment,
+                i.SubmittedDate,
+                i.Status,
+                i.TargetDate,
+                ${IS_OVERDUE} AS IsOverdue,
+                ${DAYS_REMAINING} AS DaysRemaining
+            ${IDEA_LIST_FROM}
+            WHERE ${listWhere.where}
+            ORDER BY ${orderBy}
+            OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
+        `),
+        countWhere.bind(db.request()).query(`
+            SELECT
+                i.Status,
+                COUNT(*) AS IdeaCount,
+                SUM(CASE WHEN ${IS_OVERDUE} = 1 THEN 1 ELSE 0 END) AS OverdueCount
+            ${IDEA_LIST_FROM}
+            WHERE ${countWhere.where}
+            GROUP BY i.Status;
+        `),
+    ]);
+
+    return {
+        items: itemsResult.recordset,
+        statusCounts: countsResult.recordset,
+    };
+};
+
+/**
+ * True if the viewer has at least one direct report (Team Ideas access)
+ */
+const hasDirectReports = async (db, viewerId) => {
+
+    const result = await db.request()
+        .input("ViewerID", sql.Int, viewerId)
+        .query(`
+            SELECT TOP 1 1 AS Found
+            FROM dbo.Users u
+            WHERE ${DIRECT_REPORT_CONDITION("u")};
+        `);
+
+    return result.recordset.length > 0;
+};
+
+/**
+ * Filter dropdown values for a list scope:
+ *   members     - (team) the viewer's direct reports
+ *   departments - (all) submitter departments that have ideas
+ *   leads       - (all) users who lead at least one idea
+ *   purposes    - purposes used by ideas in scope (may include retired ones)
+ */
+const getIdeaListFilterOptions = async (db, { scope, viewerId }) => {
+
+    const scopeWhere = buildIdeaListWhere({ scope, viewerId, filters: {} }, { includeStatus: false });
+    const queries = [
+        scopeWhere.bind(db.request()).query(`
+            SELECT DISTINCT i.Purpose
+            ${IDEA_LIST_FROM}
+            WHERE ${scopeWhere.where} AND i.Purpose <> N''
+            ORDER BY i.Purpose;
+        `),
+    ];
+
+    if (scope === "team") {
+        queries.push(db.request()
+            .input("ViewerID", sql.Int, viewerId)
+            .query(`
+                SELECT u.UserID, ${fullName("u")} AS FullName, d.DepartmentName
+                FROM dbo.Users u
+                LEFT JOIN dbo.Departments d ON d.DepartmentID = u.DepartmentID
+                WHERE ${DIRECT_REPORT_CONDITION("u")}
+                ORDER BY u.FirstName, u.LastName;
+            `));
+    } else {
+        queries.push(
+            db.request().query(`
+                SELECT DISTINCT d.DepartmentName
+                FROM dbo.Ideas i
+                INNER JOIN dbo.Users submitter ON submitter.UserID = i.UserID
+                INNER JOIN dbo.Departments d ON d.DepartmentID = submitter.DepartmentID
+                WHERE i.Status <> N'Draft'
+                ORDER BY d.DepartmentName;
+            `),
+            db.request().query(`
+                SELECT DISTINCT lead.UserID, ${fullName("lead")} AS FullName, leadDept.DepartmentName,
+                       lead.FirstName, lead.LastName
+                FROM dbo.Ideas i
+                INNER JOIN dbo.Users lead ON lead.UserID = i.AssignedLeadID
+                LEFT JOIN dbo.Departments leadDept ON leadDept.DepartmentID = lead.DepartmentID
+                WHERE i.Status <> N'Draft'
+                ORDER BY lead.FirstName, lead.LastName;
+            `)
+        );
+    }
+
+    const [purposes, ...rest] = await Promise.all(queries);
+    const usedPurposes = purposes.recordset.map((row) => row.Purpose);
+
+    if (scope === "team") {
+        return { purposes: usedPurposes, members: rest[0].recordset };
+    }
+
+    return {
+        purposes: usedPurposes,
+        departments: rest[0].recordset.map((row) => row.DepartmentName),
+        leads: rest[1].recordset.map(({ UserID, FullName, DepartmentName }) => ({ UserID, FullName, DepartmentName })),
+    };
+};
+
+/**
+ * Lead actions. Each UPDATE is guarded by the lead and the expected current
+ * status, so it changes nothing (returns null) if either no longer holds.
+ * `remark` replaces Remarks only when given. Returns the updated
+ * { Status, TimelineDays, TargetDate }.
+ */
+const runLeadUpdate = async (db, { ideaId, leadId, fromStatuses, remark, setClause, inputs = {} }) => {
+
+    const request = db.request()
+        .input("IdeaID", sql.Int, ideaId)
+        .input("LeadID", sql.Int, leadId)
+        .input("Remark", sql.NVarChar(1000), remark || null);
+
+    const statusParams = fromStatuses.map((status, index) => {
+        request.input(`FromStatus${index}`, sql.NVarChar(30), status);
+        return `@FromStatus${index}`;
+    });
+
+    Object.entries(inputs).forEach(([name, [type, value]]) => request.input(name, type, value));
+
+    const result = await request.query(`
+        UPDATE dbo.Ideas
+        SET
+            ${setClause},
+            Remarks = ISNULL(@Remark, Remarks),
+            ModifiedDate = SYSDATETIME()
+        OUTPUT INSERTED.Status, INSERTED.TimelineDays, INSERTED.TargetDate
+        WHERE IdeaID = @IdeaID
+          AND AssignedLeadID = @LeadID
+          AND Status IN (${statusParams.join(", ")});
+    `);
+
+    return result.recordset[0] || null;
+};
+
+// Submitted -> Accepted. TargetDate (computed) = TimelineSetDate + TimelineDays = today + days.
+const acceptIdea = (db, { ideaId, leadId, timelineDays, remark }) =>
+    runLeadUpdate(db, {
+        ideaId,
+        leadId,
+        remark,
+        fromStatuses: ["Submitted"],
+        inputs: { TimelineDays: [sql.Int, timelineDays] },
+        setClause: `
+            Status = N'Accepted',
+            TimelineDays = @TimelineDays,
+            TimelineSetDate = ${TODAY},
+            ReviewedBy = @LeadID,
+            ReviewedDate = SYSDATETIME()
+        `,
+    });
+
+// Submitted -> Rejected.
+const rejectIdea = (db, { ideaId, leadId, remark }) =>
+    runLeadUpdate(db, {
+        ideaId,
+        leadId,
+        remark,
+        fromStatuses: ["Submitted"],
+        setClause: `
+            Status = N'Rejected',
+            ReviewedBy = @LeadID,
+            ReviewedDate = SYSDATETIME()
+        `,
+    });
+
+// Accepted -> In Implementation.
+const startImplementation = (db, { ideaId, leadId, remark }) =>
+    runLeadUpdate(db, {
+        ideaId,
+        leadId,
+        remark,
+        fromStatuses: ["Accepted"],
+        setClause: `Status = N'In Implementation'`,
+    });
+
+// In Implementation -> Implemented.
+const markImplemented = (db, { ideaId, leadId, remark }) =>
+    runLeadUpdate(db, {
+        ideaId,
+        leadId,
+        remark,
+        fromStatuses: ["In Implementation"],
+        setClause: `
+            Status = N'Implemented',
+            ImplementedDate = SYSDATETIME()
+        `,
+    });
+
+// Status unchanged. Adding to TimelineDays moves the computed TargetDate by
+// the same number of days.
+const extendTimeline = (db, { ideaId, leadId, additionalDays, remark, fromStatus }) =>
+    runLeadUpdate(db, {
+        ideaId,
+        leadId,
+        remark,
+        fromStatuses: [fromStatus],
+        inputs: { AdditionalDays: [sql.Int, additionalDays] },
+        setClause: `TimelineDays = TimelineDays + @AdditionalDays`,
+    });
+
+/**
  * Full idea details with submitter / lead / reviewer names. Also returns
  * the submitter's current reporting manager, used for the access check.
  */
@@ -249,6 +666,7 @@ const getIdeaDetails = async (db, ideaId) => {
                 submitter.EmployeeCode AS SubmitterEmployeeCode,
                 submitterDept.DepartmentName AS SubmitterDepartment,
                 submitter.ReportingManagerID AS SubmitterReportingManagerID,
+                submitter.HODID AS SubmitterHODID,
                 i.Title,
                 i.Description,
                 i.Purpose,
@@ -257,8 +675,11 @@ const getIdeaDetails = async (db, ideaId) => {
                 leadDept.DepartmentName AS LeadDepartment,
                 i.TimelineDays,
                 i.TimelineSetDate,
+                -- Set to the accept date by the lead's Accept action
+                CAST(i.TimelineSetDate AS DATE) AS AcceptedDate,
                 i.TargetDate,
                 ${IS_OVERDUE} AS IsOverdue,
+                ${DAYS_REMAINING} AS DaysRemaining,
                 i.Remarks,
                 i.Status,
                 i.SubmittedDate,
@@ -314,7 +735,7 @@ const getIdeaActivity = async (db, ideaId) => {
 
 module.exports = {
     getLeadOptions,
-    getActiveUser,
+    getLeadUser,
     getIdeaRow,
     insertDraftIdea,
     updateDraftIdea,
@@ -322,6 +743,16 @@ module.exports = {
     markIdeaSubmitted,
     insertActivity,
     getIdeasByUser,
+    getIdeasByLead,
+    IDEA_SORT_COLUMNS,
+    searchIdeas,
+    hasDirectReports,
+    getIdeaListFilterOptions,
+    acceptIdea,
+    rejectIdea,
+    startImplementation,
+    markImplemented,
+    extendTimeline,
     getIdeaDetails,
     getIdeaActivity,
 };
