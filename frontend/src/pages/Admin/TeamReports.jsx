@@ -563,9 +563,9 @@ const TeamReports = () => {
                   accent="text-emerald-600"
                 />
                 <StatCard
-                  label="Brought forward pending"
-                  value={summary.BroughtForwardPendingGoals}
-                  hint="Carried-forward goals not completed"
+                  label="Brought forward achieved"
+                  value={summary.BroughtForwardAchievedGoals}
+                  hint="Carried-forward goals completed"
                   accent="text-amber-600"
                 />
               </div>

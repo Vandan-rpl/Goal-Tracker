@@ -53,7 +53,7 @@ function getGoalCreationWindow(date = new Date()) {
 }
 
 function getManagerHodApprovalWindow(date = new Date()) {
-  return getQuarterDayWindow(8, 25, date);
+  return getQuarterDayWindow(8, 30, date);
 }
 
 function getCfoApprovalWindow(date = new Date()) {

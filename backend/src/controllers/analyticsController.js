@@ -246,9 +246,9 @@ const getActiveDirectReports = async (pool, userId, role) => {
 // Goal counts for the summary cards, over the given employees.
 //   InProgress: approved, not completed, goals of `inProgressQuarter`.
 //   Completed: completed within the fiscal year.
-//   BroughtForwardPending: still-open goals whose End Date is past their own
-//     quarter and falls in this fiscal year — the goals behind the Final
-//     Evaluation "Brought forward (pending)" column, summed over Q1-Q4.
+//   BroughtForwardAchieved: goals completed within the fiscal year after their
+//     own quarter ended — the goals behind the Final Evaluation "Brought
+//     forward achieved" column, summed over Q1-Q4.
 const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
     const request = pool.request()
         .input('FiscalYearStart', sql.Date, getFiscalQuarterBoundsFromLabel(`Q1-${fiscalYear}`).startKey)
@@ -266,11 +266,10 @@ const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
                       AND g.CompletedDate >= @FiscalYearStart
                       AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
                      THEN 1 ELSE 0 END) AS CompletedGoals,
-            SUM(CASE WHEN g.Timeline > g.QuarterEndDate
-                      AND g.Timeline >= @FiscalYearStart
-                      AND g.Timeline < DATEADD(DAY, 1, @FiscalYearEnd)
-                      AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
-                     THEN 1 ELSE 0 END) AS BroughtForwardPendingGoals
+            SUM(CASE WHEN g.CompletedDate >= DATEADD(DAY, 1, g.QuarterEndDate)
+                      AND g.CompletedDate >= @FiscalYearStart
+                      AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
+                     THEN 1 ELSE 0 END) AS BroughtForwardAchievedGoals
         FROM dbo.Goals g
         WHERE ${filter}
     `);
@@ -278,7 +277,7 @@ const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
     return {
         InProgressGoals: row.InProgressGoals || 0,
         CompletedGoals: row.CompletedGoals || 0,
-        BroughtForwardPendingGoals: row.BroughtForwardPendingGoals || 0
+        BroughtForwardAchievedGoals: row.BroughtForwardAchievedGoals || 0
     };
 };
 
