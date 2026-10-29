@@ -28,6 +28,15 @@ import ReviewEmployeeGoal from './pages/manager/ReviewEmployeeGoal';
 import TeamManagement from './pages/manager/TeamManagement'; 
 import CFOAllUsersGoals from './pages/cfo/CFOAllUsersGoals';
 import Notifications from './pages/Notifications/Notifications';
+import IdeasRoute from './components/IdeasRoute';
+import ShareIdea from './pages/Ideas/ShareIdea';
+import MyIdeas from './pages/Ideas/MyIdeas';
+import IdeaDetails from './pages/Ideas/IdeaDetails';
+import AssignedIdeas from './pages/Ideas/AssignedIdeas';
+import TeamIdeas from './pages/Ideas/TeamIdeas';
+import AllIdeas from './pages/Ideas/AllIdeas';
+import IdeaReports from './pages/Ideas/IdeaReports';
+import { IDEAS_HOME_PATH } from './utils/ideasMenu';
 import {ToastContainer} from 'react-toastify';
 
 function App() {
@@ -79,7 +88,27 @@ function App() {
                   registered anywhere, so it was unreachable. Added so the
                   notification bell's "View All" link has somewhere to go. */}
               <Route path="/notifications" element={<Notifications />} />
-              
+
+              {/* Innovation Ideas module. Every /ideas URL highlights the
+                  Ideas switch in the header and shows the Ideas sidebar. */}
+              <Route path="/ideas" element={<Navigate to={IDEAS_HOME_PATH} replace />} />
+              <Route path="/ideas/share" element={<ShareIdea />} />
+              <Route path="/ideas/edit/:ideaId" element={<ShareIdea />} />
+              <Route path="/ideas/my-ideas" element={<MyIdeas />} />
+              <Route path="/ideas/view/:ideaId" element={<IdeaDetails />} />
+              <Route path="/ideas/assigned" element={<AssignedIdeas />} />
+              <Route element={<IdeasRoute menuKey="team" />}>
+                <Route path="/ideas/team" element={<TeamIdeas />} />
+              </Route>
+              <Route element={<IdeasRoute menuKey="all" />}>
+                <Route path="/ideas/all" element={<AllIdeas />} />
+              </Route>
+              <Route element={<IdeasRoute menuKey="reports" />}>
+                <Route path="/ideas/reports" element={<IdeaReports />} />
+              </Route>
+              {/* Any other /ideas URL goes to My Ideas */}
+              <Route path="/ideas/*" element={<Navigate to={IDEAS_HOME_PATH} replace />} />
+
             </Route>
           </Route>
 

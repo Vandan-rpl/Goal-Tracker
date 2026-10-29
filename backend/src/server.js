@@ -18,6 +18,7 @@ const ratingRoutes = require('./routes/ratingRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const evaluationRoutes = require('./routes/evaluationRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const ideaRoutes = require('./routes/ideaRoutes');
 
 const app = express();
 
@@ -77,6 +78,7 @@ app.use('/api/v1/evaluation', evaluationRoutes);
 // dashboardRoutes.js passing the wrong thing as middleware. All three are
 // fixed now.
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/ideas', ideaRoutes);
 
 // ============================================================
 // HTTP + Socket.IO server

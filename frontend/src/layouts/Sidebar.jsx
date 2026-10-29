@@ -1,6 +1,8 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
+import IdeasSidebarMenu from "./IdeasSidebarMenu";
+import { isIdeasPath } from "../utils/ideasMenu";
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
@@ -11,6 +13,10 @@ const Sidebar = () => {
     navigate("/login");
   };
   const isActive = (path) => location.pathname === path;
+
+  // On /ideas pages the Ideas menu replaces the Goal Tracker links below.
+  const { pathname } = useLocation();
+  const isIdeasModule = isIdeasPath(pathname);
 
   // Force checking role string (handling both uppercase and lowercase)
   const role = (user?.Role || user?.role || "").toUpperCase();
@@ -42,7 +48,11 @@ const Sidebar = () => {
 
       {/* Navigation Items */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-        
+
+        {isIdeasModule ? (
+          <IdeasSidebarMenu />
+        ) : (
+        <>
         {/* Core Links */}
         <Link
           to="/dashboard"
@@ -216,6 +226,8 @@ const Sidebar = () => {
               Reports & Analytics
             </Link>
           </div>
+        )}
+        </>
         )}
 
         {/* User Account Links */}

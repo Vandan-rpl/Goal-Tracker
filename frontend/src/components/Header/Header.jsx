@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import {
   AppBar,
@@ -11,9 +11,11 @@ import {
   Menu,
   MenuItem,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Toolbar,
   Tooltip,
-  Typography,
+  // Typography,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
@@ -21,6 +23,8 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import NotificationsOutlinedIcon from "@mui/icons-material/NotificationsOutlined";
+import TrackChangesOutlinedIcon from "@mui/icons-material/TrackChangesOutlined";
+import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
 
 import { toggleMobile, toggleSidebar } from "../../redux/slices/sidebarSlice";
 
@@ -29,7 +33,8 @@ import {
   fetchNotificationCount,
 } from "../../redux/slices/notificationSlice";
 
-import { formatTime, formatLongDate, getGreeting } from "../../utils/dateTime";
+// import { formatTime, formatLongDate, getGreeting } from "../../utils/dateTime";
+import { IDEAS_HOME_PATH, isIdeasPath } from "../../utils/ideasMenu";
 
 import ProfileMenu from "../ProfileMenu/ProfileMenu";
 import CircleIcon from "@mui/icons-material/Circle";
@@ -37,6 +42,7 @@ import CircleIcon from "@mui/icons-material/Circle";
 const Header = ({ drawerWidth = 260 }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const theme = useTheme();
 
@@ -44,36 +50,46 @@ const Header = ({ drawerWidth = 260 }) => {
 
   const { collapsed } = useSelector((state) => state.sidebar);
 
-  const { user } = useSelector((state) => state.auth);
+  // const { user } = useSelector((state) => state.auth);
 
-  const currentUser = useMemo(() => {
-    if (user) return user;
+  // const currentUser = useMemo(() => {
+  //   if (user) return user;
+  //
+  //   try {
+  //     const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+  //     return storedUser || null;
+  //   } catch {
+  //     return null;
+  //   }
+  // }, [user]);
 
-    try {
-      const storedUser = JSON.parse(localStorage.getItem("user") || "null");
-      return storedUser || null;
-    } catch {
-      return null;
-    }
-  }, [user]);
+  // const displayName = useMemo(() => {
+  //   if (!currentUser) return "User";
+  //
+  //   return (
+  //     currentUser.fullName ||
+  //     currentUser.FullName ||
+  //     [
+  //       currentUser.firstName || currentUser.FirstName,
+  //       currentUser.lastName || currentUser.LastName,
+  //     ]
+  //       .filter(Boolean)
+  //       .join(" ") ||
+  //     currentUser.username ||
+  //     currentUser.Username ||
+  //     "User"
+  //   );
+  // }, [currentUser]);
 
-  const displayName = useMemo(() => {
-    if (!currentUser) return "User";
+  // Module switch: derived from the URL, so it's correct after a refresh or
+  // a direct link. Ideas pages live under /ideas, everything else is the
+  // goal tracker (the default after login).
+  const activeModule = isIdeasPath(location.pathname) ? "ideas" : "goals";
 
-    return (
-      currentUser.fullName ||
-      currentUser.FullName ||
-      [
-        currentUser.firstName || currentUser.FirstName,
-        currentUser.lastName || currentUser.LastName,
-      ]
-        .filter(Boolean)
-        .join(" ") ||
-      currentUser.username ||
-      currentUser.Username ||
-      "User"
-    );
-  }, [currentUser]);
+  const handleModuleChange = (event, module) => {
+    if (!module || module === activeModule) return;
+    navigate(module === "ideas" ? IDEAS_HOME_PATH : "/dashboard");
+  };
 
   // Real unread count + notification list, replacing the old hardcoded
   // badgeContent={0}. notificationCount is kept live afterwards by
@@ -83,24 +99,24 @@ const Header = ({ drawerWidth = 260 }) => {
     (state) => state.notification,
   );
 
-  const [currentTime, setCurrentTime] = useState(formatTime());
+  // const [currentTime, setCurrentTime] = useState(formatTime());
 
-  const [currentDate, setCurrentDate] = useState(formatLongDate());
+  // const [currentDate, setCurrentDate] = useState(formatLongDate());
 
-  const [greeting, setGreeting] = useState(getGreeting());
+  // const [greeting, setGreeting] = useState(getGreeting());
 
   const [notifAnchorEl, setNotifAnchorEl] = useState(null);
   const notifMenuOpen = Boolean(notifAnchorEl);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(formatTime());
-      setCurrentDate(formatLongDate());
-      setGreeting(getGreeting());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
+  // useEffect(() => {
+  //   const timer = setInterval(() => {
+  //     setCurrentTime(formatTime());
+  //     setCurrentDate(formatLongDate());
+  //     setGreeting(getGreeting());
+  //   }, 1000);
+  //
+  //   return () => clearInterval(timer);
+  // }, []);
 
   // Fetch the real count + list once on mount. After this, notificationCount
   // stays current via the socket-driven notificationReceived action, and
@@ -166,7 +182,7 @@ const Header = ({ drawerWidth = 260 }) => {
         </IconButton>
 
         {/* Greeting */}
-        <Box sx={{ flexGrow: 1 }}>
+        {/* <Box sx={{ flexGrow: 1 }}>
           <Typography variant="h6" fontWeight={600}>
             {greeting}, {displayName}
           </Typography>
@@ -176,6 +192,39 @@ const Header = ({ drawerWidth = 260 }) => {
             {" • "}
             {currentTime}
           </Typography>
+        </Box> */}
+
+        {/* Module Switch */}
+        <Box sx={{ flexGrow: 1 }}>
+          <ToggleButtonGroup
+            value={activeModule}
+            exclusive
+            onChange={handleModuleChange}
+            size="small"
+            sx={{
+              "& .MuiToggleButton-root": {
+                px: 2,
+                gap: 1,
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "13px",
+              },
+              "& .MuiToggleButton-root.Mui-selected": {
+                backgroundColor: "#4f46e5",
+                color: "#ffffff",
+                "&:hover": { backgroundColor: "#4338ca" },
+              },
+            }}
+          >
+            <ToggleButton value="goals">
+              <TrackChangesOutlinedIcon fontSize="small" />
+              Goal Tracker
+            </ToggleButton>
+            <ToggleButton value="ideas">
+              <LightbulbOutlinedIcon fontSize="small" />
+              Innovation Ideas
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Box>
 
         <Stack direction="row" spacing={1} alignItems="center">
