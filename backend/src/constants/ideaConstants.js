@@ -4,11 +4,14 @@
  * ============================================================
  */
 
-// Single source for the Purpose dropdown (served by GET /ideas/purposes)
+// Single source for the Purpose dropdown 
 // and for backend validation.
 const IDEA_PURPOSES = Object.freeze([
   "Process Improvement",
+  "Reduce Manual Intervention",
   "Automation",
+  "Statutory Requirement",
+  "Management's Suggestion",
 ]);
 
 const IdeaStatus = Object.freeze({
