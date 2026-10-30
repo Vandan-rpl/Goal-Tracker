@@ -17,6 +17,17 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+const MAIL_FROM = process.env.EMAIL_USER || '"GOAL TRACKER" <no-reply@pms.com>';
+
+/**
+ * sendEmail
+ * ------------------------------------------------------------------
+ * Email only (no in-app notification), through the same transporter and
+ * sender as notifyUser. Throws on failure; the caller decides how to log it.
+ */
+const sendEmail = async ({ to, subject, html }) =>
+    transporter.sendMail({ from: MAIL_FROM, to, subject, html });
+
 /**
  * notifyUser
  * ------------------------------------------------------------------
@@ -124,7 +135,7 @@ const notifyUser = async (pool, {
     if (emailTo) {
         try {
             await transporter.sendMail({
-                from: process.env.EMAIL_USER || '"GOAL TRACKER" <no-reply@pms.com>',
+                from: MAIL_FROM,
                 to: emailTo,
                 subject: emailSubject || title,
                 html: emailHtml || `<p>${message}</p>`
@@ -138,4 +149,4 @@ const notifyUser = async (pool, {
     return result;
 };
 
-module.exports = { notifyUser };
+module.exports = { notifyUser, sendEmail };

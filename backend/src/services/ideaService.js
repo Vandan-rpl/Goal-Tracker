@@ -2,12 +2,15 @@ const { sql, poolPromise } = require("../config/db");
 const ideaModel = require("../models/ideaModel");
 const AppError = require("../utils/AppError");
 const StatusCodes = require("../constants/statusCodes");
+const { sendIdeaMail } = require("./ideaMailService");
+const { pluralDays, formatDate } = require("../utils/ideaFormat");
 const {
     IDEA_PURPOSES,
     IdeaStatus,
     IDEA_STATUSES,
     IdeaAction,
     IdeaRejectedStage,
+    IdeaMailEvent,
     IDEA_TRANSITIONS,
     IDEA_TIMELINE_DAYS_MIN,
     IDEA_TIMELINE_DAYS_MAX,
@@ -330,6 +333,9 @@ const submitIdea = async (ideaIdParam, user) => {
         });
     });
 
+    // Committed. Not awaited: the email never delays or fails the submit.
+    sendIdeaMail(IdeaMailEvent.SUBMITTED, { ideaId });
+
     return await getIdeaById(ideaId, user);
 };
 
@@ -338,15 +344,6 @@ const submitIdea = async (ideaIdParam, user) => {
  * Approval and implementation actions (rules in IDEA_TRANSITIONS)
  * ------------------------------------------------------------
  */
-
-const pluralDays = (days) => `${days} day${days === 1 ? "" : "s"}`;
-
-// SQL DATE value (a JS Date at UTC midnight) as DD/MM/YYYY
-const formatDate = (value) => {
-    if (!value) return "";
-    const [year, month, day] = new Date(value).toISOString().slice(0, 10).split("-");
-    return `${day}/${month}/${year}`;
-};
 
 /**
  * Whole number of days within the allowed range, or throw 400. Accepts a
@@ -394,11 +391,14 @@ const NOT_ACTIONABLE_MESSAGE = "This idea has already been actioned or you are n
  *   lock the idea -> must exist (404) -> caller must be the transition's
  *   actor and the status one of its `from` (409) -> `apply` runs the guarded
  *   UPDATE (409 if it matched nothing) -> one IdeaActivityLog row.
+ * After commit, the transition's mailEvent (if any) is sent with
+ * `mailContext` (e.g. { remark }). A 409 throws before that, so only the
+ * request that actually changed the idea sends an email.
  *
  * `apply(transaction, idea, base)` gets base = { transition, ideaId, actorId }
  * for the model call and returns { updated, logRemark }.
  */
-const performTransition = async (ideaIdParam, user, transition, apply) => {
+const performTransition = async (ideaIdParam, user, transition, apply, mailContext = {}) => {
     const ideaId = parseId(ideaIdParam, "idea id");
     const actorId = Number(user.userId);
 
@@ -433,6 +433,11 @@ const performTransition = async (ideaIdParam, user, transition, apply) => {
         });
     });
 
+    // Committed. Not awaited: the email never delays or fails the action.
+    if (transition.mailEvent) {
+        sendIdeaMail(transition.mailEvent, { ...mailContext, ideaId });
+    }
+
     return await getIdeaById(ideaId, user);
 };
 
@@ -466,7 +471,7 @@ const managerApprove = async (ideaIdParam, body = {}, user) => {
             updated: await ideaModel.managerApprove(transaction, { ...base, finalApproverId, timelineDays, remark }),
             logRemark: `Final approver: ${approver.FullName}. Timeline: ${pluralDays(timelineDays)}.${remark ? ` ${remark}` : ""}`,
         };
-    });
+    }, { remark });
 };
 
 /**
@@ -482,7 +487,7 @@ const managerReject = async (ideaIdParam, body = {}, user) => {
             rejectedStage: IdeaRejectedStage.MANAGER,
         }),
         logRemark: remark,
-    }));
+    }), { remark });
 };
 
 /**
@@ -501,7 +506,7 @@ const finalApprove = async (ideaIdParam, body = {}, user) => {
                 ? `Target date: ${formatDate(updated.TargetDate)}.${remark ? ` ${remark}` : ""}`
                 : null,
         };
-    });
+    }, { remark });
 };
 
 /**
@@ -517,7 +522,7 @@ const finalReject = async (ideaIdParam, body = {}, user) => {
             rejectedStage: IdeaRejectedStage.FINAL,
         }),
         logRemark: remark,
-    }));
+    }), { remark });
 };
 
 /**

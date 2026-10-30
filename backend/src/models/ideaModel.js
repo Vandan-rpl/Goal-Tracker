@@ -1021,6 +1021,47 @@ const getIdeaActivity = async (db, ideaId) => {
     return result.recordset;
 };
 
+/**
+ * Idea plus name, email and active flag of the submitter, reporting manager
+ * (lead) and final approver, for idea emails
+ */
+const getIdeaMailData = async (db, ideaId) => {
+
+    const result = await db.request()
+        .input("IdeaID", sql.Int, ideaId)
+        .query(`
+            SELECT
+                i.IdeaID,
+                i.IdeaNumber,
+                i.Title,
+                i.Status,
+                i.TimelineDays,
+                i.TargetDate,
+                i.UserID AS SubmitterID,
+                ${fullName("submitter")} AS SubmitterName,
+                submitter.Email AS SubmitterEmail,
+                submitter.IsActive AS SubmitterIsActive,
+                i.AssignedLeadID AS LeadID,
+                ${fullName("lead")} AS LeadName,
+                lead.Email AS LeadEmail,
+                lead.IsActive AS LeadIsActive,
+                i.FinalApproverID,
+                ${fullName("finalApprover")} AS FinalApproverName,
+                finalApprover.Email AS FinalApproverEmail,
+                finalApprover.IsActive AS FinalApproverIsActive
+            FROM dbo.Ideas i
+            INNER JOIN dbo.Users submitter
+                ON submitter.UserID = i.UserID
+            LEFT JOIN dbo.Users lead
+                ON lead.UserID = i.AssignedLeadID
+            LEFT JOIN dbo.Users finalApprover
+                ON finalApprover.UserID = i.FinalApproverID
+            WHERE i.IdeaID = @IdeaID;
+        `);
+
+    return result.recordset[0] || null;
+};
+
 module.exports = {
     getLeadOptions,
     getLeadUser,
@@ -1050,4 +1091,5 @@ module.exports = {
     extendTimeline,
     getIdeaDetails,
     getIdeaActivity,
+    getIdeaMailData,
 };

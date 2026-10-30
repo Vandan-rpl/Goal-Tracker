@@ -59,32 +59,47 @@ const IdeaRejectedStage = Object.freeze({
   FINAL: "Final",
 });
 
+// Idea email events. Recipient, subject and template for each live in
+// IDEA_MAIL_EVENTS (services/ideaMailService.js).
+const IdeaMailEvent = Object.freeze({
+  SUBMITTED: "submitted",
+  MANAGER_APPROVED: "managerApproved",
+  MANAGER_REJECTED: "managerRejected",
+  FINAL_APPROVED: "finalApproved",
+  FINAL_REJECTED: "finalRejected",
+});
+
 // Every status change after submit: allowed current statuses, the new status
-// (null = unchanged), who may act, and the activity log action.
+// (null = unchanged), who may act, the activity log action, and the email
+// sent once it has committed (none when mailEvent is absent).
 const IDEA_TRANSITIONS = Object.freeze({
   managerApprove: {
     from: [IdeaStatus.SUBMITTED],
     to: IdeaStatus.PENDING_FINAL_APPROVAL,
     actor: IdeaActor.MANAGER,
     action: IdeaAction.MANAGER_APPROVED,
+    mailEvent: IdeaMailEvent.MANAGER_APPROVED,
   },
   managerReject: {
     from: [IdeaStatus.SUBMITTED],
     to: IdeaStatus.REJECTED,
     actor: IdeaActor.MANAGER,
     action: IdeaAction.MANAGER_REJECTED,
+    mailEvent: IdeaMailEvent.MANAGER_REJECTED,
   },
   finalApprove: {
     from: [IdeaStatus.PENDING_FINAL_APPROVAL],
     to: IdeaStatus.ACTIVE,
     actor: IdeaActor.FINAL_APPROVER,
     action: IdeaAction.FINAL_APPROVED,
+    mailEvent: IdeaMailEvent.FINAL_APPROVED,
   },
   finalReject: {
     from: [IdeaStatus.PENDING_FINAL_APPROVAL],
     to: IdeaStatus.REJECTED,
     actor: IdeaActor.FINAL_APPROVER,
     action: IdeaAction.FINAL_REJECTED,
+    mailEvent: IdeaMailEvent.FINAL_REJECTED,
   },
   startImplementation: {
     from: [IdeaStatus.ACTIVE],
@@ -137,6 +152,7 @@ module.exports = {
   IdeaAction,
   IdeaActor,
   IdeaRejectedStage,
+  IdeaMailEvent,
   IDEA_TRANSITIONS,
   IDEA_TIMELINE_DAYS_MIN,
   IDEA_TIMELINE_DAYS_MAX,
