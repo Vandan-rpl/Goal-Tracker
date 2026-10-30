@@ -386,6 +386,24 @@ const DIRECT_REPORT_CONDITION = (alias) => `
     AND (${alias}.ReportingManagerID = @ViewerID OR ${alias}.HODID = @ViewerID)
 `;
 
+// Who may see an idea: the submitter, its reporting manager (lead) or final
+// approver, the submitter's Reporting Manager / HOD, or a view-all role
+// (@ViewAll = 1). The single rule for Idea Details and Track Idea. Needs
+// @ViewerID, @ViewAll and dbo.Users joined as `submitter`.
+const CAN_VIEW_IDEA = `
+    (@ViewAll = 1
+     OR i.UserID = @ViewerID
+     OR i.AssignedLeadID = @ViewerID
+     OR i.FinalApproverID = @ViewerID
+     OR submitter.ReportingManagerID = @ViewerID
+     OR submitter.HODID = @ViewerID)
+`;
+
+const bindViewer = (request, { viewerId, viewAll }) =>
+    request
+        .input("ViewerID", sql.Int, viewerId)
+        .input("ViewAll", sql.Bit, viewAll ? 1 : 0);
+
 // sortBy values the API accepts -> ORDER BY expression
 const IDEA_SORT_COLUMNS = {
     submittedDate: "i.SubmittedDate",
@@ -637,6 +655,136 @@ const getIdeaListFilterOptions = async (db, { scope, viewerId }) => {
 
 /**
  * ------------------------------------------------------------
+ * Track Idea (every non-draft idea the viewer may see)
+ * ------------------------------------------------------------
+ */
+
+// Whose action the idea is waiting on; NULL once Implemented / Rejected.
+const PENDING_WITH_NAME = `
+    CASE
+        WHEN i.Status IN (N'Submitted', N'Active', N'In Implementation') THEN ${fullName("lead")}
+        WHEN i.Status = N'Pending Final Approval' THEN ${fullName("finalApprover")}
+    END
+`;
+
+const TRACK_IDEA_FROM = `
+    FROM dbo.Ideas i
+    INNER JOIN dbo.Users submitter
+        ON submitter.UserID = i.UserID
+    LEFT JOIN dbo.Users lead
+        ON lead.UserID = i.AssignedLeadID
+    LEFT JOIN dbo.Users finalApprover
+        ON finalApprover.UserID = i.FinalApproverID
+    WHERE i.Status <> N'Draft'
+      AND ${CAN_VIEW_IDEA}
+`;
+
+/**
+ * Search conditions for the filled-in filters (all must match). Returns
+ * { where, bind } like buildIdeaListWhere.
+ */
+const buildTrackIdeaWhere = (filters) => {
+    const conditions = [];
+    const params = [];
+
+    if (filters.ideaNumber) {
+        conditions.push("UPPER(i.IdeaNumber) LIKE UPPER(@IdeaNumber)");
+        params.push(["IdeaNumber", sql.NVarChar(110), likeContains(filters.ideaNumber)]);
+    }
+
+    // Any time on that calendar day; a range so an index on SubmittedDate
+    // can be used.
+    if (filters.submittedDate) {
+        conditions.push("i.SubmittedDate >= @SubmittedOn AND i.SubmittedDate < DATEADD(DAY, 1, @SubmittedOn)");
+        params.push(["SubmittedOn", sql.Date, filters.submittedDate]);
+    }
+
+    if (filters.initiatedBy) {
+        conditions.push("i.UserID = @InitiatedBy");
+        params.push(["InitiatedBy", sql.Int, filters.initiatedBy]);
+    }
+
+    return {
+        where: conditions.map((condition) => `(${condition})`).join("\n AND "),
+        bind: (request) => {
+            params.forEach(([name, type, value]) => request.input(name, type, value));
+            return request;
+        },
+    };
+};
+
+/**
+ * One page of visible ideas matching every given filter, newest submission
+ * first, plus the total match count.
+ *
+ * @param {object} options
+ * @param {{ viewerId: number, viewAll: boolean }} options.viewer
+ * @param {{ ideaNumber?: string, submittedDate?: string, initiatedBy?: number }} options.filters
+ *   - at least one is required (checked in the service)
+ * @param {number} options.page     - 1-based
+ * @param {number} options.pageSize
+ * @returns {Promise<{ items: object[], total: number }>}
+ */
+const trackIdeas = async (db, { viewer, filters, page, pageSize }) => {
+
+    const { where: condition, bind } = buildTrackIdeaWhere(filters);
+    const newRequest = () => bind(bindViewer(db.request(), viewer));
+
+    const [itemsResult, countResult] = await Promise.all([
+        newRequest()
+            .input("Offset", sql.Int, (page - 1) * pageSize)
+            .input("PageSize", sql.Int, pageSize)
+            .query(`
+                SELECT
+                    i.IdeaID,
+                    i.IdeaNumber,
+                    i.Title,
+                    i.UserID AS SubmittedByID,
+                    ${fullName("submitter")} AS SubmitterName,
+                    submitter.EmployeeCode AS SubmitterEmployeeCode,
+                    i.SubmittedDate,
+                    i.Status,
+                    ${PENDING_WITH_NAME} AS PendingWithName
+                ${TRACK_IDEA_FROM}
+                  AND (${condition})
+                ORDER BY i.SubmittedDate DESC, i.IdeaID DESC
+                OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
+            `),
+        newRequest().query(`
+            SELECT COUNT(*) AS Total
+            ${TRACK_IDEA_FROM}
+              AND (${condition});
+        `),
+    ]);
+
+    return {
+        items: itemsResult.recordset,
+        total: countResult.recordset[0].Total,
+    };
+};
+
+/**
+ * All active users, for the Initiated By dropdown. The search itself still
+ * applies CAN_VIEW_IDEA, so picking someone outside the viewer's scope just
+ * finds nothing.
+ */
+const getTrackIdeaInitiators = async (db) => {
+
+    const result = await db.request().query(`
+        SELECT
+            u.UserID,
+            ${fullName("u")} AS FullName,
+            u.EmployeeCode
+        FROM dbo.Users u
+        WHERE u.IsActive = 1
+        ORDER BY u.FirstName, u.LastName;
+    `);
+
+    return result.recordset;
+};
+
+/**
+ * ------------------------------------------------------------
  * Status changes (rules in IDEA_TRANSITIONS)
  * ------------------------------------------------------------
  */
@@ -777,23 +925,22 @@ const extendTimeline = (db, { additionalDays, ...options }) =>
 
 /**
  * Full idea details with submitter / lead / final approver / reviewer names.
- * Also returns the submitter's current reporting manager, used for the
- * access check.
+ * CanView says whether `viewer` ({ viewerId, viewAll }) may see it
+ * (CAN_VIEW_IDEA).
  */
-const getIdeaDetails = async (db, ideaId) => {
+const getIdeaDetails = async (db, ideaId, viewer) => {
 
-    const result = await db.request()
+    const result = await bindViewer(db.request(), viewer)
         .input("IdeaID", sql.Int, ideaId)
         .query(`
             SELECT
+                CAST(CASE WHEN ${CAN_VIEW_IDEA} THEN 1 ELSE 0 END AS BIT) AS CanView,
                 i.IdeaID,
                 i.IdeaNumber,
                 i.UserID,
                 ${fullName("submitter")} AS SubmitterName,
                 submitter.EmployeeCode AS SubmitterEmployeeCode,
                 submitterDept.DepartmentName AS SubmitterDepartment,
-                submitter.ReportingManagerID AS SubmitterReportingManagerID,
-                submitter.HODID AS SubmitterHODID,
                 i.Title,
                 i.Description,
                 i.Purpose,
@@ -891,6 +1038,8 @@ module.exports = {
     searchIdeas,
     hasDirectReports,
     getIdeaListFilterOptions,
+    trackIdeas,
+    getTrackIdeaInitiators,
     ACTOR_COLUMNS,
     managerApprove,
     managerReject,

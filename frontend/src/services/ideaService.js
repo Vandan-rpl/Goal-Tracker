@@ -56,6 +56,20 @@ export const getAllIdeaFilterOptions = async () => {
     return response.data.data;
 };
 
+// Track Idea: search the ideas the user may see (ideaNumber, submittedDate,
+// initiatedBy: filled-in ones must all match; page, pageSize). Returns
+// { items, total, page, pageSize, totalPages }.
+export const trackIdeas = async (params) => {
+    const response = await api.get('/ideas/track', { params });
+    return response.data.data;
+};
+
+// Initiated By options: all active users (UserID, FullName, EmployeeCode).
+export const getTrackIdeaInitiators = async () => {
+    const response = await api.get('/ideas/track/initiators');
+    return response.data.data;
+};
+
 // Approval and implementation actions. Each returns the updated idea (same
 // shape as getIdea).
 export const managerApproveIdea = async (ideaId, { finalApproverId, timelineDays, remark }) => {

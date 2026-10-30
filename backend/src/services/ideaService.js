@@ -150,21 +150,13 @@ const getOwnDraft = async (db, ideaId, userId, lock = false) => {
     return idea;
 };
 
-const canViewIdea = (idea, user) => {
-    const userId = Number(user.userId);
-    const role = String(user.role || "").toUpperCase();
+const hasViewAllRole = (user) => IDEA_VIEW_ALL_ROLES.includes(String(user.role || "").toUpperCase());
 
-    // Reporting manager or HOD: the same direct-report relationship Team
-    // Ideas lists by.
-    return (
-        idea.UserID === userId ||
-        idea.AssignedLeadID === userId ||
-        idea.FinalApproverID === userId ||
-        idea.SubmitterReportingManagerID === userId ||
-        idea.SubmitterHODID === userId ||
-        IDEA_VIEW_ALL_ROLES.includes(role)
-    );
-};
+// The logged-in user for the model's visibility rule (CAN_VIEW_IDEA).
+const toViewer = (user) => ({
+    viewerId: Number(user.userId),
+    viewAll: hasViewAllRole(user),
+});
 
 /**
  * Get Purpose List
@@ -195,20 +187,19 @@ const getIdeaById = async (ideaIdParam, user) => {
     const ideaId = parseId(ideaIdParam, "idea id");
     const pool = await poolPromise;
 
-    const idea = await ideaModel.getIdeaDetails(pool, ideaId);
+    const idea = await ideaModel.getIdeaDetails(pool, ideaId, toViewer(user));
 
     if (!idea) {
         throw new AppError("Idea not found.", StatusCodes.NOT_FOUND);
     }
 
-    if (!canViewIdea(idea, user)) {
+    if (!idea.CanView) {
         throw new AppError("You do not have access to this idea.", StatusCodes.FORBIDDEN);
     }
 
     const activity = await ideaModel.getIdeaActivity(pool, ideaId);
 
-    // The reporting manager / HOD ids are only needed for the access check above.
-    const { SubmitterReportingManagerID, SubmitterHODID, ...details } = idea;
+    const { CanView, ...details } = idea;
 
     const userId = Number(user.userId);
     const isSubmitter = idea.UserID === userId;
@@ -750,7 +741,7 @@ const assertCanViewTeamIdeas = async (user) => {
 };
 
 const assertCanViewAllIdeas = (user) => {
-    if (!IDEA_VIEW_ALL_ROLES.includes(String(user.role || "").toUpperCase())) {
+    if (!hasViewAllRole(user)) {
         throw new AppError("All Ideas is only available to CFO and Admin users.", StatusCodes.FORBIDDEN);
     }
 };
@@ -781,6 +772,112 @@ const getAllIdeaFilterOptions = async (user) => {
     assertCanViewAllIdeas(user);
     const pool = await poolPromise;
     return await ideaModel.getIdeaListFilterOptions(pool, { scope: "all", viewerId: Number(user.userId) });
+};
+
+/**
+ * ------------------------------------------------------------
+ * Track Idea (Team Ideas users + CFO / Admin; visibility applied in the
+ * query)
+ * ------------------------------------------------------------
+ */
+
+const TRACK_IDEA_NUMBER_MAX_LENGTH = 50;
+
+// The Team Ideas check (has direct reports) or a view-all role.
+const assertCanTrackIdeas = async (user) => {
+    if (hasViewAllRole(user)) return;
+
+    const pool = await poolPromise;
+    if (!(await ideaModel.hasDirectReports(pool, user.userId))) {
+        throw new AppError(
+            "Track Idea is only available to reporting managers, HODs, CFO and Admin users.",
+            StatusCodes.FORBIDDEN
+        );
+    }
+};
+
+/**
+ * Validate the Track Idea query: ideaNumber, submittedDate (YYYY-MM-DD),
+ * initiatedBy, page, pageSize. At least one filter is required; blank ones
+ * are ignored. Throws 400 with every problem listed.
+ */
+const parseTrackIdeaQuery = (query = {}) => {
+    const errors = [];
+    const text = (value) => (typeof value === "string" ? value.trim() : "");
+
+    const positiveInt = (value, label) => {
+        if (value === undefined || value === "") return null;
+        const number = Number(value);
+        if (!Number.isInteger(number) || number <= 0) {
+            errors.push(`${label} must be a positive whole number.`);
+            return null;
+        }
+        return number;
+    };
+
+    const filters = {
+        ideaNumber: text(query.ideaNumber),
+        submittedDate: text(query.submittedDate),
+        initiatedBy: positiveInt(text(query.initiatedBy), "Initiated by"),
+    };
+
+    if (filters.ideaNumber.length > TRACK_IDEA_NUMBER_MAX_LENGTH) {
+        errors.push(`Idea number cannot exceed ${TRACK_IDEA_NUMBER_MAX_LENGTH} characters.`);
+    }
+
+    if (filters.submittedDate && !isValidDateKey(filters.submittedDate)) {
+        errors.push("Idea date must be a date in YYYY-MM-DD format.");
+    }
+
+    if (!filters.ideaNumber && !filters.submittedDate && !filters.initiatedBy && errors.length === 0) {
+        errors.push("Enter an idea number, an idea date or an employee to search for.");
+    }
+
+    const page = positiveInt(query.page, "Page") || 1;
+    const pageSize = positiveInt(query.pageSize, "Page size") || IDEA_LIST_PAGE_SIZE_DEFAULT;
+    if (pageSize > IDEA_LIST_PAGE_SIZE_MAX) {
+        errors.push(`Page size cannot exceed ${IDEA_LIST_PAGE_SIZE_MAX}.`);
+    }
+
+    if (errors.length > 0) {
+        throw new AppError("Invalid search.", StatusCodes.BAD_REQUEST, errors);
+    }
+
+    return { filters, page, pageSize };
+};
+
+/**
+ * Track Idea search: { items, total, page, pageSize, totalPages }. Ideas the
+ * user may not see are simply not matched.
+ */
+const trackIdeas = async (user, query) => {
+    await assertCanTrackIdeas(user);
+    const { filters, page, pageSize } = parseTrackIdeaQuery(query);
+    const pool = await poolPromise;
+
+    const { items, total } = await ideaModel.trackIdeas(pool, {
+        viewer: toViewer(user),
+        filters,
+        page,
+        pageSize,
+    });
+
+    return {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+};
+
+/**
+ * Initiated By options: all active users
+ */
+const getTrackIdeaInitiators = async (user) => {
+    await assertCanTrackIdeas(user);
+    const pool = await poolPromise;
+    return await ideaModel.getTrackIdeaInitiators(pool);
 };
 
 /**
@@ -822,6 +919,8 @@ module.exports = {
     getTeamIdeaFilterOptions,
     getAllIdeas,
     getAllIdeaFilterOptions,
+    trackIdeas,
+    getTrackIdeaInitiators,
     managerApprove,
     managerReject,
     finalApprove,

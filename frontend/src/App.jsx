@@ -36,6 +36,7 @@ import AssignedIdeas from './pages/Ideas/AssignedIdeas';
 import TeamIdeas from './pages/Ideas/TeamIdeas';
 import AllIdeas from './pages/Ideas/AllIdeas';
 import IdeaReports from './pages/Ideas/IdeaReports';
+import TrackIdea from './pages/Ideas/TrackIdea';
 import { IDEAS_HOME_PATH } from './utils/ideasMenu';
 import {ToastContainer} from 'react-toastify';
 
@@ -97,6 +98,9 @@ function App() {
               <Route path="/ideas/my-ideas" element={<MyIdeas />} />
               <Route path="/ideas/view/:ideaId" element={<IdeaDetails />} />
               <Route path="/ideas/assigned" element={<AssignedIdeas />} />
+              <Route element={<IdeasRoute menuKey="track" />}>
+                <Route path="/ideas/track" element={<TrackIdea />} />
+              </Route>
               <Route element={<IdeasRoute menuKey="team" />}>
                 <Route path="/ideas/team" element={<TeamIdeas />} />
               </Route>

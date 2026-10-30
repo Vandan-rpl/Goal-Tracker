@@ -10,7 +10,7 @@ const { verifyToken } = require("../middleware/authMiddleware");
  * Base URL : /api/v1/ideas
  * ============================================================
  * Fixed paths (/purposes, /leads, /final-approvers, /my, /assigned, /team,
- * /all) are declared before
+ * /all, /track) are declared before
  * /:ideaId so they aren't captured as an id.
  */
 
@@ -106,6 +106,27 @@ router.get(
     "/all/filter-options",
     verifyToken,
     ideaController.getAllIdeaFilterOptions
+);
+
+/**
+ * Track Idea (users with direct reports, CFO / Admin; only ideas they may
+ * see, never Drafts). Filled-in filters must all match.
+ * GET /api/v1/ideas/track?ideaNumber=&submittedDate=&initiatedBy=&page=&pageSize=
+ */
+router.get(
+    "/track",
+    verifyToken,
+    ideaController.trackIdeas
+);
+
+/**
+ * Track Idea Initiated By Options
+ * GET /api/v1/ideas/track/initiators
+ */
+router.get(
+    "/track/initiators",
+    verifyToken,
+    ideaController.getTrackIdeaInitiators
 );
 
 /**
