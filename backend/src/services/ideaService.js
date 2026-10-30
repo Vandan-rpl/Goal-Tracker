@@ -7,9 +7,12 @@ const {
     IdeaStatus,
     IDEA_STATUSES,
     IdeaAction,
+    IdeaRejectedStage,
+    IDEA_TRANSITIONS,
     IDEA_TIMELINE_DAYS_MIN,
     IDEA_TIMELINE_DAYS_MAX,
     IDEA_LEAD_REMARK_MAX_LENGTH,
+    IDEA_ACTIVITY_REMARK_MAX_LENGTH,
     IDEA_VIEW_ALL_ROLES,
     IDEA_TITLE_MAX_LENGTH,
     IDEA_DESCRIPTION_MAX_LENGTH,
@@ -21,7 +24,8 @@ const {
  * Ideas Module - validation, access rules and transactions.
  *
  * Status is never taken from the request: create always writes
- * Draft, and submit only moves an idea that is currently Draft.
+ * Draft, submit only moves an idea that is currently Draft, and every
+ * later change follows IDEA_TRANSITIONS.
  * ============================================================
  */
 
@@ -40,7 +44,8 @@ const parseId = (value, label) => {
 
 /**
  * Normalize the editable fields from a request body. Missing values become
- * '' (Title/Description/Purpose are NOT NULL in dbo.Ideas) or null (lead).
+ * '' (Title/Description/Purpose are NOT NULL in dbo.Ideas) or null (the
+ * reporting manager, stored as the lead).
  */
 const normalizeIdeaInput = (body = {}) => {
     const text = (value) => (typeof value === "string" ? value.trim() : "");
@@ -83,13 +88,13 @@ const validateIdeaInput = async (db, idea, userId, { requireAll }) => {
     }
 
     if (idea.assignedLeadId === null) {
-        if (requireAll) errors.push("Lead is required.");
+        if (requireAll) errors.push("Reporting manager is required.");
     } else if (!Number.isInteger(idea.assignedLeadId) || idea.assignedLeadId <= 0) {
-        errors.push("Invalid lead.");
+        errors.push("Invalid reporting manager.");
     } else if (idea.assignedLeadId === Number(userId)) {
-        errors.push("You cannot assign yourself as the lead.");
+        errors.push("You cannot select yourself as the reporting manager.");
     } else if (!(await ideaModel.getLeadUser(db, idea.assignedLeadId))) {
-        errors.push("Selected lead must be an active Manager or HOD.");
+        errors.push("Selected reporting manager must be an active Manager or HOD.");
     }
 
     if (errors.length > 0) {
@@ -154,6 +159,7 @@ const canViewIdea = (idea, user) => {
     return (
         idea.UserID === userId ||
         idea.AssignedLeadID === userId ||
+        idea.FinalApproverID === userId ||
         idea.SubmitterReportingManagerID === userId ||
         idea.SubmitterHODID === userId ||
         IDEA_VIEW_ALL_ROLES.includes(role)
@@ -166,11 +172,20 @@ const canViewIdea = (idea, user) => {
 const getPurposes = () => IDEA_PURPOSES;
 
 /**
- * Get Lead Options (active Managers and HODs except the logged-in user)
+ * Get Reporting Manager Options (active Managers and HODs except the
+ * logged-in user)
  */
 const getLeadOptions = async (userId) => {
     const pool = await poolPromise;
     return await ideaModel.getLeadOptions(pool, userId);
+};
+
+/**
+ * Get Final Approver Options (active final approvers)
+ */
+const getFinalApproverOptions = async () => {
+    const pool = await poolPromise;
+    return await ideaModel.getFinalApproverOptions(pool);
 };
 
 /**
@@ -195,12 +210,19 @@ const getIdeaById = async (ideaIdParam, user) => {
     // The reporting manager / HOD ids are only needed for the access check above.
     const { SubmitterReportingManagerID, SubmitterHODID, ...details } = idea;
 
-    const isSubmitter = idea.UserID === Number(user.userId);
+    const userId = Number(user.userId);
+    const isSubmitter = idea.UserID === userId;
+    const isLead = idea.AssignedLeadID === userId;
+    const isFinalApprover = idea.FinalApproverID === userId;
 
     return {
         ...details,
         IsSubmitter: isSubmitter,
-        IsLead: idea.AssignedLeadID === Number(user.userId),
+        IsLead: isLead,
+        IsFinalApprover: isFinalApprover,
+        IsPendingWithMe:
+            (isLead && idea.Status === IdeaStatus.SUBMITTED) ||
+            (isFinalApprover && idea.Status === IdeaStatus.PENDING_FINAL_APPROVAL),
         CanEdit: isSubmitter && idea.Status === IdeaStatus.DRAFT,
         Activity: activity,
     };
@@ -277,8 +299,9 @@ const deleteDraft = async (ideaIdParam, user) => {
 /**
  * Submit Idea (Draft -> Submitted)
  *
- * Validates the saved draft, not the request body. IdeaNumber is a
- * computed column on the IDENTITY IdeaID, so it's already unique.
+ * Validates the saved draft, not the request body. The idea goes to the
+ * reporting manager chosen on the form (stored as the lead). IdeaNumber is
+ * a computed column on the IDENTITY IdeaID, so it's already unique.
  */
 const submitIdea = async (ideaIdParam, user) => {
     const ideaId = parseId(ideaIdParam, "idea id");
@@ -321,7 +344,7 @@ const submitIdea = async (ideaIdParam, user) => {
 
 /**
  * ------------------------------------------------------------
- * Lead actions
+ * Approval and implementation actions (rules in IDEA_TRANSITIONS)
  * ------------------------------------------------------------
  */
 
@@ -372,18 +395,21 @@ const parseRemark = (value, label, { required }) => {
     return remark;
 };
 
+// Wrong person, wrong status, or someone acted first.
+const NOT_ACTIONABLE_MESSAGE = "This idea has already been actioned or you are not the approver.";
+
 /**
- * Shared flow for every lead action, in one transaction:
- *   lock the idea -> must exist (404) -> caller must be its lead (403)
- *   -> status must allow the action (409) -> `apply` updates the idea
- *   -> one IdeaActivityLog row.
+ * Shared flow for every action, in one transaction:
+ *   lock the idea -> must exist (404) -> caller must be the transition's
+ *   actor and the status one of its `from` (409) -> `apply` runs the guarded
+ *   UPDATE (409 if it matched nothing) -> one IdeaActivityLog row.
  *
- * `apply(transaction, idea)` returns { updated, logRemark }, where
- * `updated` is the model's result (null if the guarded UPDATE matched nothing).
+ * `apply(transaction, idea, base)` gets base = { transition, ideaId, actorId }
+ * for the model call and returns { updated, logRemark }.
  */
-const performLeadAction = async (ideaIdParam, user, { allowedStatuses, statusError, action, apply }) => {
+const performTransition = async (ideaIdParam, user, transition, apply) => {
     const ideaId = parseId(ideaIdParam, "idea id");
-    const leadId = Number(user.userId);
+    const actorId = Number(user.userId);
 
     await withTransaction(async (transaction) => {
         // UPDLOCK holds the row until commit, so two actions on the same idea
@@ -394,27 +420,25 @@ const performLeadAction = async (ideaIdParam, user, { allowedStatuses, statusErr
             throw new AppError("Idea not found.", StatusCodes.NOT_FOUND);
         }
 
-        if (idea.AssignedLeadID !== leadId) {
-            throw new AppError("Only the idea's lead can perform this action.", StatusCodes.FORBIDDEN);
+        const actorColumn = ideaModel.ACTOR_COLUMNS[transition.actor];
+
+        if (idea[actorColumn] !== actorId || !transition.from.includes(idea.Status)) {
+            throw new AppError(NOT_ACTIONABLE_MESSAGE, StatusCodes.CONFLICT);
         }
 
-        if (!allowedStatuses.includes(idea.Status)) {
-            throw new AppError(`${statusError} This idea is ${idea.Status}.`, StatusCodes.CONFLICT);
-        }
-
-        const { updated, logRemark } = await apply(transaction, idea, leadId);
+        const { updated, logRemark } = await apply(transaction, idea, { transition, ideaId, actorId });
 
         if (!updated) {
-            throw new AppError("This idea was just changed. Refresh and try again.", StatusCodes.CONFLICT);
+            throw new AppError(NOT_ACTIONABLE_MESSAGE, StatusCodes.CONFLICT);
         }
 
         await ideaModel.insertActivity(transaction, {
             ideaId,
-            actionBy: leadId,
-            action,
+            actionBy: actorId,
+            action: transition.action,
             fromStatus: idea.Status,
             toStatus: updated.Status,
-            remark: logRemark,
+            remark: logRemark ? logRemark.slice(0, IDEA_ACTIVITY_REMARK_MAX_LENGTH) : null,
         });
     });
 
@@ -422,60 +446,99 @@ const performLeadAction = async (ideaIdParam, user, { allowedStatuses, statusErr
 };
 
 /**
- * Accept Idea (Submitted -> Accepted)
+ * Manager Approve (Submitted -> Pending Final Approval). The manager picks
+ * an active final approver (not themselves or the submitter) and the
+ * timeline; the target date is set when the final approver approves.
  */
-const acceptIdea = async (ideaIdParam, body = {}, user) => {
+const managerApprove = async (ideaIdParam, body = {}, user) => {
+    const finalApproverId = parseId(body.finalApproverId, "final approver");
     const timelineDays = parseDays(body.timelineDays, "Timeline days");
     const remark = parseRemark(body.remark, "Remark", { required: false });
 
-    return await performLeadAction(ideaIdParam, user, {
-        allowedStatuses: [IdeaStatus.SUBMITTED],
-        statusError: "Only Submitted ideas can be accepted.",
-        action: IdeaAction.ACCEPTED,
-        apply: async (transaction, idea, leadId) => ({
-            updated: await ideaModel.acceptIdea(transaction, {
-                ideaId: idea.IdeaID,
-                leadId,
-                timelineDays,
-                remark,
-            }),
-            logRemark: `Timeline: ${pluralDays(timelineDays)}.${remark ? ` ${remark}` : ""}`,
-        }),
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.managerApprove, async (transaction, idea, base) => {
+        const errors = [];
+        const approver = await ideaModel.getActiveFinalApprover(transaction, finalApproverId);
+
+        if (!approver) {
+            errors.push("Selected final approver is not an active final approver.");
+        } else if (finalApproverId === base.actorId) {
+            errors.push("You cannot select yourself as the final approver.");
+        } else if (finalApproverId === idea.UserID) {
+            errors.push("The idea's submitter cannot be its final approver.");
+        }
+
+        if (errors.length > 0) {
+            throw new AppError("Validation failed.", StatusCodes.BAD_REQUEST, errors);
+        }
+
+        return {
+            updated: await ideaModel.managerApprove(transaction, { ...base, finalApproverId, timelineDays, remark }),
+            logRemark: `Final approver: ${approver.FullName}. Timeline: ${pluralDays(timelineDays)}.${remark ? ` ${remark}` : ""}`,
+        };
     });
 };
 
 /**
- * Reject Idea (Submitted -> Rejected)
+ * Manager Reject (Submitted -> Rejected)
  */
-const rejectIdea = async (ideaIdParam, body = {}, user) => {
+const managerReject = async (ideaIdParam, body = {}, user) => {
     const remark = parseRemark(body.remark, "Remark", { required: true });
 
-    return await performLeadAction(ideaIdParam, user, {
-        allowedStatuses: [IdeaStatus.SUBMITTED],
-        statusError: "Only Submitted ideas can be rejected.",
-        action: IdeaAction.REJECTED,
-        apply: async (transaction, idea, leadId) => ({
-            updated: await ideaModel.rejectIdea(transaction, { ideaId: idea.IdeaID, leadId, remark }),
-            logRemark: remark,
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.managerReject, async (transaction, idea, base) => ({
+        updated: await ideaModel.managerReject(transaction, {
+            ...base,
+            remark,
+            rejectedStage: IdeaRejectedStage.MANAGER,
         }),
+        logRemark: remark,
+    }));
+};
+
+/**
+ * Final Approve (Pending Final Approval -> Active). Target date = today +
+ * the timeline days the manager set.
+ */
+const finalApprove = async (ideaIdParam, body = {}, user) => {
+    const remark = parseRemark(body.remark, "Remark", { required: false });
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.finalApprove, async (transaction, idea, base) => {
+        const updated = await ideaModel.finalApprove(transaction, { ...base, remark });
+
+        return {
+            updated,
+            logRemark: updated
+                ? `Target date: ${formatDate(updated.TargetDate)}.${remark ? ` ${remark}` : ""}`
+                : null,
+        };
     });
 };
 
 /**
- * Start Implementation (Accepted -> In Implementation)
+ * Final Reject (Pending Final Approval -> Rejected)
+ */
+const finalReject = async (ideaIdParam, body = {}, user) => {
+    const remark = parseRemark(body.remark, "Remark", { required: true });
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.finalReject, async (transaction, idea, base) => ({
+        updated: await ideaModel.finalReject(transaction, {
+            ...base,
+            remark,
+            rejectedStage: IdeaRejectedStage.FINAL,
+        }),
+        logRemark: remark,
+    }));
+};
+
+/**
+ * Start Implementation (Active -> In Implementation)
  */
 const startImplementation = async (ideaIdParam, body = {}, user) => {
     const remark = parseRemark(body.remark, "Remark", { required: false });
 
-    return await performLeadAction(ideaIdParam, user, {
-        allowedStatuses: [IdeaStatus.ACCEPTED],
-        statusError: "Implementation can only be started on Accepted ideas.",
-        action: IdeaAction.IMPLEMENTATION_STARTED,
-        apply: async (transaction, idea, leadId) => ({
-            updated: await ideaModel.startImplementation(transaction, { ideaId: idea.IdeaID, leadId, remark }),
-            logRemark: remark,
-        }),
-    });
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.startImplementation, async (transaction, idea, base) => ({
+        updated: await ideaModel.startImplementation(transaction, { ...base, remark }),
+        logRemark: remark,
+    }));
 };
 
 /**
@@ -484,63 +547,53 @@ const startImplementation = async (ideaIdParam, body = {}, user) => {
 const markImplemented = async (ideaIdParam, body = {}, user) => {
     const remark = parseRemark(body.remark, "Remark", { required: false });
 
-    return await performLeadAction(ideaIdParam, user, {
-        allowedStatuses: [IdeaStatus.IN_IMPLEMENTATION],
-        statusError: "Only ideas In Implementation can be marked as implemented.",
-        action: IdeaAction.IMPLEMENTED,
-        apply: async (transaction, idea, leadId) => ({
-            updated: await ideaModel.markImplemented(transaction, { ideaId: idea.IdeaID, leadId, remark }),
-            logRemark: remark,
-        }),
-    });
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.markImplemented, async (transaction, idea, base) => ({
+        updated: await ideaModel.markImplemented(transaction, { ...base, remark }),
+        logRemark: remark,
+    }));
 };
 
 /**
- * Extend Timeline (Accepted / In Implementation, only when overdue).
+ * Extend Timeline (Active / In Implementation, only when overdue).
  * Status does not change.
  */
 const extendTimeline = async (ideaIdParam, body = {}, user) => {
     const additionalDays = parseDays(body.additionalDays, "Additional days");
     const reason = parseRemark(body.reason, "Reason", { required: true });
 
-    return await performLeadAction(ideaIdParam, user, {
-        allowedStatuses: [IdeaStatus.ACCEPTED, IdeaStatus.IN_IMPLEMENTATION],
-        statusError: "The timeline can only be extended on Accepted or In Implementation ideas.",
-        action: IdeaAction.TIMELINE_EXTENDED,
-        apply: async (transaction, idea, leadId) => {
-            if (!idea.IsOverdue) {
-                throw new AppError(
-                    `The timeline can only be extended once the idea is overdue. Current target date: ${formatDate(idea.TargetDate)}.`,
-                    StatusCodes.CONFLICT
-                );
-            }
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.extendTimeline, async (transaction, idea, base) => {
+        if (!idea.IsOverdue) {
+            throw new AppError(
+                `The timeline can only be extended once the idea is overdue. Current target date: ${formatDate(idea.TargetDate)}.`,
+                StatusCodes.CONFLICT
+            );
+        }
 
-            // New target = TargetDate + additionalDays, which must be today or
-            // later, i.e. additionalDays >= days the target has already passed.
-            const minimumDays = idea.DaysPastTarget;
+        // New target = TargetDate + additionalDays, which must be today or
+        // later, i.e. additionalDays >= days the target has already passed.
+        const minimumDays = idea.DaysPastTarget;
 
-            if (additionalDays < minimumDays) {
-                throw new AppError("Validation failed.", StatusCodes.BAD_REQUEST, [
-                    `Extending by ${pluralDays(additionalDays)} still leaves the target date in the past. ` +
-                    `Add at least ${pluralDays(minimumDays)} so the new target date is today or later.`,
-                ]);
-            }
+        if (additionalDays < minimumDays) {
+            throw new AppError("Validation failed.", StatusCodes.BAD_REQUEST, [
+                `Extending by ${pluralDays(additionalDays)} still leaves the target date in the past. ` +
+                `Add at least ${pluralDays(minimumDays)} so the new target date is today or later.`,
+            ]);
+        }
 
-            const updated = await ideaModel.extendTimeline(transaction, {
-                ideaId: idea.IdeaID,
-                leadId,
-                additionalDays,
-                remark: reason,
-                fromStatus: idea.Status,
-            });
+        const updated = await ideaModel.extendTimeline(transaction, {
+            ...base,
+            // Only the status that was just read, so the status can't change underneath.
+            fromStatuses: [idea.Status],
+            additionalDays,
+            remark: reason,
+        });
 
-            return {
-                updated,
-                logRemark: updated
-                    ? `Extended by ${pluralDays(additionalDays)}. New target date: ${formatDate(updated.TargetDate)}. Reason: ${reason}`
-                    : null,
-            };
-        },
+        return {
+            updated,
+            logRemark: updated
+                ? `Extended by ${pluralDays(additionalDays)}. New target date: ${formatDate(updated.TargetDate)}. Reason: ${reason}`
+                : null,
+        };
     });
 };
 
@@ -731,11 +784,12 @@ const getAllIdeaFilterOptions = async (user) => {
 };
 
 /**
- * Get Ideas Assigned To Me (logged-in user is the lead)
+ * Get Ideas Assigned To Me (logged-in user is the reporting manager or the
+ * final approver). IsPendingWithMe ideas come first.
  */
 const getAssignedIdeas = async (user) => {
     const pool = await poolPromise;
-    return await ideaModel.getIdeasByLead(pool, user.userId);
+    return await ideaModel.getAssignedIdeas(pool, user.userId);
 };
 
 /**
@@ -756,6 +810,7 @@ const getMyIdeas = async (user, status) => {
 module.exports = {
     getPurposes,
     getLeadOptions,
+    getFinalApproverOptions,
     getIdeaById,
     createDraft,
     updateDraft,
@@ -767,8 +822,10 @@ module.exports = {
     getTeamIdeaFilterOptions,
     getAllIdeas,
     getAllIdeaFilterOptions,
-    acceptIdea,
-    rejectIdea,
+    managerApprove,
+    managerReject,
+    finalApprove,
+    finalReject,
     startImplementation,
     markImplemented,
     extendTimeline,

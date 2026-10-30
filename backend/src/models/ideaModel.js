@@ -1,10 +1,11 @@
 const { sql } = require("../config/db");
-const { IDEA_OVERDUE_STATUSES, IDEA_LEAD_ROLES } = require("../constants/ideaConstants");
+const { IDEA_OVERDUE_STATUSES, IDEA_LEAD_ROLES, IdeaActor } = require("../constants/ideaConstants");
 
 /**
  * ============================================================
  * Idea Model
- * SQL for dbo.Ideas and dbo.IdeaActivityLog.
+ * SQL for dbo.Ideas and dbo.IdeaActivityLog (dbo.IdeaFinalApprovers is
+ * only read).
  *
  * Every function takes `db`: either a resolved pool or an open
  * sql.Transaction (both expose .request()).
@@ -20,7 +21,7 @@ const OVERDUE_STATUS_LIST = IDEA_OVERDUE_STATUSES.map((s) => `N'${s}'`).join(", 
 
 const LEAD_ROLE_LIST = IDEA_LEAD_ROLES.map((r) => `N'${r}'`).join(", ");
 
-// Overdue: Accepted / In Implementation and TargetDate before today (dates
+// Overdue: Active / In Implementation and TargetDate before today (dates
 // only). The single definition used by every query below.
 const IS_OVERDUE = `
     CAST(CASE
@@ -40,8 +41,8 @@ const DAYS_REMAINING = `
 `;
 
 /**
- * Active users with a lead role for the Lead dropdown, excluding the
- * logged-in user
+ * Active users with a lead role for the Reporting Manager dropdown,
+ * excluding the logged-in user
  */
 const getLeadOptions = async (db, excludeUserId) => {
 
@@ -84,6 +85,56 @@ const getLeadUser = async (db, userId) => {
     return result.recordset[0] || null;
 };
 
+// Active final approvers who are also active users.
+const ACTIVE_FINAL_APPROVERS_FROM = `
+    FROM dbo.IdeaFinalApprovers fa
+    INNER JOIN dbo.Users u
+        ON u.UserID = fa.UserID
+    LEFT JOIN dbo.Departments d
+        ON d.DepartmentID = u.DepartmentID
+    WHERE fa.IsActive = 1
+      AND u.IsActive = 1
+`;
+
+/**
+ * Active final approvers for the manager's approve dropdown, by
+ * DisplayOrder (blank last) then name
+ */
+const getFinalApproverOptions = async (db) => {
+
+    const result = await db.request().query(`
+        SELECT
+            u.UserID,
+            ${fullName("u")} AS FullName,
+            u.Designation,
+            d.DepartmentName
+        ${ACTIVE_FINAL_APPROVERS_FROM}
+        ORDER BY
+            CASE WHEN fa.DisplayOrder IS NULL THEN 1 ELSE 0 END,
+            fa.DisplayOrder,
+            u.FirstName,
+            u.LastName;
+    `);
+
+    return result.recordset;
+};
+
+/**
+ * Active final approver by user id, or null
+ */
+const getActiveFinalApprover = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            SELECT u.UserID, ${fullName("u")} AS FullName
+            ${ACTIVE_FINAL_APPROVERS_FROM}
+              AND fa.UserID = @UserID;
+        `);
+
+    return result.recordset[0] || null;
+};
+
 /**
  * Raw idea row. Pass `lock = true` inside a transaction to hold an update
  * lock on the row until commit (stops two submits of the same idea racing).
@@ -101,6 +152,7 @@ const getIdeaRow = async (db, ideaId, lock = false) => {
                 i.Description,
                 i.Purpose,
                 i.AssignedLeadID,
+                i.FinalApproverID,
                 i.Status,
                 i.TimelineDays,
                 i.TargetDate,
@@ -240,6 +292,8 @@ const getIdeasByUser = async (db, userId, status) => {
                 i.Status,
                 i.AssignedLeadID,
                 ${fullName("lead")} AS LeadName,
+                i.FinalApproverID,
+                ${fullName("finalApprover")} AS FinalApproverName,
                 i.TargetDate,
                 ${IS_OVERDUE} AS IsOverdue,
                 i.SubmittedDate,
@@ -248,6 +302,8 @@ const getIdeasByUser = async (db, userId, status) => {
             FROM dbo.Ideas i
             LEFT JOIN dbo.Users lead
                 ON lead.UserID = i.AssignedLeadID
+            LEFT JOIN dbo.Users finalApprover
+                ON finalApprover.UserID = i.FinalApproverID
             WHERE i.UserID = @UserID
               AND (@Status IS NULL OR i.Status = @Status)
             ORDER BY i.CreatedDate DESC, i.IdeaID DESC;
@@ -257,12 +313,14 @@ const getIdeasByUser = async (db, userId, status) => {
 };
 
 /**
- * Ideas where the user is the lead (Drafts excluded), newest submission first
+ * Ideas where the user is the reporting manager (lead) or the final approver
+ * (Drafts excluded). Ideas waiting for the user's decision come first, oldest
+ * submission first; then the rest, newest submission first.
  */
-const getIdeasByLead = async (db, leadId) => {
+const getAssignedIdeas = async (db, userId) => {
 
     const result = await db.request()
-        .input("LeadID", sql.Int, leadId)
+        .input("UserID", sql.Int, userId)
         .query(`
             SELECT
                 i.IdeaID,
@@ -272,20 +330,42 @@ const getIdeasByLead = async (db, leadId) => {
                 i.UserID AS SubmittedByID,
                 ${fullName("submitter")} AS SubmitterName,
                 submitterDept.DepartmentName AS SubmitterDepartment,
+                i.AssignedLeadID,
+                ${fullName("lead")} AS LeadName,
+                i.FinalApproverID,
+                ${fullName("finalApprover")} AS FinalApproverName,
                 i.SubmittedDate,
                 i.Status,
                 i.TimelineDays,
                 i.TargetDate,
                 ${IS_OVERDUE} AS IsOverdue,
-                ${DAYS_REMAINING} AS DaysRemaining
+                ${DAYS_REMAINING} AS DaysRemaining,
+                CAST(CASE WHEN i.AssignedLeadID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsLead,
+                CAST(CASE WHEN i.FinalApproverID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsFinalApprover,
+                pending.IsPendingWithMe
             FROM dbo.Ideas i
             INNER JOIN dbo.Users submitter
                 ON submitter.UserID = i.UserID
             LEFT JOIN dbo.Departments submitterDept
                 ON submitterDept.DepartmentID = submitter.DepartmentID
-            WHERE i.AssignedLeadID = @LeadID
+            LEFT JOIN dbo.Users lead
+                ON lead.UserID = i.AssignedLeadID
+            LEFT JOIN dbo.Users finalApprover
+                ON finalApprover.UserID = i.FinalApproverID
+            CROSS APPLY (
+                SELECT CAST(CASE
+                    WHEN i.Status = N'Submitted' AND i.AssignedLeadID = @UserID THEN 1
+                    WHEN i.Status = N'Pending Final Approval' AND i.FinalApproverID = @UserID THEN 1
+                    ELSE 0
+                END AS BIT) AS IsPendingWithMe
+            ) pending
+            WHERE (i.AssignedLeadID = @UserID OR i.FinalApproverID = @UserID)
               AND i.Status <> N'Draft'
-            ORDER BY i.SubmittedDate DESC, i.IdeaID DESC;
+            ORDER BY
+                pending.IsPendingWithMe DESC,
+                CASE WHEN pending.IsPendingWithMe = 1 THEN i.SubmittedDate END ASC,
+                i.SubmittedDate DESC,
+                i.IdeaID DESC;
         `);
 
     return result.recordset;
@@ -326,6 +406,10 @@ const IDEA_LIST_FROM = `
         ON lead.UserID = i.AssignedLeadID
     LEFT JOIN dbo.Departments leadDept
         ON leadDept.DepartmentID = lead.DepartmentID
+    LEFT JOIN dbo.Users finalApprover
+        ON finalApprover.UserID = i.FinalApproverID
+    LEFT JOIN dbo.Departments finalApproverDept
+        ON finalApproverDept.DepartmentID = finalApprover.DepartmentID
 `;
 
 // LIKE pattern for a literal substring (escapes %, _ and [).
@@ -440,6 +524,9 @@ const searchIdeas = async (db, { scope, viewerId, filters, sortBy, sortDir, page
                 i.AssignedLeadID,
                 ${fullName("lead")} AS LeadName,
                 leadDept.DepartmentName AS LeadDepartment,
+                i.FinalApproverID,
+                ${fullName("finalApprover")} AS FinalApproverName,
+                finalApproverDept.DepartmentName AS FinalApproverDepartment,
                 i.SubmittedDate,
                 i.Status,
                 i.TargetDate,
@@ -549,16 +636,38 @@ const getIdeaListFilterOptions = async (db, { scope, viewerId }) => {
 };
 
 /**
- * Lead actions. Each UPDATE is guarded by the lead and the expected current
- * status, so it changes nothing (returns null) if either no longer holds.
- * `remark` replaces Remarks only when given. Returns the updated
+ * ------------------------------------------------------------
+ * Status changes (rules in IDEA_TRANSITIONS)
+ * ------------------------------------------------------------
+ */
+
+// Column holding each actor's user id.
+const ACTOR_COLUMNS = {
+    [IdeaActor.MANAGER]: "AssignedLeadID",
+    [IdeaActor.FINAL_APPROVER]: "FinalApproverID",
+};
+
+/**
+ * Apply a transition. The UPDATE is guarded by the actor's column and the
+ * expected current status, so it changes nothing (returns null) if either no
+ * longer holds. `fromStatuses` defaults to transition.from. `remark` replaces
+ * Remarks only when given. Returns the updated
  * { Status, TimelineDays, TargetDate }.
  */
-const runLeadUpdate = async (db, { ideaId, leadId, fromStatuses, remark, setClause, inputs = {} }) => {
+const applyTransition = async (db, {
+    transition,
+    ideaId,
+    actorId,
+    fromStatuses = transition.from,
+    remark,
+    setClause,
+    inputs = {},
+}) => {
 
     const request = db.request()
         .input("IdeaID", sql.Int, ideaId)
-        .input("LeadID", sql.Int, leadId)
+        .input("ActorID", sql.Int, actorId)
+        .input("ToStatus", sql.NVarChar(30), transition.to)
         .input("Remark", sql.NVarChar(1000), remark || null);
 
     const statusParams = fromStatuses.map((status, index) => {
@@ -568,90 +677,108 @@ const runLeadUpdate = async (db, { ideaId, leadId, fromStatuses, remark, setClau
 
     Object.entries(inputs).forEach(([name, [type, value]]) => request.input(name, type, value));
 
+    // A null `to` (Extend Timeline) leaves the status as it is.
+    const setClauses = [
+        transition.to ? "Status = @ToStatus" : null,
+        setClause && setClause.trim(),
+        "Remarks = ISNULL(@Remark, Remarks)",
+        "ModifiedDate = SYSDATETIME()",
+    ].filter(Boolean);
+
     const result = await request.query(`
         UPDATE dbo.Ideas
         SET
-            ${setClause},
-            Remarks = ISNULL(@Remark, Remarks),
-            ModifiedDate = SYSDATETIME()
+            ${setClauses.join(",\n            ")}
         OUTPUT INSERTED.Status, INSERTED.TimelineDays, INSERTED.TargetDate
         WHERE IdeaID = @IdeaID
-          AND AssignedLeadID = @LeadID
+          AND ${ACTOR_COLUMNS[transition.actor]} = @ActorID
           AND Status IN (${statusParams.join(", ")});
     `);
 
     return result.recordset[0] || null;
 };
 
-// Submitted -> Accepted. TargetDate (computed) = TimelineSetDate + TimelineDays = today + days.
-const acceptIdea = (db, { ideaId, leadId, timelineDays, remark }) =>
-    runLeadUpdate(db, {
-        ideaId,
-        leadId,
-        remark,
-        fromStatuses: ["Submitted"],
-        inputs: { TimelineDays: [sql.Int, timelineDays] },
+// Submitted -> Pending Final Approval. TargetDate stays empty until the
+// final approver approves (TimelineSetDate is set then).
+const managerApprove = (db, { finalApproverId, timelineDays, ...options }) =>
+    applyTransition(db, {
+        ...options,
+        inputs: {
+            FinalApproverID: [sql.Int, finalApproverId],
+            TimelineDays: [sql.Int, timelineDays],
+        },
         setClause: `
-            Status = N'Accepted',
+            FinalApproverID = @FinalApproverID,
             TimelineDays = @TimelineDays,
-            TimelineSetDate = ${TODAY},
-            ReviewedBy = @LeadID,
+            TimelineSetDate = NULL,
+            ManagerActionDate = SYSDATETIME(),
+            ReviewedBy = @ActorID,
             ReviewedDate = SYSDATETIME()
         `,
     });
 
-// Submitted -> Rejected.
-const rejectIdea = (db, { ideaId, leadId, remark }) =>
-    runLeadUpdate(db, {
-        ideaId,
-        leadId,
-        remark,
-        fromStatuses: ["Submitted"],
+// Submitted -> Rejected by the reporting manager.
+const managerReject = (db, { rejectedStage, ...options }) =>
+    applyTransition(db, {
+        ...options,
+        inputs: { RejectedStage: [sql.NVarChar(20), rejectedStage] },
         setClause: `
-            Status = N'Rejected',
-            ReviewedBy = @LeadID,
+            RejectedStage = @RejectedStage,
+            ManagerActionDate = SYSDATETIME(),
+            ReviewedBy = @ActorID,
             ReviewedDate = SYSDATETIME()
         `,
     });
 
-// Accepted -> In Implementation.
-const startImplementation = (db, { ideaId, leadId, remark }) =>
-    runLeadUpdate(db, {
-        ideaId,
-        leadId,
-        remark,
-        fromStatuses: ["Accepted"],
-        setClause: `Status = N'In Implementation'`,
+// Pending Final Approval -> Active. TargetDate (computed) =
+// TimelineSetDate + TimelineDays = today + days.
+const finalApprove = (db, options) =>
+    applyTransition(db, {
+        ...options,
+        setClause: `
+            TimelineSetDate = ${TODAY},
+            FinalActionDate = SYSDATETIME(),
+            ReviewedBy = @ActorID,
+            ReviewedDate = SYSDATETIME()
+        `,
     });
+
+// Pending Final Approval -> Rejected by the final approver.
+const finalReject = (db, { rejectedStage, ...options }) =>
+    applyTransition(db, {
+        ...options,
+        inputs: { RejectedStage: [sql.NVarChar(20), rejectedStage] },
+        setClause: `
+            RejectedStage = @RejectedStage,
+            FinalActionDate = SYSDATETIME(),
+            ReviewedBy = @ActorID,
+            ReviewedDate = SYSDATETIME()
+        `,
+    });
+
+// Active -> In Implementation.
+const startImplementation = (db, options) => applyTransition(db, options);
 
 // In Implementation -> Implemented.
-const markImplemented = (db, { ideaId, leadId, remark }) =>
-    runLeadUpdate(db, {
-        ideaId,
-        leadId,
-        remark,
-        fromStatuses: ["In Implementation"],
-        setClause: `
-            Status = N'Implemented',
-            ImplementedDate = SYSDATETIME()
-        `,
+const markImplemented = (db, options) =>
+    applyTransition(db, {
+        ...options,
+        setClause: "ImplementedDate = SYSDATETIME()",
     });
 
 // Status unchanged. Adding to TimelineDays moves the computed TargetDate by
 // the same number of days.
-const extendTimeline = (db, { ideaId, leadId, additionalDays, remark, fromStatus }) =>
-    runLeadUpdate(db, {
-        ideaId,
-        leadId,
-        remark,
-        fromStatuses: [fromStatus],
+const extendTimeline = (db, { additionalDays, ...options }) =>
+    applyTransition(db, {
+        ...options,
         inputs: { AdditionalDays: [sql.Int, additionalDays] },
-        setClause: `TimelineDays = TimelineDays + @AdditionalDays`,
+        setClause: "TimelineDays = TimelineDays + @AdditionalDays",
     });
 
 /**
- * Full idea details with submitter / lead / reviewer names. Also returns
- * the submitter's current reporting manager, used for the access check.
+ * Full idea details with submitter / lead / final approver / reviewer names.
+ * Also returns the submitter's current reporting manager, used for the
+ * access check.
  */
 const getIdeaDetails = async (db, ideaId) => {
 
@@ -673,15 +800,25 @@ const getIdeaDetails = async (db, ideaId) => {
                 i.AssignedLeadID,
                 ${fullName("lead")} AS LeadName,
                 leadDept.DepartmentName AS LeadDepartment,
+                i.FinalApproverID,
+                ${fullName("finalApprover")} AS FinalApproverName,
+                finalApproverDept.DepartmentName AS FinalApproverDepartment,
                 i.TimelineDays,
                 i.TimelineSetDate,
-                -- Set to the accept date by the lead's Accept action
-                CAST(i.TimelineSetDate AS DATE) AS AcceptedDate,
+                -- Set by the final approval; the target date counts from it
+                CAST(i.TimelineSetDate AS DATE) AS ActiveDate,
                 i.TargetDate,
                 ${IS_OVERDUE} AS IsOverdue,
                 ${DAYS_REMAINING} AS DaysRemaining,
                 i.Remarks,
                 i.Status,
+                i.ManagerActionDate,
+                i.FinalActionDate,
+                i.RejectedStage,
+                CASE i.RejectedStage
+                    WHEN N'Manager' THEN ${fullName("lead")}
+                    WHEN N'Final' THEN ${fullName("finalApprover")}
+                END AS RejectedByName,
                 i.SubmittedDate,
                 i.ReviewedBy,
                 ${fullName("reviewer")} AS ReviewedByName,
@@ -698,6 +835,10 @@ const getIdeaDetails = async (db, ideaId) => {
                 ON lead.UserID = i.AssignedLeadID
             LEFT JOIN dbo.Departments leadDept
                 ON leadDept.DepartmentID = lead.DepartmentID
+            LEFT JOIN dbo.Users finalApprover
+                ON finalApprover.UserID = i.FinalApproverID
+            LEFT JOIN dbo.Departments finalApproverDept
+                ON finalApproverDept.DepartmentID = finalApprover.DepartmentID
             LEFT JOIN dbo.Users reviewer
                 ON reviewer.UserID = i.ReviewedBy
             WHERE i.IdeaID = @IdeaID;
@@ -736,6 +877,8 @@ const getIdeaActivity = async (db, ideaId) => {
 module.exports = {
     getLeadOptions,
     getLeadUser,
+    getFinalApproverOptions,
+    getActiveFinalApprover,
     getIdeaRow,
     insertDraftIdea,
     updateDraftIdea,
@@ -743,13 +886,16 @@ module.exports = {
     markIdeaSubmitted,
     insertActivity,
     getIdeasByUser,
-    getIdeasByLead,
+    getAssignedIdeas,
     IDEA_SORT_COLUMNS,
     searchIdeas,
     hasDirectReports,
     getIdeaListFilterOptions,
-    acceptIdea,
-    rejectIdea,
+    ACTOR_COLUMNS,
+    managerApprove,
+    managerReject,
+    finalApprove,
+    finalReject,
     startImplementation,
     markImplemented,
     extendTimeline,

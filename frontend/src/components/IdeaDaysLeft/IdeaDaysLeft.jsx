@@ -1,7 +1,7 @@
 import { formatDays } from "../../utils/ideaStatus";
 
 // "Days Left" cell for idea tables. DaysRemaining is only set by the backend
-// for Accepted / In Implementation ideas, so anything else shows "—".
+// for Active / In Implementation ideas, so anything else shows "—".
 export default function IdeaDaysLeft({ idea }) {
   if (idea.IsOverdue) {
     return (

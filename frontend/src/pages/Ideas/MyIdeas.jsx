@@ -19,7 +19,8 @@ const COUNT_BOXES = [
   { label: "Total", status: "" },
   { label: "Drafts", status: "Draft" },
   { label: "Submitted", status: "Submitted" },
-  { label: "Accepted", status: "Accepted" },
+  { label: "Pending Final Approval", status: "Pending Final Approval" },
+  { label: "Active", status: "Active" },
   { label: "In Implementation", status: "In Implementation" },
   { label: "Implemented", status: "Implemented" },
   { label: "Rejected", status: "Rejected" },
@@ -181,7 +182,7 @@ const MyIdeas = () => {
           activeKey={status}
           loading={loading}
           onSelect={changeStatus}
-          gridClassName="grid-cols-2 sm:grid-cols-4 lg:grid-cols-7"
+          gridClassName="grid-cols-2 sm:grid-cols-4 lg:grid-cols-8"
         />
 
         {/* Filters */}
@@ -260,7 +261,7 @@ const MyIdeas = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50/75">
                 <tr>
-                  {["Idea No.", "Title", "Purpose", "Lead", "Submitted Date", "Target Date", "Status"].map(
+                  {["Idea No.", "Title", "Purpose", "Reporting Manager", "Submitted Date", "Target Date", "Status"].map(
                     (heading) => (
                       <th
                         key={heading}

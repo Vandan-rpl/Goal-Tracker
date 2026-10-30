@@ -9,7 +9,8 @@ const { verifyToken } = require("../middleware/authMiddleware");
  * Idea Routes
  * Base URL : /api/v1/ideas
  * ============================================================
- * Fixed paths (/purposes, /leads, /my, /assigned, /team, /all) are declared before
+ * Fixed paths (/purposes, /leads, /final-approvers, /my, /assigned, /team,
+ * /all) are declared before
  * /:ideaId so they aren't captured as an id.
  */
 
@@ -24,13 +25,24 @@ router.get(
 );
 
 /**
- * Get Lead Options (active Managers and HODs except the logged-in user)
+ * Get Reporting Manager Options (active Managers and HODs except the
+ * logged-in user)
  * GET /api/v1/ideas/leads
  */
 router.get(
     "/leads",
     verifyToken,
     ideaController.getLeadOptions
+);
+
+/**
+ * Get Final Approver Options (active rows of dbo.IdeaFinalApprovers)
+ * GET /api/v1/ideas/final-approvers
+ */
+router.get(
+    "/final-approvers",
+    verifyToken,
+    ideaController.getFinalApproverOptions
 );
 
 /**
@@ -44,7 +56,8 @@ router.get(
 );
 
 /**
- * Get Ideas Assigned To Me (logged-in user is the lead)
+ * Get Ideas Assigned To Me (logged-in user is the reporting manager or the
+ * final approver)
  * GET /api/v1/ideas/assigned
  */
 router.get(
@@ -147,32 +160,53 @@ router.post(
 
 /**
  * ------------------------------------------------------------
- * Lead actions (only the idea's lead; status checked in the service)
+ * Approval and implementation actions (who may act and from which
+ * status: IDEA_TRANSITIONS, checked in the service)
  * ------------------------------------------------------------
  */
 
 /**
- * Accept Idea (Submitted -> Accepted)
- * POST /api/v1/ideas/:ideaId/accept
+ * Manager Approve (Submitted -> Pending Final Approval)
+ * POST /api/v1/ideas/:ideaId/manager-approve
  */
 router.post(
-    "/:ideaId/accept",
+    "/:ideaId/manager-approve",
     verifyToken,
-    ideaController.acceptIdea
+    ideaController.managerApprove
 );
 
 /**
- * Reject Idea (Submitted -> Rejected)
- * POST /api/v1/ideas/:ideaId/reject
+ * Manager Reject (Submitted -> Rejected)
+ * POST /api/v1/ideas/:ideaId/manager-reject
  */
 router.post(
-    "/:ideaId/reject",
+    "/:ideaId/manager-reject",
     verifyToken,
-    ideaController.rejectIdea
+    ideaController.managerReject
 );
 
 /**
- * Start Implementation (Accepted -> In Implementation)
+ * Final Approve (Pending Final Approval -> Active)
+ * POST /api/v1/ideas/:ideaId/final-approve
+ */
+router.post(
+    "/:ideaId/final-approve",
+    verifyToken,
+    ideaController.finalApprove
+);
+
+/**
+ * Final Reject (Pending Final Approval -> Rejected)
+ * POST /api/v1/ideas/:ideaId/final-reject
+ */
+router.post(
+    "/:ideaId/final-reject",
+    verifyToken,
+    ideaController.finalReject
+);
+
+/**
+ * Start Implementation (Active -> In Implementation)
  * POST /api/v1/ideas/:ideaId/start-implementation
  */
 router.post(
@@ -192,7 +226,7 @@ router.post(
 );
 
 /**
- * Extend Timeline (Accepted / In Implementation, only when overdue)
+ * Extend Timeline (Active / In Implementation, only when overdue)
  * POST /api/v1/ideas/:ideaId/extend-timeline
  */
 router.post(

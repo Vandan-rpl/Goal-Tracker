@@ -2,9 +2,8 @@
 export const IDEA_STATUSES = [
   "Draft",
   "Submitted",
-  "Under Review",
-  "Accepted",
-  "On Hold",
+  "Pending Final Approval",
+  "Active",
   "In Implementation",
   "Implemented",
   "Rejected",
@@ -13,9 +12,8 @@ export const IDEA_STATUSES = [
 const IDEA_STATUS_CLASSES = {
   Draft: "bg-gray-100 text-gray-700",
   Submitted: "bg-blue-100 text-blue-800",
-  "Under Review": "bg-indigo-100 text-indigo-800",
-  Accepted: "bg-teal-100 text-teal-800",
-  "On Hold": "bg-amber-100 text-amber-800",
+  "Pending Final Approval": "bg-indigo-100 text-indigo-800",
+  Active: "bg-teal-100 text-teal-800",
   "In Implementation": "bg-orange-100 text-orange-800",
   Implemented: "bg-emerald-100 text-emerald-800",
   Rejected: "bg-red-100 text-red-800",
@@ -64,10 +62,16 @@ export const formatIdeaDateTime = (value) => {
 };
 
 // Values written to IdeaActivityLog.Action, with their timeline label and
-// dot color. Unknown actions are shown as-is with a grey dot.
+// dot color. Unknown actions are shown as-is with a grey dot. ACCEPTED,
+// REJECTED and ON_HOLD are no longer written but stay readable in the
+// history of older ideas.
 export const IDEA_ACTIONS = {
   CREATED: "Created",
   SUBMITTED: "Submitted",
+  MANAGER_APPROVED: "Manager Approved",
+  MANAGER_REJECTED: "Manager Rejected",
+  FINAL_APPROVED: "Final Approved",
+  FINAL_REJECTED: "Final Rejected",
   ACCEPTED: "Accepted",
   REJECTED: "Rejected",
   ON_HOLD: "On Hold",
@@ -78,7 +82,11 @@ export const IDEA_ACTIONS = {
 
 const IDEA_ACTION_DISPLAY = {
   [IDEA_ACTIONS.CREATED]: { label: "Draft Created", dot: "bg-gray-400" },
-  [IDEA_ACTIONS.SUBMITTED]: { label: "Submitted", dot: "bg-blue-500" },
+  [IDEA_ACTIONS.SUBMITTED]: { label: "Submitted to Reporting Manager", dot: "bg-blue-500" },
+  [IDEA_ACTIONS.MANAGER_APPROVED]: { label: "Approved by Reporting Manager", dot: "bg-indigo-500" },
+  [IDEA_ACTIONS.MANAGER_REJECTED]: { label: "Rejected by Reporting Manager", dot: "bg-red-500" },
+  [IDEA_ACTIONS.FINAL_APPROVED]: { label: "Final Approval Given", dot: "bg-teal-500" },
+  [IDEA_ACTIONS.FINAL_REJECTED]: { label: "Rejected by Final Approver", dot: "bg-red-500" },
   [IDEA_ACTIONS.ACCEPTED]: { label: "Accepted", dot: "bg-teal-500" },
   [IDEA_ACTIONS.REJECTED]: { label: "Rejected", dot: "bg-red-500" },
   [IDEA_ACTIONS.ON_HOLD]: { label: "On Hold", dot: "bg-amber-500" },

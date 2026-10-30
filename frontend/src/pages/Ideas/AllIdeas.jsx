@@ -10,8 +10,8 @@ const EXTRA_FILTERS = [
   },
   {
     param: "leadId",
-    label: "Lead",
-    allLabel: "All Leads",
+    label: "Reporting Manager",
+    allLabel: "All Reporting Managers",
     getOptions: (options) =>
       (options.leads || []).map((lead) => ({
         value: String(lead.UserID),

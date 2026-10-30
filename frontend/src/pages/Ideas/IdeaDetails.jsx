@@ -136,6 +136,7 @@ const IdeaDetails = () => {
     (entry) => entry.Action === IDEA_ACTIONS.TIMELINE_EXTENDED,
   ).length;
   const isRejected = idea.Status === "Rejected";
+  const canAct = idea.IsLead || idea.IsFinalApprover;
 
   return (
     <div className="flex-1 bg-slate-50 min-h-screen overflow-y-auto py-10 px-4 sm:px-6 lg:px-8 text-slate-800">
@@ -176,22 +177,39 @@ const IdeaDetails = () => {
                 <PersonValue name={idea.SubmitterName} department={idea.SubmitterDepartment} />
               </InfoItem>
               <InfoItem label="Purpose">{idea.Purpose || "—"}</InfoItem>
-              <InfoItem label="Lead">
+              <InfoItem label="Reporting Manager">
                 <PersonValue name={idea.LeadName} department={idea.LeadDepartment} />
               </InfoItem>
+              {idea.FinalApproverID && (
+                <InfoItem label="Final Approver">
+                  <PersonValue name={idea.FinalApproverName} department={idea.FinalApproverDepartment} />
+                </InfoItem>
+              )}
               <InfoItem label="Submitted Date">{formatIdeaDate(idea.SubmittedDate)}</InfoItem>
-              <InfoItem label="Accepted Date">{formatIdeaDate(idea.AcceptedDate)}</InfoItem>
               <InfoItem label="Timeline (Days)">{idea.TimelineDays ?? "—"}</InfoItem>
-              <InfoItem label="Target Date">
-                <span className="flex flex-wrap items-center gap-2">
-                  {formatIdeaDate(idea.TargetDate)}
-                  {extensionCount > 0 && (
-                    <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                      Extended {extensionCount} {extensionCount === 1 ? "time" : "times"}
+              {idea.TargetDate && (
+                <>
+                  <InfoItem label="Final Approval Date">{formatIdeaDate(idea.ActiveDate)}</InfoItem>
+                  <InfoItem label="Target Date">
+                    <span className="flex flex-wrap items-center gap-2">
+                      {formatIdeaDate(idea.TargetDate)}
+                      {extensionCount > 0 && (
+                        <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                          Extended {extensionCount} {extensionCount === 1 ? "time" : "times"}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              </InfoItem>
+                  </InfoItem>
+                </>
+              )}
+              {isRejected && idea.RejectedStage && (
+                <>
+                  <InfoItem label="Rejected At">
+                    {idea.RejectedStage === "Final" ? "Final Approval" : "Reporting Manager Review"}
+                  </InfoItem>
+                  <InfoItem label="Rejected By">{idea.RejectedByName || "—"}</InfoItem>
+                </>
+              )}
               {idea.Status === "Implemented" && (
                 <InfoItem label="Implemented Date">{formatIdeaDate(idea.ImplementedDate)}</InfoItem>
               )}
@@ -250,9 +268,11 @@ const IdeaDetails = () => {
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">by {entry.ActionByName || "Unknown"}</p>
 
-                      {/* The backend writes the days into the remark: Accepted =
-                          "Timeline: N days. ...", Timeline Extended = "Extended by
-                          N days. New target date: ... Reason: ..." */}
+                      {/* The backend writes the details into the remark: Manager
+                          Approved = "Final approver: ... Timeline: N days. ...",
+                          Final Approved = "Target date: ... ...", Timeline
+                          Extended = "Extended by N days. New target date: ...
+                          Reason: ..." */}
                       {entry.Remark && (
                         <p className="text-sm text-slate-700 mt-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 whitespace-pre-wrap break-words">
                           {entry.Remark}
@@ -265,10 +285,12 @@ const IdeaDetails = () => {
             )}
           </section>
 
-          {/* Lead Actions: only for the idea's lead */}
-          {idea.IsLead && (
+          {/* Actions: only for the idea's reporting manager or final approver */}
+          {canAct && (
             <section className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-5 space-y-3">
-              <h2 className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Lead Actions</h2>
+              <h2 className="text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                {idea.IsFinalApprover && !idea.IsLead ? "Final Approver Actions" : "Your Actions"}
+              </h2>
               <IdeaLeadActions
                 idea={idea}
                 onUpdated={(updatedIdea, message) => {

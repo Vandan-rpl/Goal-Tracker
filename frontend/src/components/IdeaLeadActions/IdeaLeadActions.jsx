@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ConfirmDialog from "../ConfirmDialog/ConfirmDialog";
+import SearchableSelect from "../SearchableSelect/SearchableSelect";
 import {
-  acceptIdea,
   extendIdeaTimeline,
+  finalApproveIdea,
+  finalRejectIdea,
   getIdeaApiError,
+  getIdeaFinalApprovers,
+  managerApproveIdea,
+  managerRejectIdea,
   markIdeaImplemented,
-  rejectIdea,
   startIdeaImplementation,
 } from "../../services/ideaService";
 import {
@@ -31,37 +35,66 @@ const BUTTON_STYLES = {
   warning: "bg-white hover:bg-amber-50 text-amber-800 border border-amber-300",
 };
 
-// Each lead action: its button, dialog fields and API call.
-//   days   -> number input (1-365), sent as `daysParam`
-//   remark -> textarea, sent as `remarkParam`
+const REJECT_REMARK = {
+  label: "Reason for rejection",
+  required: true,
+  helper: "Please explain why the idea is being rejected; the submitter will see this.",
+};
+
+// Each action: its button, dialog fields and API call.
+//   finalApprover -> final approver dropdown
+//   days          -> number input (1-365)
+//   remark        -> textarea
 const ACTIONS = {
-  accept: {
-    label: "Accept",
+  managerApprove: {
+    label: "Approve",
     buttonStyle: "primary",
-    title: "Accept idea",
-    message: "Set how many days the implementation needs. The target date is counted from today.",
+    title: "Approve idea",
+    message:
+      "Choose the final approver and set how many days the implementation needs. The target date is counted from the day the final approver approves.",
+    finalApprover: { label: "Final approver" },
     days: { label: "Timeline (days)" },
     remark: { label: "Remark", required: false, placeholder: "Optional note for the submitter" },
-    confirmLabel: "Accept",
-    busyLabel: "Accepting...",
+    confirmLabel: "Approve",
+    busyLabel: "Approving...",
     tone: "success",
-    successMessage: "Idea accepted.",
-    submit: (ideaId, { days, remark }) => acceptIdea(ideaId, { timelineDays: days, remark }),
+    successMessage: "Idea approved and sent for final approval.",
+    submit: (ideaId, { finalApproverId, days, remark }) =>
+      managerApproveIdea(ideaId, { finalApproverId, timelineDays: days, remark }),
   },
-  reject: {
+  managerReject: {
     label: "Reject",
     buttonStyle: "danger",
     title: "Reject idea",
-    remark: {
-      label: "Reason for rejection",
-      required: true,
-      helper: "Please explain why the idea is being rejected; the submitter will see this.",
-    },
+    remark: REJECT_REMARK,
     confirmLabel: "Reject",
     busyLabel: "Rejecting...",
     tone: "danger",
     successMessage: "Idea rejected.",
-    submit: (ideaId, { remark }) => rejectIdea(ideaId, { remark }),
+    submit: (ideaId, { remark }) => managerRejectIdea(ideaId, { remark }),
+  },
+  finalApprove: {
+    label: "Approve",
+    buttonStyle: "primary",
+    title: "Give final approval",
+    message: "The idea becomes Active and the reporting manager can start implementation.",
+    remark: { label: "Remark", required: false, placeholder: "Optional" },
+    confirmLabel: "Approve",
+    busyLabel: "Approving...",
+    tone: "success",
+    successMessage: "Idea approved. It is now Active.",
+    submit: (ideaId, { remark }) => finalApproveIdea(ideaId, { remark }),
+  },
+  finalReject: {
+    label: "Reject",
+    buttonStyle: "danger",
+    title: "Reject idea",
+    remark: REJECT_REMARK,
+    confirmLabel: "Reject",
+    busyLabel: "Rejecting...",
+    tone: "danger",
+    successMessage: "Idea rejected.",
+    submit: (ideaId, { remark }) => finalRejectIdea(ideaId, { remark }),
   },
   start: {
     label: "Start Implementation",
@@ -101,10 +134,14 @@ const ACTIONS = {
   },
 };
 
-// Buttons available to the lead in each status.
+// Buttons available to the viewer for the idea's status: the reporting
+// manager (IsLead) or the final approver (IsFinalApprover). The backend
+// checks the same rules.
 const getAvailableActions = (idea) => {
-  if (idea.Status === "Submitted") return ["accept", "reject"];
-  if (idea.Status === "Accepted") return idea.IsOverdue ? ["start", "extend"] : ["start"];
+  if (idea.IsFinalApprover && idea.Status === "Pending Final Approval") return ["finalApprove", "finalReject"];
+  if (!idea.IsLead) return [];
+  if (idea.Status === "Submitted") return ["managerApprove", "managerReject"];
+  if (idea.Status === "Active") return idea.IsOverdue ? ["start", "extend"] : ["start"];
   if (idea.Status === "In Implementation") return idea.IsOverdue ? ["implement", "extend"] : ["implement"];
   return [];
 };
@@ -116,24 +153,67 @@ const isValidDays = (days) => Number.isInteger(days) && days >= DAYS_MIN && days
 function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
   const action = ACTIONS[actionKey];
 
+  const [finalApproverId, setFinalApproverId] = useState(null);
   const [days, setDays] = useState("");
   const [remark, setRemark] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  const [approvers, setApprovers] = useState([]);
+  const [approversLoading, setApproversLoading] = useState(Boolean(action.finalApprover));
+  const [approversError, setApproversError] = useState("");
+
+  useEffect(() => {
+    if (!action.finalApprover) return undefined;
+    let ignore = false;
+
+    getIdeaFinalApprovers()
+      .then((list) => {
+        if (!ignore) setApprovers(list || []);
+      })
+      .catch((err) => {
+        if (!ignore) setApproversError(getIdeaApiError(err, "Unable to load the final approvers.").message);
+      })
+      .finally(() => {
+        if (!ignore) setApproversLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [action.finalApprover]);
+
+  // The viewer here is the reporting manager (AssignedLeadID); neither they
+  // nor the submitter can be the final approver.
+  const approverOptions = useMemo(
+    () =>
+      approvers
+        .filter((approver) => approver.UserID !== idea.AssignedLeadID && approver.UserID !== idea.UserID)
+        .map((approver) => ({
+          value: approver.UserID,
+          label: [approver.FullName, approver.Designation, approver.DepartmentName].filter(Boolean).join(" – "),
+        })),
+    [approvers, idea.AssignedLeadID, idea.UserID],
+  );
+
   const daysValue = parseDays(days);
   const daysValid = isValidDays(daysValue);
   const todayKey = getTodayKey();
 
   // Live previews
-  const acceptTargetKey = actionKey === "accept" && daysValid ? addDaysToDateKey(todayKey, daysValue) : "";
+  const finalTargetKey =
+    actionKey === "finalApprove" && idea.TimelineDays ? addDaysToDateKey(todayKey, idea.TimelineDays) : "";
   const extendTargetKey = actionKey === "extend" && daysValid ? addDaysToDateKey(idea.TargetDate, daysValue) : "";
   const overdueDays = idea.IsOverdue ? Math.abs(idea.DaysRemaining ?? 0) : 0;
   const extendStillPast = Boolean(extendTargetKey) && extendTargetKey < todayKey;
 
   const validate = () => {
     const errors = {};
+
+    if (action.finalApprover && !finalApproverId) {
+      errors.finalApprover = "Select a final approver.";
+    }
 
     if (action.days && !daysValid) {
       errors.days = `Enter a whole number from ${DAYS_MIN} to ${DAYS_MAX}.`;
@@ -157,7 +237,11 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
     setApiError(null);
 
     try {
-      const updatedIdea = await action.submit(idea.IdeaID, { days: daysValue, remark: remark.trim() });
+      const updatedIdea = await action.submit(idea.IdeaID, {
+        finalApproverId,
+        days: daysValue,
+        remark: remark.trim(),
+      });
       onCompleted(updatedIdea, action.successMessage);
     } catch (err) {
       // Keep the dialog open with what was entered.
@@ -189,6 +273,18 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
           </div>
         )}
 
+        {finalTargetKey && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <p>
+              Timeline set by the reporting manager:{" "}
+              <span className="font-semibold">{formatDays(idea.TimelineDays)}</span>
+            </p>
+            <p className="mt-0.5">
+              Target date will be <span className="font-semibold">{formatIdeaDate(finalTargetKey)}</span>.
+            </p>
+          </div>
+        )}
+
         {apiError && (
           <div role="alert" className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm font-medium">
             <span className="text-red-500 font-bold">✕</span>
@@ -205,6 +301,32 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
           </div>
         )}
 
+        {action.finalApprover && (
+          <div>
+            <label htmlFor="lead-action-final-approver" className="block text-xs font-semibold text-slate-700 mb-1">
+              {action.finalApprover.label} <span className="text-red-500">*</span>
+            </label>
+            <SearchableSelect
+              id="lead-action-final-approver"
+              options={approverOptions}
+              value={finalApproverId}
+              onChange={(value) => {
+                setFinalApproverId(value);
+                setFieldErrors((prev) => ({ ...prev, finalApprover: undefined }));
+              }}
+              placeholder="Search by name or department"
+              disabled={busy}
+              loading={approversLoading}
+              hasError={Boolean(fieldErrors.finalApprover)}
+              noOptionsText={approversLoading ? "Loading..." : "No final approvers available"}
+              aria-invalid={Boolean(fieldErrors.finalApprover)}
+            />
+            {(fieldErrors.finalApprover || approversError) && (
+              <p className="text-red-600 text-xs mt-1 font-medium">{fieldErrors.finalApprover || approversError}</p>
+            )}
+          </div>
+        )}
+
         {action.days && (
           <div>
             <label htmlFor="lead-action-days" className="block text-xs font-semibold text-slate-700 mb-1">
@@ -217,7 +339,7 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
               min={DAYS_MIN}
               max={DAYS_MAX}
               step={1}
-              autoFocus
+              autoFocus={!action.finalApprover}
               disabled={busy}
               value={days}
               onChange={(e) => {
@@ -230,11 +352,6 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
             />
             {fieldErrors.days && <p className="text-red-600 text-xs mt-1 font-medium">{fieldErrors.days}</p>}
 
-            {acceptTargetKey && (
-              <p className="text-sm text-slate-700 mt-2">
-                Target date will be <span className="font-semibold">{formatIdeaDate(acceptTargetKey)}</span>.
-              </p>
-            )}
             {extendTargetKey && !extendStillPast && (
               <p className="text-sm text-slate-700 mt-2">
                 New target date will be <span className="font-semibold">{formatIdeaDate(extendTargetKey)}</span>.
@@ -262,7 +379,7 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
             id="lead-action-remark"
             rows={4}
             maxLength={REMARK_MAX}
-            autoFocus={!action.days}
+            autoFocus={!action.days && !action.finalApprover}
             disabled={busy}
             value={remark}
             onChange={(e) => {
@@ -285,7 +402,8 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
 }
 
 /**
- * Lead action buttons for Idea Details. Render only for the idea's lead.
+ * Action buttons for Idea Details, for the idea's reporting manager (lead)
+ * or final approver; shows the buttons their role and the status allow.
  * `onUpdated(updatedIdea, successMessage)` receives the idea returned by the
  * API (with its refreshed activity log).
  */

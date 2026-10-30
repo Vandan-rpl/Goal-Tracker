@@ -20,7 +20,8 @@ const STATUS_OPTIONS = IDEA_STATUSES.filter((status) => status !== "Draft");
 
 const COUNT_BOXES = [
   { key: "Submitted", label: "Submitted" },
-  { key: "Accepted", label: "Accepted" },
+  { key: "Pending Final Approval", label: "Pending Final Approval" },
+  { key: "Active", label: "Active" },
   { key: "In Implementation", label: "In Implementation" },
   { key: "Overdue", label: "Overdue", tone: "danger" },
   { key: "Implemented", label: "Implemented" },
@@ -32,7 +33,8 @@ const COLUMNS = [
   { label: "Idea No.", sortKey: "ideaNumber", firstDir: "desc" },
   { label: "Title", sortKey: "title", firstDir: "asc" },
   { label: "Submitted By", sortKey: "submitter", firstDir: "asc" },
-  { label: "Lead" },
+  { label: "Reporting Manager" },
+  { label: "Final Approver" },
   { label: "Purpose" },
   { label: "Submitted Date", sortKey: "submittedDate", firstDir: "desc" },
   { label: "Target Date", sortKey: "targetDate", firstDir: "asc" },
@@ -232,7 +234,7 @@ export default function IdeaListView({ title, description, fetchIdeas, fetchFilt
           activeKey={activeBox}
           loading={loading && !result}
           onSelect={selectBox}
-          gridClassName="grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+          gridClassName="grid-cols-2 sm:grid-cols-4 lg:grid-cols-7"
         />
 
         {/* Filters */}
@@ -450,6 +452,9 @@ export default function IdeaListView({ title, description, fetchIdeas, fetchFilt
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <PersonCell name={idea.LeadName} department={idea.LeadDepartment} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <PersonCell name={idea.FinalApproverName} department={idea.FinalApproverDepartment} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{idea.Purpose || "—"}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">

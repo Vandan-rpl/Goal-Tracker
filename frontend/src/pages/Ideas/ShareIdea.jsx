@@ -64,7 +64,7 @@ const validateForm = (form, { requireAll }) => {
   }
 
   if (requireAll && !form.assignedLeadId) {
-    errors.assignedLeadId = "Lead is required.";
+    errors.assignedLeadId = "Reporting manager is required.";
   }
 
   return errors;
@@ -77,7 +77,7 @@ const fieldErrorsFromApi = (details) =>
     if (/^title/i.test(text)) errors.title = text;
     else if (/^description/i.test(text)) errors.description = text;
     else if (/^purpose/i.test(text)) errors.purpose = text;
-    else if (/lead/i.test(text)) errors.assignedLeadId = text;
+    else if (/reporting manager/i.test(text)) errors.assignedLeadId = text;
     return errors;
   }, {});
 
@@ -142,7 +142,7 @@ const ShareIdea = () => {
         setLeads(leadList || []);
       } catch (err) {
         if (!ignore) {
-          setListsError(getIdeaApiError(err, "Unable to load the purpose and lead lists.").message);
+          setListsError(getIdeaApiError(err, "Unable to load the purpose and reporting manager lists.").message);
         }
       } finally {
         if (!ignore) setListsLoading(false);
@@ -468,10 +468,10 @@ const ShareIdea = () => {
                   )}
                 </div>
 
-                {/* Lead */}
+                {/* Reporting Manager (stored as the lead) */}
                 <div>
                   <label htmlFor="idea-lead" className="block text-xs font-semibold text-slate-700 mb-1">
-                    Lead <span className="text-red-500">*</span>
+                    Reporting Manager <span className="text-red-500">*</span>
                   </label>
                   <SearchableSelect
                     id="idea-lead"
@@ -488,7 +488,7 @@ const ShareIdea = () => {
                     <p className="text-red-600 text-xs mt-1 font-medium">{fieldErrors.assignedLeadId}</p>
                   )}
                   <p className="text-slate-500 text-xs mt-1">
-                    Your lead will review the idea and set the timeline.
+                    Your reporting manager will review the idea and send it for final approval.
                   </p>
                 </div>
               </div>

@@ -9,8 +9,15 @@ export const getIdeaPurposes = async () => {
     return response.data.data;
 };
 
+// Reporting manager options for Share an Idea (active Managers and HODs).
 export const getIdeaLeads = async () => {
     const response = await api.get('/ideas/leads');
+    return response.data.data;
+};
+
+// Active final approvers (UserID, FullName, Designation, DepartmentName).
+export const getIdeaFinalApprovers = async () => {
+    const response = await api.get('/ideas/final-approvers');
     return response.data.data;
 };
 
@@ -49,14 +56,25 @@ export const getAllIdeaFilterOptions = async () => {
     return response.data.data;
 };
 
-// Lead actions. Each returns the updated idea (same shape as getIdea).
-export const acceptIdea = async (ideaId, { timelineDays, remark }) => {
-    const response = await api.post(`/ideas/${ideaId}/accept`, { timelineDays, remark });
+// Approval and implementation actions. Each returns the updated idea (same
+// shape as getIdea).
+export const managerApproveIdea = async (ideaId, { finalApproverId, timelineDays, remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/manager-approve`, { finalApproverId, timelineDays, remark });
     return response.data.data;
 };
 
-export const rejectIdea = async (ideaId, { remark }) => {
-    const response = await api.post(`/ideas/${ideaId}/reject`, { remark });
+export const managerRejectIdea = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/manager-reject`, { remark });
+    return response.data.data;
+};
+
+export const finalApproveIdea = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/final-approve`, { remark });
+    return response.data.data;
+};
+
+export const finalRejectIdea = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/final-reject`, { remark });
     return response.data.data;
 };
 

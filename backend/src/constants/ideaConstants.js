@@ -17,12 +17,11 @@ const IDEA_PURPOSES = Object.freeze([
 const IdeaStatus = Object.freeze({
   DRAFT: "Draft",
   SUBMITTED: "Submitted",
-  UNDER_REVIEW: "Under Review",
-  ACCEPTED: "Accepted",
-  REJECTED: "Rejected",
-  ON_HOLD: "On Hold",
+  PENDING_FINAL_APPROVAL: "Pending Final Approval",
+  ACTIVE: "Active",
   IN_IMPLEMENTATION: "In Implementation",
   IMPLEMENTED: "Implemented",
+  REJECTED: "Rejected",
 });
 
 const IDEA_STATUSES = Object.freeze(Object.values(IdeaStatus));
@@ -30,7 +29,7 @@ const IDEA_STATUSES = Object.freeze(Object.values(IdeaStatus));
 // Overdue = status is one of these AND TargetDate is before today (dates
 // only). Used by every API that returns an overdue flag.
 const IDEA_OVERDUE_STATUSES = Object.freeze([
-  IdeaStatus.ACCEPTED,
+  IdeaStatus.ACTIVE,
   IdeaStatus.IN_IMPLEMENTATION,
 ]);
 
@@ -38,26 +37,92 @@ const IDEA_OVERDUE_STATUSES = Object.freeze([
 const IdeaAction = Object.freeze({
   CREATED: "Created",
   SUBMITTED: "Submitted",
-  ACCEPTED: "Accepted",
-  REJECTED: "Rejected",
+  MANAGER_APPROVED: "Manager Approved",
+  MANAGER_REJECTED: "Manager Rejected",
+  FINAL_APPROVED: "Final Approved",
+  FINAL_REJECTED: "Final Rejected",
   IMPLEMENTATION_STARTED: "Implementation Started",
   IMPLEMENTED: "Implemented",
   TIMELINE_EXTENDED: "Timeline Extended",
 });
 
-// Accept timeline days and Extend Timeline additional days.
+// Who may act on an idea. The model maps each to its dbo.Ideas column
+// (MANAGER -> AssignedLeadID, FINAL_APPROVER -> FinalApproverID).
+const IdeaActor = Object.freeze({
+  MANAGER: "manager",
+  FINAL_APPROVER: "finalApprover",
+});
+
+// Values written to dbo.Ideas.RejectedStage.
+const IdeaRejectedStage = Object.freeze({
+  MANAGER: "Manager",
+  FINAL: "Final",
+});
+
+// Every status change after submit: allowed current statuses, the new status
+// (null = unchanged), who may act, and the activity log action.
+const IDEA_TRANSITIONS = Object.freeze({
+  managerApprove: {
+    from: [IdeaStatus.SUBMITTED],
+    to: IdeaStatus.PENDING_FINAL_APPROVAL,
+    actor: IdeaActor.MANAGER,
+    action: IdeaAction.MANAGER_APPROVED,
+  },
+  managerReject: {
+    from: [IdeaStatus.SUBMITTED],
+    to: IdeaStatus.REJECTED,
+    actor: IdeaActor.MANAGER,
+    action: IdeaAction.MANAGER_REJECTED,
+  },
+  finalApprove: {
+    from: [IdeaStatus.PENDING_FINAL_APPROVAL],
+    to: IdeaStatus.ACTIVE,
+    actor: IdeaActor.FINAL_APPROVER,
+    action: IdeaAction.FINAL_APPROVED,
+  },
+  finalReject: {
+    from: [IdeaStatus.PENDING_FINAL_APPROVAL],
+    to: IdeaStatus.REJECTED,
+    actor: IdeaActor.FINAL_APPROVER,
+    action: IdeaAction.FINAL_REJECTED,
+  },
+  startImplementation: {
+    from: [IdeaStatus.ACTIVE],
+    to: IdeaStatus.IN_IMPLEMENTATION,
+    actor: IdeaActor.MANAGER,
+    action: IdeaAction.IMPLEMENTATION_STARTED,
+  },
+  markImplemented: {
+    from: [IdeaStatus.IN_IMPLEMENTATION],
+    to: IdeaStatus.IMPLEMENTED,
+    actor: IdeaActor.MANAGER,
+    action: IdeaAction.IMPLEMENTED,
+  },
+  extendTimeline: {
+    from: [IdeaStatus.ACTIVE, IdeaStatus.IN_IMPLEMENTATION],
+    to: null,
+    actor: IdeaActor.MANAGER,
+    action: IdeaAction.TIMELINE_EXTENDED,
+  },
+});
+
+// Manager approve timeline days and Extend Timeline additional days.
 const IDEA_TIMELINE_DAYS_MIN = 1;
 const IDEA_TIMELINE_DAYS_MAX = 365;
 
-// Lead remarks / extension reasons. Kept under the 1000-character Remark
-// columns so the activity log text ("Timeline: N days. ..." or
-// "Extended by N days. New target date: ... Reason: ...") still fits.
+// Action remarks / extension reasons. Kept under the 1000-character Remark
+// columns so the activity log text ("Final approver: ... Timeline: N days.
+// ..." or "Extended by N days. New target date: ... Reason: ...") still fits.
 const IDEA_LEAD_REMARK_MAX_LENGTH = 900;
+
+// dbo.IdeaActivityLog.Remark column size.
+const IDEA_ACTIVITY_REMARK_MAX_LENGTH = 1000;
 
 // Roles that may view any idea. BusinessHead is the CFO role in this app.
 const IDEA_VIEW_ALL_ROLES = Object.freeze(["ADMIN", "BUSINESSHEAD"]);
 
-// dbo.Users.Role values that can be picked as an idea's Lead.
+// dbo.Users.Role values that can be picked as an idea's reporting manager
+// (the lead).
 const IDEA_LEAD_ROLES = Object.freeze(["Manager", "HOD"]);
 
 // Match the column sizes in dbo.Ideas.
@@ -70,9 +135,13 @@ module.exports = {
   IDEA_STATUSES,
   IDEA_OVERDUE_STATUSES,
   IdeaAction,
+  IdeaActor,
+  IdeaRejectedStage,
+  IDEA_TRANSITIONS,
   IDEA_TIMELINE_DAYS_MIN,
   IDEA_TIMELINE_DAYS_MAX,
   IDEA_LEAD_REMARK_MAX_LENGTH,
+  IDEA_ACTIVITY_REMARK_MAX_LENGTH,
   IDEA_VIEW_ALL_ROLES,
   IDEA_LEAD_ROLES,
   IDEA_TITLE_MAX_LENGTH,

@@ -36,7 +36,7 @@ exports.getPurposes = async (req, res) => {
 };
 
 /**
- * Get Lead Options
+ * Get Reporting Manager Options
  * GET /api/v1/ideas/leads
  */
 exports.getLeadOptions = async (req, res) => {
@@ -45,11 +45,31 @@ exports.getLeadOptions = async (req, res) => {
 
         const leads = await ideaService.getLeadOptions(req.user.userId);
 
-        return successResponse(res, 200, "Leads fetched successfully.", leads);
+        return successResponse(res, 200, "Reporting managers fetched successfully.", leads);
 
     } catch (error) {
 
-        return handleError(res, error, "Get Idea Leads", "Failed to fetch leads.");
+        return handleError(res, error, "Get Idea Leads", "Failed to fetch reporting managers.");
+
+    }
+
+};
+
+/**
+ * Get Final Approver Options
+ * GET /api/v1/ideas/final-approvers
+ */
+exports.getFinalApproverOptions = async (req, res) => {
+
+    try {
+
+        const approvers = await ideaService.getFinalApproverOptions();
+
+        return successResponse(res, 200, "Final approvers fetched successfully.", approvers);
+
+    } catch (error) {
+
+        return handleError(res, error, "Get Idea Final Approvers", "Failed to fetch final approvers.");
 
     }
 
@@ -196,40 +216,80 @@ exports.getAssignedIdeas = async (req, res) => {
 };
 
 /**
- * Accept Idea
- * POST /api/v1/ideas/:ideaId/accept
+ * Manager Approve Idea
+ * POST /api/v1/ideas/:ideaId/manager-approve
  */
-exports.acceptIdea = async (req, res) => {
+exports.managerApprove = async (req, res) => {
 
     try {
 
-        const idea = await ideaService.acceptIdea(req.params.ideaId, req.body, req.user);
+        const idea = await ideaService.managerApprove(req.params.ideaId, req.body, req.user);
 
-        return successResponse(res, 200, "Idea accepted successfully.", idea);
+        return successResponse(res, 200, "Idea approved and sent for final approval.", idea);
 
     } catch (error) {
 
-        return handleError(res, error, "Accept Idea", "Failed to accept idea.");
+        return handleError(res, error, "Manager Approve Idea", "Failed to approve idea.");
 
     }
 
 };
 
 /**
- * Reject Idea
- * POST /api/v1/ideas/:ideaId/reject
+ * Manager Reject Idea
+ * POST /api/v1/ideas/:ideaId/manager-reject
  */
-exports.rejectIdea = async (req, res) => {
+exports.managerReject = async (req, res) => {
 
     try {
 
-        const idea = await ideaService.rejectIdea(req.params.ideaId, req.body, req.user);
+        const idea = await ideaService.managerReject(req.params.ideaId, req.body, req.user);
 
         return successResponse(res, 200, "Idea rejected successfully.", idea);
 
     } catch (error) {
 
-        return handleError(res, error, "Reject Idea", "Failed to reject idea.");
+        return handleError(res, error, "Manager Reject Idea", "Failed to reject idea.");
+
+    }
+
+};
+
+/**
+ * Final Approve Idea
+ * POST /api/v1/ideas/:ideaId/final-approve
+ */
+exports.finalApprove = async (req, res) => {
+
+    try {
+
+        const idea = await ideaService.finalApprove(req.params.ideaId, req.body, req.user);
+
+        return successResponse(res, 200, "Idea approved successfully.", idea);
+
+    } catch (error) {
+
+        return handleError(res, error, "Final Approve Idea", "Failed to approve idea.");
+
+    }
+
+};
+
+/**
+ * Final Reject Idea
+ * POST /api/v1/ideas/:ideaId/final-reject
+ */
+exports.finalReject = async (req, res) => {
+
+    try {
+
+        const idea = await ideaService.finalReject(req.params.ideaId, req.body, req.user);
+
+        return successResponse(res, 200, "Idea rejected successfully.", idea);
+
+    } catch (error) {
+
+        return handleError(res, error, "Final Reject Idea", "Failed to reject idea.");
 
     }
 
