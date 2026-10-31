@@ -2,7 +2,9 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import IdeasSidebarMenu from "./IdeasSidebarMenu";
+import TasksSidebarMenu from "./TasksSidebarMenu";
 import { isIdeasPath } from "../utils/ideasMenu";
+import { isTasksPath } from "../utils/tasksMenu";
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
@@ -14,9 +16,11 @@ const Sidebar = () => {
   };
   const isActive = (path) => location.pathname === path;
 
-  // On /ideas pages the Ideas menu replaces the Goal Tracker links below.
+  // On /ideas and /tasks pages that module's menu replaces the Goal Tracker
+  // links below.
   const { pathname } = useLocation();
   const isIdeasModule = isIdeasPath(pathname);
+  const isTasksModule = isTasksPath(pathname);
 
   // Force checking role string (handling both uppercase and lowercase)
   const role = (user?.Role || user?.role || "").toUpperCase();
@@ -51,6 +55,8 @@ const Sidebar = () => {
 
         {isIdeasModule ? (
           <IdeasSidebarMenu />
+        ) : isTasksModule ? (
+          <TasksSidebarMenu />
         ) : (
         <>
         {/* Core Links */}

@@ -5,6 +5,7 @@ import dashboardReducer from "./slices/dashboardSlice";
 import menuReducer from "./slices/menuSlice";
 import sidebarReducer from "./slices/sidebarSlice";
 import notificationReducer from "./slices/notificationSlice";
+import taskReducer from "./slices/taskSlice";
 
 export const store = configureStore({
     reducer: {
@@ -13,7 +14,8 @@ export const store = configureStore({
         dashboard: dashboardReducer,
         menu: menuReducer,
         sidebar: sidebarReducer,
-        notification: notificationReducer
+        notification: notificationReducer,
+        task: taskReducer
     },
     // ... middleware / devTools configs ...
 });

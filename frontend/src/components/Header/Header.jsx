@@ -25,6 +25,7 @@ import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import NotificationsOutlinedIcon from "@mui/icons-material/NotificationsOutlined";
 import TrackChangesOutlinedIcon from "@mui/icons-material/TrackChangesOutlined";
 import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
+import AssignmentTurnedInOutlinedIcon from "@mui/icons-material/AssignmentTurnedInOutlined";
 
 import { toggleMobile, toggleSidebar } from "../../redux/slices/sidebarSlice";
 
@@ -32,9 +33,11 @@ import {
   fetchNotifications,
   fetchNotificationCount,
 } from "../../redux/slices/notificationSlice";
+import { fetchTaskUnseenCount } from "../../redux/slices/taskSlice";
 
 // import { formatTime, formatLongDate, getGreeting } from "../../utils/dateTime";
 import { IDEAS_HOME_PATH, isIdeasPath } from "../../utils/ideasMenu";
+import { TASKS_HOME_PATH, isTasksPath } from "../../utils/tasksMenu";
 
 import ProfileMenu from "../ProfileMenu/ProfileMenu";
 import CircleIcon from "@mui/icons-material/Circle";
@@ -82,14 +85,29 @@ const Header = ({ drawerWidth = 260 }) => {
   // }, [currentUser]);
 
   // Module switch: derived from the URL, so it's correct after a refresh or
-  // a direct link. Ideas pages live under /ideas, everything else is the
-  // goal tracker (the default after login).
-  const activeModule = isIdeasPath(location.pathname) ? "ideas" : "goals";
+  // a direct link. Ideas pages live under /ideas, Tasks under /tasks,
+  // everything else is the goal tracker (the default after login).
+  const activeModule = isIdeasPath(location.pathname)
+    ? "ideas"
+    : isTasksPath(location.pathname)
+      ? "tasks"
+      : "goals";
+
+  const MODULE_HOME = { goals: "/dashboard", ideas: IDEAS_HOME_PATH, tasks: TASKS_HOME_PATH };
 
   const handleModuleChange = (event, module) => {
     if (!module || module === activeModule) return;
-    navigate(module === "ideas" ? IDEAS_HOME_PATH : "/dashboard");
+    navigate(MODULE_HOME[module]);
   };
+
+  // Tasks tab badge: the user's tasks not yet seen. Re-fetched on every
+  // navigation; between navigations the 'task:unseen-count' socket event
+  // keeps it current (see useSocket.js).
+  const taskUnseenCount = useSelector((state) => state.task.unseenCount);
+
+  useEffect(() => {
+    dispatch(fetchTaskUnseenCount());
+  }, [dispatch, location.pathname]);
 
   // Real unread count + notification list, replacing the old hardcoded
   // badgeContent={0}. notificationCount is kept live afterwards by
@@ -223,6 +241,17 @@ const Header = ({ drawerWidth = 260 }) => {
             <ToggleButton value="ideas">
               <LightbulbOutlinedIcon fontSize="small" />
               Innovation Ideas
+            </ToggleButton>
+            <ToggleButton value="tasks">
+              <AssignmentTurnedInOutlinedIcon fontSize="small" />
+              <Badge
+                badgeContent={taskUnseenCount}
+                color="error"
+                max={99}
+                sx={{ "& .MuiBadge-badge": { right: -10, top: -2 } }}
+              >
+                Task Tracker
+              </Badge>
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>

@@ -38,6 +38,12 @@ import AllIdeas from './pages/Ideas/AllIdeas';
 import IdeaReports from './pages/Ideas/IdeaReports';
 import TrackIdea from './pages/Ideas/TrackIdea';
 import { IDEAS_HOME_PATH } from './utils/ideasMenu';
+import TasksRoute from './components/TasksRoute';
+import MyTasks from './pages/Tasks/MyTasks';
+import TeamTasks from './pages/Tasks/TeamTasks';
+import AllTasks from './pages/Tasks/AllTasks';
+import AssignTask from './pages/Tasks/AssignTask';
+import { TASKS_HOME_PATH } from './utils/tasksMenu';
 import {ToastContainer} from 'react-toastify';
 
 function App() {
@@ -112,6 +118,22 @@ function App() {
               </Route>
               {/* Any other /ideas URL goes to My Ideas */}
               <Route path="/ideas/*" element={<Navigate to={IDEAS_HOME_PATH} replace />} />
+
+              {/* Task Tracker module. Every /tasks URL highlights the Tasks
+                  switch in the header and shows the Tasks sidebar. */}
+              <Route path="/tasks" element={<Navigate to={TASKS_HOME_PATH} replace />} />
+              <Route path="/tasks/my-tasks" element={<MyTasks />} />
+              <Route element={<TasksRoute menuKey="team" />}>
+                <Route path="/tasks/team" element={<TeamTasks />} />
+              </Route>
+              <Route element={<TasksRoute menuKey="all" />}>
+                <Route path="/tasks/all" element={<AllTasks />} />
+              </Route>
+              <Route element={<TasksRoute menuKey="assign" />}>
+                <Route path="/tasks/assign" element={<AssignTask />} />
+              </Route>
+              {/* Any other /tasks URL goes to My Tasks */}
+              <Route path="/tasks/*" element={<Navigate to={TASKS_HOME_PATH} replace />} />
 
             </Route>
           </Route>

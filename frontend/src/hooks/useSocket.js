@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { io } from "socket.io-client";
 import { notificationReceived } from "../redux/slices/notificationSlice";
+import { taskUnseenCountReceived } from "../redux/slices/taskSlice";
 
 // Same host the REST API lives on (see src/api/axios.js), but WITHOUT the
 // /api/v1 path — Socket.IO manages its own path (/socket.io) on top of the
@@ -64,12 +65,20 @@ const useSocket = () => {
       });
     };
 
+    // Task Tracker badge: the backend pushes the user's new unseen count
+    // after a task is assigned, a CFO remark is added or tasks are seen.
+    const handleTaskUnseenCount = (payload) => {
+      dispatch(taskUnseenCountReceived(payload?.count));
+    };
+
     socket.on("connect_error", handleConnectError);
     socket.on("notification:new", handleNewNotification);
+    socket.on("task:unseen-count", handleTaskUnseenCount);
 
     return () => {
       socket.off("connect_error", handleConnectError);
       socket.off("notification:new", handleNewNotification);
+      socket.off("task:unseen-count", handleTaskUnseenCount);
     };
   }, [dispatch]);
 };

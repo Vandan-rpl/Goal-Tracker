@@ -8,6 +8,7 @@ const { decodeAuthToken, getAccountState } = require('./middleware/authMiddlewar
 const { setIO } = require('./sockets/io');
 const { requireOtpSecret } = require('./utils/passwordResetCrypto');
 const { logAuthMailMode } = require('./services/authMailService');
+const { logTaskMailMode } = require('./services/taskMailService');
 
 // Forgot Password OTPs and reset tokens are hashed with OTP_SECRET; refuse to
 // start without it rather than store weak hashes.
@@ -19,6 +20,7 @@ try {
 }
 
 logAuthMailMode();
+logTaskMailMode();
 
 // Import Routers
 const authRoutes = require('./routes/authRoutes');
@@ -32,6 +34,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const evaluationRoutes = require('./routes/evaluationRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const ideaRoutes = require('./routes/ideaRoutes');
+const taskRoutes = require('./routes/taskRoutes');
 
 const app = express();
 
@@ -97,6 +100,7 @@ app.use('/api/v1/evaluation', evaluationRoutes);
 // fixed now.
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/ideas', ideaRoutes);
+app.use('/api/v1/tasks', taskRoutes);
 
 // ============================================================
 // HTTP + Socket.IO server
