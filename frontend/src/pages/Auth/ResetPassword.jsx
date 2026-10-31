@@ -1,74 +1,55 @@
-import React, { useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, KeyRound } from 'lucide-react';
 import api from '../../services/api';
 
+/**
+ * Old emailed reset links (/reset-password?token=...) no longer work:
+ * Forgot Password now uses an emailed OTP. This page only says so and
+ * lets the backend log that an old link was opened. The token is never
+ * sent anywhere and is removed from the address bar.
+ */
+const LEGACY_LINK_MESSAGE = 'This link is no longer valid. Please use Forgot Password again.';
+
 const ResetPassword = () => {
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get('token'); // URL માંથી token મેળવે છે
-  const navigate = useNavigate();
+  const reported = useRef(false);
 
-  const [newPassword, setNewPassword] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [resetSucceeded, setResetSucceeded] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage('');
-    setError('');
-
-    if (!token) {
-      setError('Invalid or missing reset token in URL.');
-      return;
+  useEffect(() => {
+    if (window.location.search) {
+      window.history.replaceState(window.history.state, '', window.location.pathname);
     }
 
-    setSubmitting(true);
-    try {
-      // અહી '/auth/reset-password' ના બદલે નવા બનાવેલા Route નો ઉપયોગ કરો
-      const response = await api.post('/auth/reset-password-token', {
-        token,
-        newPassword
-      });
-
-      setMessage(response.data.message || 'Password reset successfully!');
-      setResetSucceeded(true);
-      setTimeout(() => navigate('/login'), 2000);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to reset password.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    // StrictMode runs effects twice in development; report once.
+    if (reported.current) return;
+    reported.current = true;
+    api.post('/auth/forgot-password/legacy-link-opened').catch(() => {});
+  }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Reset Password</h2>
-        {message && <div className="mb-4 bg-green-50 text-green-600 p-3 rounded text-sm">{message}</div>}
-        {error && <div className="mb-4 bg-red-50 text-red-600 p-3 rounded text-sm">{error}</div>}
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-            <input 
-              type="password" 
-              required
-              minLength={6}
-              disabled={submitting || resetSucceeded}
-              value={newPassword} 
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting || resetSucceeded}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md disabled:opacity-50"
-          >
-            {submitting ? 'Updating...' : resetSucceeded ? 'Password Updated' : 'Update Password'}
-          </button>
-        </form>
+    <div className="min-h-screen relative flex items-center justify-center bg-slate-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] p-4">
+      <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl shadow-xl shadow-slate-200/50 p-8 relative z-10 text-center">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 mb-3 shadow-sm">
+          <KeyRound className="w-6 h-6" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-5">Reset Password</h2>
+
+        <div role="alert" className="mb-6 flex items-start space-x-3 bg-red-50 border border-red-200 text-red-700 p-3.5 rounded-xl text-sm text-left">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
+          <span className="leading-snug">{LEGACY_LINK_MESSAGE}</span>
+        </div>
+
+        <Link
+          to="/forgot-password"
+          className="w-full inline-flex justify-center bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium py-2.5 rounded-xl transition duration-200 shadow-md shadow-blue-500/20"
+        >
+          Go to Forgot Password
+        </Link>
+
+        <div className="mt-4">
+          <Link to="/login" className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 font-semibold">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Login
+          </Link>
+        </div>
       </div>
     </div>
   );

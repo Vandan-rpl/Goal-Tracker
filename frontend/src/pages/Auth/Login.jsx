@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import { toast } from 'react-toastify';
-import { Eye, EyeOff, Lock, User, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState(''); // Handles either username or email input
@@ -13,6 +13,16 @@ const Login = () => {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Success message passed by Forgot Password after a reset; shown once.
+  const [successMessage] = useState(location.state?.successMessage || '');
+
+  useEffect(() => {
+    if (location.state?.successMessage) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,6 +76,14 @@ const Login = () => {
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Sign In</h2>
           <p className="text-sm text-slate-500 mt-1">Please enter your details to access your account</p>
         </div>
+
+        {/* Success Alert Box (after Forgot Password) */}
+        {successMessage && !error && (
+          <div className="mb-6 flex items-start space-x-3 bg-green-50 border border-green-200 text-green-700 p-3.5 rounded-xl text-sm">
+            <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-green-500" />
+            <span className="leading-snug">{successMessage}</span>
+          </div>
+        )}
 
         {/* Error Alert Box */}
         {error && (

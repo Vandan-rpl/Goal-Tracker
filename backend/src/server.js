@@ -6,6 +6,19 @@ require('dotenv').config();
 const { poolPromise } = require('./config/db');
 const { decodeAuthToken } = require('./middleware/authMiddleware');
 const { setIO } = require('./sockets/io');
+const { requireOtpSecret } = require('./utils/passwordResetCrypto');
+const { logAuthMailMode } = require('./services/authMailService');
+
+// Forgot Password OTPs and reset tokens are hashed with OTP_SECRET; refuse to
+// start without it rather than store weak hashes.
+try {
+    requireOtpSecret();
+} catch (error) {
+    console.error(`[STARTUP] ${error.message}`);
+    process.exit(1);
+}
+
+logAuthMailMode();
 
 // Import Routers
 const authRoutes = require('./routes/authRoutes');
@@ -21,6 +34,11 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const ideaRoutes = require('./routes/ideaRoutes');
 
 const app = express();
+
+// Production runs behind one Nginx hop: req.ip is the client IP from
+// X-Forwarded-For as added by Nginx. Only one hop is trusted, so a client
+// cannot spoof its IP by sending its own X-Forwarded-For.
+app.set('trust proxy', 1);
 
 // CORS origin is shared between Express and Socket.IO so both stay in sync
 // if the frontend URL ever changes.
