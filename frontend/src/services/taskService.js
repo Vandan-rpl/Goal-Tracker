@@ -52,6 +52,14 @@ export const getAllTaskFilterOptions = async () => {
     return response.data.data;
 };
 
+// All Tasks Employees view: every active user, with or without tasks
+// (UserID, EmployeeCode, FullName, Designation, DepartmentName, OpenCount,
+// OverdueCount, DoneRecentCount, AssignedOpenCount).
+export const getEmployeeTaskSummary = async () => {
+    const response = await api.get('/tasks/all/employees');
+    return response.data.data;
+};
+
 // Active users for Assign Task (UserID, EmployeeCode, FullName, Designation,
 // DepartmentName).
 export const getAssignableEmployees = async () => {

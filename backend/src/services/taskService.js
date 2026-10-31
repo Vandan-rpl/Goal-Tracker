@@ -367,6 +367,16 @@ const getAllFilterOptions = async (user) => {
 };
 
 /**
+ * All Tasks Employees view: every active user with task counts, including
+ * users with no tasks (Business Head / Admin)
+ */
+const getEmployeeTaskSummary = async (user) => {
+    assertCanViewAllTasks(user);
+    const pool = await poolPromise;
+    return await taskModel.getEmployeeTaskSummary(pool);
+};
+
+/**
  * Active users for the Assign Task dropdown (Business Head only)
  */
 const getAssignableEmployees = async (user) => {
@@ -737,6 +747,7 @@ module.exports = {
     getAllTasks,
     getTeamFilterOptions,
     getAllFilterOptions,
+    getEmployeeTaskSummary,
     getAssignableEmployees,
     getTaskById,
     markTasksSeen,

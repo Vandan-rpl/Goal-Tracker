@@ -420,8 +420,8 @@ const getActiveUser = async (db, userId) => {
 /**
  * Filter dropdown values:
  *   team - employees: the viewer's direct reports
- *   all  - employees: users with at least one task; departments: their
- *          departments
+ *   all  - employees: every active user, plus inactive users who still have
+ *          tasks; departments: their departments
  */
 const getTaskFilterOptions = async (db, { scope, viewerId }) => {
 
@@ -443,7 +443,8 @@ const getTaskFilterOptions = async (db, { scope, viewerId }) => {
         SELECT u.UserID, ${fullName("u")} AS FullName, d.DepartmentName
         FROM dbo.Users u
         LEFT JOIN dbo.Departments d ON d.DepartmentID = u.DepartmentID
-        WHERE EXISTS (
+        WHERE u.IsActive = 1
+           OR EXISTS (
             SELECT 1 FROM dbo.Tasks t
             WHERE t.UserID = u.UserID AND t.IsDeleted = 0
         )
@@ -453,6 +454,51 @@ const getTaskFilterOptions = async (db, { scope, viewerId }) => {
     const departments = [...new Set(result.recordset.map((row) => row.DepartmentName).filter(Boolean))].sort();
 
     return { employees: result.recordset, departments };
+};
+
+/**
+ * Every active user with their task counts (deleted tasks left out), for
+ * the All Tasks Employees view. Users with no tasks are included.
+ *   OpenCount     - not Done
+ *   OverdueCount  - not Done and DueDate before today
+ *   DoneRecentCount - Done in the last TASK_DONE_RECENT_DAYS days
+ *   AssignedOpenCount - open tasks assigned by the Business Head
+ */
+const getEmployeeTaskSummary = async (db) => {
+
+    const result = await db.request().query(`
+        SELECT
+            u.UserID,
+            u.EmployeeCode,
+            ${fullName("u")} AS FullName,
+            u.Designation,
+            d.DepartmentName,
+            ISNULL(c.OpenCount, 0) AS OpenCount,
+            ISNULL(c.OverdueCount, 0) AS OverdueCount,
+            ISNULL(c.DoneRecentCount, 0) AS DoneRecentCount,
+            ISNULL(c.AssignedOpenCount, 0) AS AssignedOpenCount
+        FROM dbo.Users u
+        LEFT JOIN dbo.Departments d
+            ON d.DepartmentID = u.DepartmentID
+        OUTER APPLY (
+            SELECT
+                SUM(CASE WHEN t.Status <> N'${TaskStatus.DONE}' THEN 1 ELSE 0 END) AS OpenCount,
+                SUM(CASE WHEN ${IS_OVERDUE} = 1 THEN 1 ELSE 0 END) AS OverdueCount,
+                SUM(CASE
+                    WHEN t.Status = N'${TaskStatus.DONE}'
+                     AND t.CompletedDate >= CAST(DATEADD(DAY, -${TASK_DONE_RECENT_DAYS}, ${TODAY}) AS DATETIME2)
+                    THEN 1 ELSE 0
+                END) AS DoneRecentCount,
+                SUM(CASE WHEN t.Status <> N'${TaskStatus.DONE}' AND t.AssignedBy IS NOT NULL THEN 1 ELSE 0 END) AS AssignedOpenCount
+            FROM dbo.Tasks t
+            WHERE t.UserID = u.UserID
+              AND t.IsDeleted = 0
+        ) c
+        WHERE u.IsActive = 1
+        ORDER BY u.FirstName, u.LastName;
+    `);
+
+    return result.recordset;
 };
 
 /**
@@ -495,5 +541,6 @@ module.exports = {
     getAssignableEmployees,
     getActiveUser,
     getTaskFilterOptions,
+    getEmployeeTaskSummary,
     getTaskMailData,
 };

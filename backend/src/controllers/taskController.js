@@ -112,6 +112,15 @@ exports.getAllFilterOptions = handle(
 );
 
 /**
+ * Get All Tasks Employees View (every active user with task counts)
+ * GET /api/v1/tasks/all/employees
+ */
+exports.getEmployeeTaskSummary = handle(
+    "Get Employee Task Summary", "Failed to fetch employees.", 200, "Employees fetched successfully.",
+    (req) => taskService.getEmployeeTaskSummary(req.user)
+);
+
+/**
  * Get Assign Task Employee Options
  * GET /api/v1/tasks/employees
  */

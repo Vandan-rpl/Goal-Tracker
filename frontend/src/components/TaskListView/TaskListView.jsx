@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch } from "react-redux";
-import { Button } from "@mui/material";
 import { toast } from "react-toastify";
-import AssignmentTurnedInOutlinedIcon from "@mui/icons-material/AssignmentTurnedInOutlined";
-import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
-import TableLoader from "../loaders/TableLoader";
-import EmptyState from "../EmptyState/EmptyState";
-import TablePagination from "../TablePagination/TablePagination";
 import ConfirmDialog from "../ConfirmDialog/ConfirmDialog";
 import TaskFormDialog from "../TaskFormDialog/TaskFormDialog";
+import TaskWorkbookFrame, {
+  taskFilterControlClass as selectClass,
+  taskFilterLabelClass as filterLabelClass,
+  taskSecondaryButtonClass,
+} from "../TaskWorkbookFrame/TaskWorkbookFrame";
 import { deleteTask, getTaskApiError, markTasksSeen, submitCFORemarks } from "../../services/taskService";
 import { taskUnseenCountReceived } from "../../redux/slices/taskSlice";
+import { worksheetControlClass } from "../../utils/goalWorksheet";
 import {
   TASK_PRIORITIES,
   TASK_REMARKS_MAX,
@@ -18,16 +18,9 @@ import {
   TASK_STATUSES,
   formatTaskDate,
   formatTaskDateTime,
-  getTaskPriorityClasses,
-  getTaskStatusClasses,
 } from "../../utils/taskStatus";
 
-const PAGE_SIZE = 10;
-
-const selectClass =
-  "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500";
-
-const filterLabelClass = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1";
+const PAGE_SIZE = 20;
 
 const EMPTY_FILTERS = {
   department: "",
@@ -39,16 +32,36 @@ const EMPTY_FILTERS = {
   source: "",
 };
 
+// Same look as the Add Goal worksheet and TaskSheet.
+const headClass =
+  "sticky top-0 z-2 border-r border-b border-[#cbd4e2] bg-[#dce5f2] px-2.5 py-2.5 text-left text-[11px] font-bold leading-[1.35] text-[#30415f] align-middle whitespace-nowrap last:border-r-0";
+const cellClass = "border-r border-b border-[#d5dce5] px-2.5 py-2.5 align-top text-xs text-[#202522] last:border-r-0";
+
+// Square labels in the workbook palette.
+const STATUS_LABEL_CLASSES = {
+  Pending: "border-slate-300 bg-slate-50 text-slate-700",
+  "In Progress": "border-blue-200 bg-blue-50 text-[#2c3e82]",
+  Done: "border-green-200 bg-green-50 text-green-800",
+};
+
+const PRIORITY_LABEL_CLASSES = {
+  High: "border-red-200 bg-red-50 text-[#b3403f]",
+  Medium: "border-amber-200 bg-amber-50 text-amber-900",
+  Low: "border-slate-200 bg-white text-slate-600",
+};
+
+const labelClass = "inline-flex border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap";
+
 /**
- * My Tasks / Team Tasks / All Tasks: filters, the task grid and the row
- * actions. Columns: Sr.No. | [Employee Name | Department] | Task Name |
- * Priority | Due Date | Status | CFO's Remarks | User's Remarks [| Actions].
- * Which controls show comes from each row's Can* flags (the backend checks
- * the same rules).
+ * Team Tasks / All Tasks: workbook frame with summary counts, filters, the
+ * task grid and row actions. Columns: Sr.No. | [Employee Name | Department]
+ * | Task Name | Priority | Due Date | Status | CFO's Remarks | User's Remarks
+ * [| Actions]. Which controls show comes from each row's Can* flags (the
+ * backend checks the same rules).
  *
  * Props:
- *   title, description
- *   loadTasks(params)      list API (getMyTasks / getTeamTasks / getAllTasks)
+ *   title, description, badge, barSubtitle
+ *   loadTasks(params)      list API (getTeamTasks / getAllTasks / getMyTasks)
  *   loadFilterOptions()    optional: { employees, departments }
  *   filterKeys             any of department, employee, status, priority,
  *                          dueRange, source
@@ -56,12 +69,16 @@ const EMPTY_FILTERS = {
  *   allowAdd               Add Task button
  *   cfoEditable            CFO's Remarks editable with Submit (rows with
  *                          CanEditCFORemarks)
- *   markSeenOnLoad         My Tasks: highlight unseen rows as New and mark
- *                          them seen
+ *   markSeenOnLoad         highlight unseen rows as New and mark them seen
+ *   initialFilters         filter values to start with (e.g. { employeeId })
+ *   headerActions          extra controls on the right of the title
+ *   footer                 note under the grid
  */
 export default function TaskListView({
   title,
   description,
+  badge,
+  barSubtitle,
   loadTasks,
   loadFilterOptions,
   filterKeys = [],
@@ -70,6 +87,9 @@ export default function TaskListView({
   cfoEditable = false,
   markSeenOnLoad = false,
   emptyTitle = "No tasks yet.",
+  initialFilters = null,
+  headerActions = null,
+  footer = null,
 }) {
   const dispatch = useDispatch();
 
@@ -77,9 +97,13 @@ export default function TaskListView({
   const [options, setOptions] = useState({ employees: [], departments: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [filters, setFilters] = useState(() => ({ ...EMPTY_FILTERS, ...initialFilters }));
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Client-side only: text search and the Overdue box.
+  const [search, setSearch] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   // Rows that were unseen when the list loaded; they stay highlighted as
   // New on this visit even after being marked seen.
@@ -147,17 +171,42 @@ export default function TaskListView({
     };
   }, [loadTasks, filters, reloadKey, markSeenOnLoad, dispatch]);
 
-  const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageTasks = tasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  // Counts for the summary strip, over what the server returned.
+  const summary = useMemo(
+    () => ({
+      total: tasks.length,
+      pending: tasks.filter((t) => t.Status === "Pending").length,
+      inProgress: tasks.filter((t) => t.Status === "In Progress").length,
+      done: tasks.filter((t) => t.Status === "Done").length,
+      overdue: tasks.filter((t) => t.IsOverdue).length,
+      assigned: tasks.filter((t) => t.IsAssignedByBusinessHead).length,
+      employees: new Set(tasks.map((t) => t.UserID)).size,
+    }),
+    [tasks],
+  );
 
-  const hasFilters = Object.values(filters).some((value) => value !== "");
+  const visibleTasks = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return tasks.filter((task) => {
+      if (overdueOnly && !task.IsOverdue) return false;
+      if (!term) return true;
+      return (
+        (task.TaskName || "").toLowerCase().includes(term) ||
+        (task.EmployeeName || "").toLowerCase().includes(term) ||
+        (task.EmployeeCode || "").toLowerCase().includes(term)
+      );
+    });
+  }, [tasks, search, overdueOnly]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleTasks.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageTasks = visibleTasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const hasFilters = Object.values(filters).some((value) => value !== "") || Boolean(search) || overdueOnly;
   const hasActions = useMemo(
     () => tasks.some((t) => t.CanEditDetails || t.CanEditStatus || t.CanEditUserRemarks || t.CanDelete),
     [tasks],
   );
-
-  const columnCount = 8 + (showEmployee ? 2 : 0) + (hasActions ? 1 : 0);
 
   const changeFilter = (field, value) => {
     setFilters((current) => ({ ...current, [field]: value }));
@@ -166,6 +215,8 @@ export default function TaskListView({
 
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
+    setSearch("");
+    setOverdueOnly(false);
     setPage(1);
   };
 
@@ -196,8 +247,8 @@ export default function TaskListView({
     try {
       setCfoSavingId(task.TaskID);
       const result = await submitCFORemarks(task.TaskID, remarks);
-      if (result?.mailWarning) toast.warning(result.mailWarning);
-      else toast.success("CFO's Remarks saved and emailed to the employee.");
+      if (result?.mailWarning) toast.warning(`Remark saved. ${result.mailWarning}`);
+      else toast.success(`Remark saved and emailed to ${task.EmployeeName || "the employee"}.`);
       reload();
     } catch (err) {
       const apiError = getTaskApiError(err, "Failed to save CFO's Remarks.");
@@ -213,35 +264,40 @@ export default function TaskListView({
       const changed = draft.trim() !== (task.CFORemarks || "").trim();
       const saving = cfoSavingId === task.TaskID;
       return (
-        <div className="space-y-1.5 min-w-[220px]">
+        <div className="min-w-[230px]">
           <textarea
             rows={2}
             maxLength={TASK_REMARKS_MAX}
             value={draft}
             onChange={(e) => setCfoDrafts((current) => ({ ...current, [task.TaskID]: e.target.value }))}
             disabled={saving}
-            placeholder="Add a remark"
+            placeholder="Add a remark..."
             aria-label={`CFO's Remarks for ${task.TaskName}`}
-            className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className={`${worksheetControlClass} min-h-[52px] resize-y border-[#d5dce5] bg-white`}
           />
-          <button
-            type="button"
-            onClick={() => handleCfoSubmit(task)}
-            disabled={saving || !changed || !draft.trim()}
-            className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-40 cursor-pointer"
-          >
-            {saving ? "Submitting..." : "Submit"}
-          </button>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <span className="text-[10px] text-slate-500">
+              {task.CFORemarksDate ? `Last: ${formatTaskDateTime(task.CFORemarksDate)}` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleCfoSubmit(task)}
+              disabled={saving || !changed || !draft.trim()}
+              className="cursor-pointer bg-[#2c3e82] px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[#1f2c61] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              {saving ? "Sending..." : "Submit"}
+            </button>
+          </div>
         </div>
       );
     }
 
-    if (!task.CFORemarks) return <span className="text-gray-400">—</span>;
+    if (!task.CFORemarks) return <span className="text-slate-400">—</span>;
     return (
       <div className="max-w-xs">
         <p className="whitespace-pre-wrap break-words">{task.CFORemarks}</p>
         {task.CFORemarksDate && (
-          <p className="text-[11px] text-gray-400 mt-0.5">{formatTaskDateTime(task.CFORemarksDate)}</p>
+          <p className="mt-0.5 text-[10px] text-slate-500">{formatTaskDateTime(task.CFORemarksDate)}</p>
         )}
       </div>
     );
@@ -261,312 +317,359 @@ export default function TaskListView({
 
   const employeeOptions = options.employees || [];
 
-  return (
-    <div className="flex-1 bg-gray-50 min-h-screen overflow-y-auto p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header Section */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+  const summaryBoxes = [
+    showEmployee && { label: "Employees", value: summary.employees },
+    { label: "Tasks", value: summary.total },
+    { label: "Pending", value: summary.pending },
+    { label: "In Progress", value: summary.inProgress },
+    { label: "Done", value: summary.done },
+    { label: "Assigned by BH", value: summary.assigned },
+  ].filter(Boolean);
+
+  const filterControls = (
+    <>
+      <div>
+        <label htmlFor="task-filter-search" className={filterLabelClass}>Search</label>
+        <input
+          id="task-filter-search"
+          type="search"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          placeholder={showEmployee ? "Task, employee or code" : "Task name"}
+          className={selectClass}
+        />
+      </div>
+
+      {filterKeys.includes("department") && (
+        <div>
+          <label htmlFor="task-filter-department" className={filterLabelClass}>Department</label>
+          <select
+            id="task-filter-department"
+            value={filters.department}
+            onChange={(e) => changeFilter("department", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All Departments</option>
+            {(options.departments || []).map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+      )}
+
+      {filterKeys.includes("employee") && (
+        <div>
+          <label htmlFor="task-filter-employee" className={filterLabelClass}>Employee</label>
+          <select
+            id="task-filter-employee"
+            value={filters.employeeId}
+            onChange={(e) => changeFilter("employeeId", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All Employees</option>
+            {employeeOptions
+              .filter((emp) => !filters.department || emp.DepartmentName === filters.department)
+              .map((emp) => (
+                <option key={emp.UserID} value={emp.UserID}>
+                  {emp.FullName}{emp.DepartmentName ? ` – ${emp.DepartmentName}` : ""}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
+
+      {filterKeys.includes("status") && (
+        <div>
+          <label htmlFor="task-filter-status" className={filterLabelClass}>Status</label>
+          <select
+            id="task-filter-status"
+            value={filters.status}
+            onChange={(e) => changeFilter("status", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Open + Done (last 30 days)</option>
+            {TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      )}
+
+      {filterKeys.includes("priority") && (
+        <div>
+          <label htmlFor="task-filter-priority" className={filterLabelClass}>Priority</label>
+          <select
+            id="task-filter-priority"
+            value={filters.priority}
+            onChange={(e) => changeFilter("priority", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All Priorities</option>
+            {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+      )}
+
+      {filterKeys.includes("dueRange") && (
+        <>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-            <p className="text-sm text-gray-500 mt-1">{description}</p>
+            <label htmlFor="task-filter-due-from" className={filterLabelClass}>Due Date From</label>
+            <input
+              id="task-filter-due-from"
+              type="date"
+              value={filters.dueFrom}
+              max={filters.dueTo || undefined}
+              onChange={(e) => changeFilter("dueFrom", e.target.value)}
+              className={selectClass}
+            />
           </div>
-          {allowAdd && (
-            <button
-              type="button"
-              onClick={() => setEditing("new")}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md transition flex items-center cursor-pointer"
-            >
-              + Add Task
-            </button>
-          )}
+          <div>
+            <label htmlFor="task-filter-due-to" className={filterLabelClass}>Due Date To</label>
+            <input
+              id="task-filter-due-to"
+              type="date"
+              value={filters.dueTo}
+              min={filters.dueFrom || undefined}
+              onChange={(e) => changeFilter("dueTo", e.target.value)}
+              className={selectClass}
+            />
+          </div>
+        </>
+      )}
+
+      {filterKeys.includes("source") && (
+        <div>
+          <label htmlFor="task-filter-source" className={filterLabelClass}>Source</label>
+          <select
+            id="task-filter-source"
+            value={filters.source}
+            onChange={(e) => changeFilter("source", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Self-added and Assigned</option>
+            {TASK_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
         </div>
+      )}
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-          {filterKeys.includes("department") && (
-            <div>
-              <label htmlFor="task-filter-department" className={filterLabelClass}>Department</label>
-              <select
-                id="task-filter-department"
-                value={filters.department}
-                onChange={(e) => changeFilter("department", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">All Departments</option>
-                {(options.departments || []).map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-          )}
+      {hasFilters && (
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="cursor-pointer px-3 py-2 text-sm font-semibold text-slate-600 hover:text-[#2c3e82]"
+          >
+            Clear filters
+          </button>
+        </div>
+      )}
+    </>
+  );
 
-          {filterKeys.includes("employee") && (
-            <div>
-              <label htmlFor="task-filter-employee" className={filterLabelClass}>Employee</label>
-              <select
-                id="task-filter-employee"
-                value={filters.employeeId}
-                onChange={(e) => changeFilter("employeeId", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">All Employees</option>
-                {employeeOptions
-                  .filter((emp) => !filters.department || emp.DepartmentName === filters.department)
-                  .map((emp) => (
-                    <option key={emp.UserID} value={emp.UserID}>
-                      {emp.FullName}{emp.DepartmentName ? ` – ${emp.DepartmentName}` : ""}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
+  const pagerButtonClass =
+    "cursor-pointer border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40";
 
-          {filterKeys.includes("status") && (
-            <div>
-              <label htmlFor="task-filter-status" className={filterLabelClass}>Status</label>
-              <select
-                id="task-filter-status"
-                value={filters.status}
-                onChange={(e) => changeFilter("status", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">Open + Done (last 30 days)</option>
-                {TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          )}
-
-          {filterKeys.includes("priority") && (
-            <div>
-              <label htmlFor="task-filter-priority" className={filterLabelClass}>Priority</label>
-              <select
-                id="task-filter-priority"
-                value={filters.priority}
-                onChange={(e) => changeFilter("priority", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">All Priorities</option>
-                {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-          )}
-
-          {filterKeys.includes("dueRange") && (
-            <>
-              <div>
-                <label htmlFor="task-filter-due-from" className={filterLabelClass}>Due Date From</label>
-                <input
-                  id="task-filter-due-from"
-                  type="date"
-                  value={filters.dueFrom}
-                  max={filters.dueTo || undefined}
-                  onChange={(e) => changeFilter("dueFrom", e.target.value)}
-                  className={selectClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="task-filter-due-to" className={filterLabelClass}>Due Date To</label>
-                <input
-                  id="task-filter-due-to"
-                  type="date"
-                  value={filters.dueTo}
-                  min={filters.dueFrom || undefined}
-                  onChange={(e) => changeFilter("dueTo", e.target.value)}
-                  className={selectClass}
-                />
-              </div>
-            </>
-          )}
-
-          {filterKeys.includes("source") && (
-            <div>
-              <label htmlFor="task-filter-source" className={filterLabelClass}>Source</label>
-              <select
-                id="task-filter-source"
-                value={filters.source}
-                onChange={(e) => changeFilter("source", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">Self-added and Assigned</option>
-                {TASK_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-            </div>
-          )}
-
-          {hasFilters && (
-            <div className="flex items-end">
-              <button
-                onClick={clearFilters}
-                className="text-sm font-semibold text-gray-500 hover:text-gray-700 px-3 py-2 cursor-pointer"
-              >
-                Clear filters
+  return (
+    <TaskWorkbookFrame
+      barSubtitle={barSubtitle}
+      badge={badge}
+      title={title}
+      description={description}
+      actions={
+        (headerActions || allowAdd) && (
+          <>
+            {headerActions}
+            {allowAdd && (
+              <button type="button" onClick={() => setEditing("new")} className={taskSecondaryButtonClass}>
+                + Add Task
               </button>
-            </div>
-          )}
-        </div>
+            )}
+          </>
+        )
+      }
+      filters={filterControls}
+      footer={footer}
+    >
+      {/* Summary strip */}
+      <div className="mb-5 flex flex-wrap items-stretch border border-[#cbd4e2] bg-white">
+        {summaryBoxes.map((box) => (
+          <div key={box.label} className="min-w-[110px] flex-1 border-r border-[#d5dce5] px-4 py-3 last:border-r-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#30415f]">{box.label}</p>
+            <p className="mt-1 text-2xl font-bold text-[#2c3e82]">{loading ? "–" : box.value}</p>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            setOverdueOnly((value) => !value);
+            setPage(1);
+          }}
+          aria-pressed={overdueOnly}
+          title={overdueOnly ? "Show all tasks" : "Show only overdue tasks"}
+          className={`min-w-[110px] flex-1 cursor-pointer px-4 py-3 text-left transition ${
+            overdueOnly ? "bg-[#b3403f] text-white" : "bg-red-50 hover:bg-red-100"
+          }`}
+        >
+          <p className={`text-[11px] font-bold uppercase tracking-wider ${overdueOnly ? "text-white" : "text-[#b3403f]"}`}>
+            Overdue {overdueOnly ? "· showing" : ""}
+          </p>
+          <p className={`mt-1 text-2xl font-bold ${overdueOnly ? "text-white" : "text-[#b3403f]"}`}>
+            {loading ? "–" : summary.overdue}
+          </p>
+        </button>
+      </div>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium">{error}</div>
-        )}
+      {error && (
+        <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>
+      )}
 
-        {/* Task Grid */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50/75">
-                <tr>
-                  {headings.map((heading) => (
-                    <th
-                      key={heading}
-                      className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
-                    >
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? (
-                  <tr>
-                    <td colSpan={columnCount} className="p-0">
-                      <TableLoader rows={5} columns={columnCount} showToolbar={false} paper={false} />
+      {/* Task Grid */}
+      <div className="max-w-full overflow-x-auto border border-[#aeb9cc] bg-white [scrollbar-color:#aeb9cc_#edf1f7] scrollbar-thin">
+        <table className="min-w-full border-separate border-spacing-0">
+          <thead>
+            <tr>
+              {headings.map((heading, i) => (
+                <th key={heading} className={`${headClass} ${i === 0 ? "bg-[#e5eaf3] text-center" : ""}`}>
+                  {heading}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={headings.length} className="px-4 py-10 text-center text-sm text-slate-500">
+                  Loading tasks...
+                </td>
+              </tr>
+            ) : pageTasks.length > 0 ? (
+              pageTasks.map((task, index) => {
+                const isNew = markSeenOnLoad && newTaskIds.has(task.TaskID);
+                const canEdit = task.CanEditDetails || task.CanEditStatus || task.CanEditUserRemarks;
+                return (
+                  <tr key={task.TaskID} className={`${isNew ? "bg-blue-50" : "bg-white"} hover:bg-[#f4f6fa]`}>
+                    <td className={`${cellClass} w-14 bg-[#edf1f7] text-center font-medium text-slate-600`}>
+                      {(currentPage - 1) * PAGE_SIZE + index + 1}
                     </td>
-                  </tr>
-                ) : pageTasks.length > 0 ? (
-                  pageTasks.map((task, index) => {
-                    const isNew = markSeenOnLoad && newTaskIds.has(task.TaskID);
-                    const canEdit = task.CanEditDetails || task.CanEditStatus || task.CanEditUserRemarks;
-                    return (
-                      <tr
-                        key={task.TaskID}
-                        className={`align-top transition ${isNew ? "bg-indigo-50/60" : "hover:bg-gray-50/50"}`}
-                      >
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {(currentPage - 1) * PAGE_SIZE + index + 1}
+                    {showEmployee && (
+                      <>
+                        <td className={`${cellClass} whitespace-nowrap`}>
+                          <p className="font-semibold text-slate-900">{task.EmployeeName}</p>
+                          {task.EmployeeCode && <p className="text-[10px] text-slate-500">{task.EmployeeCode}</p>}
                         </td>
-                        {showEmployee && (
-                          <>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                              {task.EmployeeName}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
-                              {task.DepartmentName || "—"}
-                            </td>
-                          </>
-                        )}
-                        <td className="px-4 py-4 text-sm text-gray-900 min-w-[200px] max-w-sm">
-                          <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                            {isNew && (
-                              <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-indigo-600 text-white">
-                                New
-                              </span>
-                            )}
-                            {task.IsAssignedByBusinessHead && (
-                              <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                                Assigned by Business Head
-                              </span>
-                            )}
-                          </div>
-                          <p className="font-semibold whitespace-pre-wrap break-words">{task.TaskName}</p>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getTaskPriorityClasses(task.Priority)}`}>
-                            {task.Priority}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {formatTaskDate(task.DueDate)}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getTaskStatusClasses(task.Status)}`}>
-                              {task.Status}
+                        <td className={`${cellClass} whitespace-nowrap text-slate-600`}>{task.DepartmentName || "—"}</td>
+                      </>
+                    )}
+                    <td className={`${cellClass} min-w-[220px] max-w-sm`}>
+                      {(isNew || task.IsAssignedByBusinessHead) && (
+                        <div className="mb-1 flex flex-wrap gap-1">
+                          {isNew && <span className="bg-[#2c3e82] px-1.5 py-0.5 text-[10px] font-bold text-white">New</span>}
+                          {task.IsAssignedByBusinessHead && (
+                            <span className={`${labelClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
+                              Assigned by Business Head
                             </span>
-                            {task.IsOverdue && (
-                              <span className="px-2 py-0.5 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-red-50 text-red-700 border border-red-200">
-                                Overdue
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-sm text-gray-700">{renderCfoRemarks(task)}</td>
-                        <td className="px-4 py-4 text-sm text-gray-700">
-                          {task.UserRemarks ? (
-                            <p className="max-w-xs whitespace-pre-wrap break-words">{task.UserRemarks}</p>
-                          ) : (
-                            <span className="text-gray-400">—</span>
                           )}
-                        </td>
-                        {hasActions && (
-                          <td className="px-4 py-4 whitespace-nowrap text-sm">
-                            <div className="flex items-center gap-2">
-                              {canEdit && (
-                                <button
-                                  type="button"
-                                  onClick={() => setEditing(task)}
-                                  className="px-3 py-1 rounded-lg border border-gray-200 font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
-                                >
-                                  Edit
-                                </button>
-                              )}
-                              {task.CanDelete && (
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleting(task)}
-                                  className="px-3 py-1 rounded-lg border border-red-200 font-semibold text-red-600 hover:bg-red-50 cursor-pointer"
-                                >
-                                  Delete
-                                </button>
-                              )}
-                            </div>
-                          </td>
+                        </div>
+                      )}
+                      <p className="font-semibold whitespace-pre-wrap break-words">{task.TaskName}</p>
+                    </td>
+                    <td className={cellClass}>
+                      <span className={`${labelClass} ${PRIORITY_LABEL_CLASSES[task.Priority] || PRIORITY_LABEL_CLASSES.Low}`}>
+                        {task.Priority}
+                      </span>
+                    </td>
+                    <td className={`${cellClass} whitespace-nowrap ${task.IsOverdue ? "font-semibold text-[#b3403f]" : ""}`}>
+                      {formatTaskDate(task.DueDate)}
+                    </td>
+                    <td className={`${cellClass} whitespace-nowrap`}>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className={`${labelClass} ${STATUS_LABEL_CLASSES[task.Status] || STATUS_LABEL_CLASSES.Pending}`}>
+                          {task.Status}
+                        </span>
+                        {task.IsOverdue && (
+                          <span className={`${labelClass} border-red-200 bg-red-50 text-[#b3403f]`}>Overdue</span>
                         )}
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={columnCount} className="p-0">
-                      {!hasFilters && !error ? (
-                        <EmptyState
-                          icon={<AssignmentTurnedInOutlinedIcon sx={{ fontSize: 40 }} />}
-                          title={emptyTitle}
-                          action={
-                            allowAdd ? (
-                              <Button size="small" onClick={() => setEditing("new")}>
-                                Add Task
-                              </Button>
-                            ) : null
-                          }
-                        />
+                      </div>
+                    </td>
+                    <td className={cellClass}>{renderCfoRemarks(task)}</td>
+                    <td className={`${cellClass} min-w-[180px]`}>
+                      {task.UserRemarks ? (
+                        <p className="max-w-xs whitespace-pre-wrap break-words">{task.UserRemarks}</p>
                       ) : (
-                        <EmptyState
-                          icon={<SearchOffOutlinedIcon sx={{ fontSize: 40 }} />}
-                          title="No tasks match the selected filters."
-                          action={
-                            hasFilters ? (
-                              <Button size="small" onClick={clearFilters}>
-                                Clear filters
-                              </Button>
-                            ) : null
-                          }
-                        />
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
+                    {hasActions && (
+                      <td className={`${cellClass} whitespace-nowrap`}>
+                        <div className="flex flex-col items-start gap-1.5">
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => setEditing(task)}
+                              className="cursor-pointer text-[11px] font-semibold text-[#2c3e82] hover:underline"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {task.CanDelete && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleting(task)}
+                              className="cursor-pointer text-[11px] font-semibold text-[#b3403f] hover:underline"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {!loading && (
-            <TablePagination
-              page={currentPage}
-              pageSize={PAGE_SIZE}
-              total={tasks.length}
-              onPageChange={setPage}
-            />
-          )}
-        </div>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={headings.length} className="px-4 py-10 text-center">
+                  <p className="text-sm font-semibold text-slate-700">
+                    {hasFilters ? "No tasks match the selected filters." : emptyTitle}
+                  </p>
+                  {hasFilters && (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="mt-2 cursor-pointer text-xs font-semibold text-[#2c3e82] hover:underline"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* Pagination */}
+      {!loading && visibleTasks.length > PAGE_SIZE && (
+        <div className="mt-3 flex flex-col items-center justify-between gap-3 text-xs text-slate-600 sm:flex-row">
+          <span>
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, visibleTasks.length)} of{" "}
+            {visibleTasks.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1} className={pagerButtonClass}>
+              Previous
+            </button>
+            <span className="px-2">Page {currentPage} of {totalPages}</span>
+            <button
+              type="button"
+              onClick={() => setPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={pagerButtonClass}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <TaskFormDialog
@@ -588,6 +691,6 @@ export default function TaskListView({
           onCancel={() => setDeleting(null)}
         />
       )}
-    </div>
+    </TaskWorkbookFrame>
   );
 }

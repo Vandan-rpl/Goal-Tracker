@@ -8,12 +8,8 @@ import {
   formatTaskDateTime,
 } from "../../utils/taskStatus";
 
-const inputClass = (hasError) =>
-  `w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
-    hasError ? "border-red-500" : "border-slate-300"
-  }`;
-
-const labelClass = "block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1";
+const worksheetInputClass =
+  "block min-h-32 w-full resize-none border-0 bg-transparent px-2.5 py-2 text-xs text-[#202522] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#2c3e82] disabled:bg-slate-50 disabled:text-slate-500";
 
 const formFromTask = (task) => ({
   taskName: task?.TaskName || "",
@@ -141,124 +137,195 @@ export default function TaskFormDialog({ task = null, onClose, onSaved }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-form-title"
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-4"
+        className="max-h-[90vh] w-full max-w-6xl overflow-y-auto border border-[#c6cedc] bg-white shadow-[0_4px_18px_rgba(37,55,80,0.2)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div>
-          <h2 id="task-form-title" className="text-base font-bold text-slate-900">
-            {isNew ? "Add Task" : "Edit Task"}
+        <div className="flex min-h-12 items-center gap-3 bg-[#2c3e82] px-4 py-2 text-xs font-bold tracking-[0.08em] text-white sm:px-5">
+          <div
+            className="grid size-7 shrink-0 place-items-center border border-white/45"
+            aria-hidden="true"
+          >
+            <svg className="size-4 stroke-current stroke-[1.5]" viewBox="0 0 24 24" fill="none">
+              <path d="M4 3.5h16v17H4zM4 8.5h16M4 14h16M10 3.5v17M15 3.5v17" />
+            </svg>
+          </div>
+          <h2 id="task-form-title" className="font-bold">
+            TASK WORKBOOK
           </h2>
+          <span className="h-5 w-px bg-white/40" aria-hidden="true" />
+          <span className="text-[13px] font-normal tracking-normal">
+            {isNew ? "New task" : "Edit task"}
+          </span>
+        </div>
+
+        <div className="space-y-4 p-3 sm:p-5">
           {!isNew && task.IsAssignedByBusinessHead && canEditStatus && (
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-[#2c3e82]">
               This task was assigned by the Business Head. You can change only its Status and your remarks.
             </p>
           )}
-        </div>
 
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium">{error}</div>}
+          {error && (
+            <div className="border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700" role="alert">
+              {error}
+            </div>
+          )}
 
-        <div>
-          <label htmlFor="task-name" className={labelClass}>Task Name *</label>
-          <textarea
-            id="task-name"
-            rows={2}
-            maxLength={TASK_NAME_MAX}
-            value={form.taskName}
-            onChange={(e) => updateField("taskName", e.target.value)}
-            disabled={!canEditDetails || saving}
-            className={inputClass(fieldErrors.taskName)}
-          />
-          {fieldErrors.taskName && <p className="text-red-600 text-xs mt-1 font-medium">{fieldErrors.taskName}</p>}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label htmlFor="task-priority" className={labelClass}>Priority *</label>
-            <select
-              id="task-priority"
-              value={form.priority}
-              onChange={(e) => updateField("priority", e.target.value)}
-              disabled={!canEditDetails || saving}
-              className={inputClass(fieldErrors.priority)}
-            >
-              {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="task-due" className={labelClass}>Due Date *</label>
-            <input
-              id="task-due"
-              type="date"
-              value={form.dueDate}
-              onChange={(e) => updateField("dueDate", e.target.value)}
-              disabled={!canEditDetails || saving}
-              className={inputClass(fieldErrors.dueDate)}
-            />
-          </div>
-          <div>
-            <label htmlFor="task-status" className={labelClass}>Status</label>
-            <select
-              id="task-status"
-              value={form.status}
-              onChange={(e) => updateField("status", e.target.value)}
-              disabled={!canEditStatus || saving}
-              className={inputClass(fieldErrors.status)}
-            >
-              {TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-        {(fieldErrors.priority || fieldErrors.dueDate || fieldErrors.status) && (
-          <p className="text-red-600 text-xs font-medium">
-            {[fieldErrors.priority, fieldErrors.dueDate, fieldErrors.status].filter(Boolean).join(" ")}
+          <p className="text-xs text-slate-500">
+            Enter task details in the worksheet row. Scroll horizontally to see every column.
           </p>
-        )}
 
-        {!isNew && task.CFORemarks && (
-          <div>
-            <p className={labelClass}>CFO's Remarks</p>
-            <p className="text-sm text-slate-800 whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              {task.CFORemarks}
-            </p>
-            {task.CFORemarksDate && (
-              <p className="text-[11px] text-slate-500 mt-1">
-                {task.CFORemarksByName ? `${task.CFORemarksByName}, ` : ""}{formatTaskDateTime(task.CFORemarksDate)}
-              </p>
-            )}
+          <div
+            className="max-w-full overflow-x-auto border border-[#aeb9cc] bg-white [scrollbar-color:#aeb9cc_#edf1f7] scrollbar-thin"
+            role="region"
+            aria-label="Task entry worksheet"
+            tabIndex="0"
+          >
+            <table className="w-full min-w-[1120px] table-fixed border-separate border-spacing-0 text-xs text-[#202522] [&_td]:border-r [&_td]:border-b [&_td]:border-[#d5dce5] [&_td]:p-0 [&_td]:align-top [&_td:last-child]:border-r-0">
+              <colgroup>
+                <col className="w-10" />
+                <col className="w-[300px]" />
+                <col className="w-[140px]" />
+                <col className="w-[165px]" />
+                <col className="w-[150px]" />
+                <col className="w-[320px]" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="sticky left-0 top-0 z-3 h-7 border-r border-b border-[#d5dce5] bg-[#edf1f7]" aria-label="Row number" />
+                  {["A", "B", "C", "D", "E"].map((letter) => (
+                    <th
+                      key={letter}
+                      className="sticky top-0 z-2 h-7 border-r border-b border-[#d5dce5] bg-[#edf1f7] text-center text-[11px] font-medium text-slate-600"
+                    >
+                      {letter}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  <th className="sticky left-0 top-7 z-4 border-r border-b border-[#d5dce5] bg-[#e5eaf3] px-2 py-2 text-center text-[11px] font-bold text-[#30415f]" aria-label="Row number">
+                    #
+                  </th>
+                  {["Task Name", "Priority", "Due Date", "Status", "User's Remarks"].map((heading, index) => (
+                    <th
+                      key={heading}
+                      className="sticky top-7 z-2 h-10 border-r border-b border-[#cbd4e2] bg-[#dce5f2] px-2.5 py-2 text-left text-[11px] font-bold leading-[1.35] text-[#30415f]"
+                    >
+                      {heading}
+                      {[0, 1, 2].includes(index) && <span className="text-red-600"> *</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row" className="sticky left-0 z-1 border-r border-b border-[#d5dce5] bg-[#f3f5f9] px-2 py-3 text-center text-xs font-semibold text-slate-600">
+                    1
+                  </th>
+                  <td className={fieldErrors.taskName ? "bg-red-50" : "bg-white"}>
+                    <label className="sr-only" htmlFor="task-name">Task Name</label>
+                    <textarea
+                      id="task-name"
+                      rows={5}
+                      maxLength={TASK_NAME_MAX}
+                      value={form.taskName}
+                      onChange={(e) => updateField("taskName", e.target.value)}
+                      disabled={!canEditDetails || saving}
+                      aria-invalid={Boolean(fieldErrors.taskName)}
+                      className={worksheetInputClass}
+                    />
+                    {fieldErrors.taskName && <p className="px-2.5 pb-2 text-[11px] font-medium text-red-700">{fieldErrors.taskName}</p>}
+                  </td>
+                  <td className={fieldErrors.priority ? "bg-red-50" : "bg-white"}>
+                    <label className="sr-only" htmlFor="task-priority">Priority</label>
+                    <select
+                      id="task-priority"
+                      value={form.priority}
+                      onChange={(e) => updateField("priority", e.target.value)}
+                      disabled={!canEditDetails || saving}
+                      aria-invalid={Boolean(fieldErrors.priority)}
+                      className={worksheetInputClass}
+                    >
+                      {TASK_PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                    </select>
+                    {fieldErrors.priority && <p className="px-2.5 pb-2 text-[11px] font-medium text-red-700">{fieldErrors.priority}</p>}
+                  </td>
+                  <td className={fieldErrors.dueDate ? "bg-red-50" : "bg-white"}>
+                    <label className="sr-only" htmlFor="task-due">Due Date</label>
+                    <input
+                      id="task-due"
+                      type="date"
+                      value={form.dueDate}
+                      onChange={(e) => updateField("dueDate", e.target.value)}
+                      disabled={!canEditDetails || saving}
+                      aria-invalid={Boolean(fieldErrors.dueDate)}
+                      className={worksheetInputClass}
+                    />
+                    {fieldErrors.dueDate && <p className="px-2.5 pb-2 text-[11px] font-medium text-red-700">{fieldErrors.dueDate}</p>}
+                  </td>
+                  <td className={fieldErrors.status ? "bg-red-50" : "bg-white"}>
+                    <label className="sr-only" htmlFor="task-status">Status</label>
+                    <select
+                      id="task-status"
+                      value={form.status}
+                      onChange={(e) => updateField("status", e.target.value)}
+                      disabled={!canEditStatus || saving}
+                      aria-invalid={Boolean(fieldErrors.status)}
+                      className={worksheetInputClass}
+                    >
+                      {TASK_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                    {fieldErrors.status && <p className="px-2.5 pb-2 text-[11px] font-medium text-red-700">{fieldErrors.status}</p>}
+                  </td>
+                  <td className={fieldErrors.userRemarks ? "bg-red-50" : "bg-white"}>
+                    <label className="sr-only" htmlFor="task-user-remarks">User's Remarks</label>
+                    <textarea
+                      id="task-user-remarks"
+                      rows={5}
+                      maxLength={TASK_REMARKS_MAX}
+                      value={form.userRemarks}
+                      onChange={(e) => updateField("userRemarks", e.target.value)}
+                      disabled={!canEditUserRemarks || saving}
+                      aria-invalid={Boolean(fieldErrors.userRemarks)}
+                      className={worksheetInputClass}
+                    />
+                    {fieldErrors.userRemarks && <p className="px-2.5 pb-2 text-[11px] font-medium text-red-700">{fieldErrors.userRemarks}</p>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        )}
 
-        <div>
-          <label htmlFor="task-user-remarks" className={labelClass}>User's Remarks</label>
-          <textarea
-            id="task-user-remarks"
-            rows={3}
-            maxLength={TASK_REMARKS_MAX}
-            value={form.userRemarks}
-            onChange={(e) => updateField("userRemarks", e.target.value)}
-            disabled={!canEditUserRemarks || saving}
-            className={inputClass(fieldErrors.userRemarks)}
-          />
-          {fieldErrors.userRemarks && <p className="text-red-600 text-xs mt-1 font-medium">{fieldErrors.userRemarks}</p>}
-        </div>
+          {!isNew && task.CFORemarks && (
+            <div className="border border-[#cbd4e2] bg-[#f8faff] p-3">
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#30415f]">CFO's Remarks</p>
+              <p className="whitespace-pre-wrap text-sm text-slate-800">{task.CFORemarks}</p>
+              {task.CFORemarksDate && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {task.CFORemarksByName ? `${task.CFORemarksByName}, ` : ""}{formatTaskDateTime(task.CFORemarksDate)}
+                </p>
+              )}
+            </div>
+          )}
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 rounded-xl text-white text-sm font-bold disabled:opacity-50 cursor-pointer bg-indigo-600 hover:bg-indigo-700"
-          >
-            {saving ? "Saving..." : isNew ? "Add Task" : "Save"}
-          </button>
+          <div className="flex flex-col-reverse justify-end gap-2 border-t border-slate-200 pt-4 sm:flex-row">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="cursor-pointer border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="cursor-pointer bg-[#2c3e82] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1f2c61] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Saving..." : isNew ? "Add Task" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

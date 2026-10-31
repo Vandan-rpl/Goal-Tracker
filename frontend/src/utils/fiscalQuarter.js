@@ -32,7 +32,7 @@ export const getQuarterDayWindow = (startDay, endDay, date = new Date()) => {
 
 export const getGoalCreationWindow = (date = new Date()) => {
   const reopeningStart = new Date(2026, 9, 14);
-  const reopeningEnd = new Date(2026, 9, 30);
+  const reopeningEnd = new Date(2026, 9, 31);
   const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   if (today >= reopeningStart && today <= reopeningEnd) {
@@ -47,10 +47,10 @@ export const getGoalCreationWindow = (date = new Date()) => {
 };
 
 export const getManagerHodApprovalWindow = (date = new Date()) =>
-  getQuarterDayWindow(8, 30, date);
+  getQuarterDayWindow(8, 31, date);
 
 export const getCfoApprovalWindow = (date = new Date()) =>
-  getQuarterDayWindow(16, 30, date);
+  getQuarterDayWindow(16, 31, date);
 
 export const getFiscalQuarterValue = (dateValue) => {
   if (!dateValue) return "";

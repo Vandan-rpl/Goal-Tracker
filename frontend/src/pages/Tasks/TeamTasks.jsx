@@ -6,6 +6,8 @@ import { getTeamTaskFilterOptions, getTeamTasks } from "../../services/taskServi
 const TeamTasks = () => (
   <TaskListView
     title="Team Tasks"
+    badge="TEAM TASKS"
+    barSubtitle="My team"
     description="Tasks of the employees who report to you (view only)."
     loadTasks={getTeamTasks}
     loadFilterOptions={getTeamTaskFilterOptions}

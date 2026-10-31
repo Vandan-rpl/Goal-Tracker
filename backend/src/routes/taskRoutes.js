@@ -63,6 +63,13 @@ router.get("/all", verifyToken, taskController.getAllTasks);
 router.get("/all/filter-options", verifyToken, taskController.getAllFilterOptions);
 
 /**
+ * All Tasks Employees View: every active user with task counts, including
+ * users with no tasks (Business Head / Admin)
+ * GET /api/v1/tasks/all/employees
+ */
+router.get("/all/employees", verifyToken, taskController.getEmployeeTaskSummary);
+
+/**
  * Assign Task Employee Options (Business Head)
  * GET /api/v1/tasks/employees
  */
