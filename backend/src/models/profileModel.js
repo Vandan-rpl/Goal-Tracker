@@ -163,8 +163,9 @@ exports.updatePassword = async (userId, passwordHash) => {
             .input("PasswordHash", sql.VarChar, passwordHash)
             .query(`
                 UPDATE Users 
-                SET PasswordHash = @PasswordHash, 
-                    IsPasswordChanged = 1, 
+                SET PasswordHash = @PasswordHash,
+                    IsPasswordChanged = 1,
+                    DefaultPasswordFlag = 0,
                     PasswordChangedDate = GETDATE(),
                     ModifiedDate = GETDATE() 
                 WHERE UserID = @UserId

@@ -85,10 +85,12 @@ const login = async (req, res) => {
         .query("UPDATE Users SET FailedLoginCount = 0 WHERE UserID = @UserID");
     }
 
-    // FIX: normalize once, use the same normalized value everywhere below
-    // instead of re-comparing against 1 / 0 in three different places.
-    const isPasswordChanged = toBool(user.IsPasswordChanged);
+    // DefaultPasswordFlag is the source of truth for "must change password"
+    // (the same column verifyToken enforces on every protected request).
+    // isPasswordChanged is derived from it so the two can never disagree
+    // in the token/response, even if the DB columns have drifted.
     const defaultPasswordFlag = toBool(user.DefaultPasswordFlag);
+    const isPasswordChanged = !defaultPasswordFlag;
 
     const token = jwt.sign(
       {
@@ -150,6 +152,15 @@ const forceResetPassword = async (req, res) => {
     return res.status(400).json({
       success: false,
       message: "New password must be at least 6 characters long.",
+    });
+  }
+
+  // Otherwise the temporary password could be "changed" to itself and the
+  // DefaultPasswordFlag cleared without the user ever choosing a password.
+  if (newPassword === currentPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must be different from your current password.",
     });
   }
 

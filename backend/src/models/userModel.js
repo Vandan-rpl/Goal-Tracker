@@ -29,13 +29,13 @@ async function createUser(userData) {
                 INSERT INTO Users (
                     EmployeeCode, Username, Email, PasswordHash, FirstName, LastName, 
                     MobileNo, DepartmentID, Designation, Grade, Post, 
-                    ReportingManagerID, HODID, BusinessHeadID, Role, IsPasswordChanged, CreatedDate
+                    ReportingManagerID, HODID, BusinessHeadID, Role, IsPasswordChanged, DefaultPasswordFlag, CreatedDate
                 )
                 OUTPUT INSERTED.*
                 VALUES (
                     @EmployeeCode, @Username, @Email, @PasswordHash, @FirstName, @LastName, 
                     @MobileNo, @DepartmentID, @Designation, @Grade, @Post, 
-                    @ReportingManagerID, @HODID, @BusinessHeadID, @Role, @IsPasswordChanged, GETDATE()
+                    @ReportingManagerID, @HODID, @BusinessHeadID, @Role, @IsPasswordChanged, CASE WHEN @IsPasswordChanged = 1 THEN 0 ELSE 1 END, GETDATE()
                 );
             `);
         return result.recordset[0];
@@ -57,9 +57,11 @@ async function updatePassword(userId, newPasswordHash) {
             .input("PasswordHash", sql.VarChar, newPasswordHash)
             .query(`
                 UPDATE Users 
-                SET PasswordHash = @PasswordHash, 
-                    IsPasswordChanged = 1, 
-                    ModifiedDate = GETDATE() 
+                SET PasswordHash = @PasswordHash,
+                    IsPasswordChanged = 1,
+                    DefaultPasswordFlag = 0,
+                    PasswordChangedDate = GETDATE(),
+                    ModifiedDate = GETDATE()
                 WHERE UserID = @UserID
             `);
         return true;

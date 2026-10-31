@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
+import { needsPasswordChange, FORCE_RESET_PATH } from '../../utils/passwordChange';
 import { toast } from 'react-toastify';
 import { Eye, EyeOff, Lock, User, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 
@@ -34,11 +35,9 @@ const Login = () => {
       const res = await login(username, password);
 
       if (res.success) {
-        // Check if password change is required on first login
-        const passwordChangedState = res.isPasswordChanged ?? res.data?.isPasswordChanged;
-
-        if (passwordChangedState === false) {
-          navigate('/force-reset-password');
+        // Users on a temporary password (DefaultPasswordFlag = 1) must change it first
+        if (needsPasswordChange(res.data?.data)) {
+          navigate(FORCE_RESET_PATH);
         } else {
           toast.success('Login successful!');
           navigate('/dashboard');

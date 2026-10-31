@@ -156,13 +156,13 @@ const createUser = async (userData) => {
       INSERT INTO Users (
         EmployeeCode, Username, PasswordHash, Email, FirstName, LastName, 
         MobileNo, DepartmentID, Designation, Grade, Post, ReportingManagerID, 
-        HODID, BusinessHeadID, Role, IsActive, IsPasswordChanged, CreatedDate
+        HODID, BusinessHeadID, Role, IsActive, IsPasswordChanged, DefaultPasswordFlag, CreatedDate
       )
       OUTPUT INSERTED.UserID
       VALUES (
         @EmployeeCode, @Username, @PasswordHash, @Email, @FirstName, @LastName, 
         @MobileNo, @DepartmentID, @Designation, @Grade, @Post, @ReportingManagerID, 
-        @HODID, @BusinessHeadID, @Role, @IsActive, @IsPasswordChanged, GETDATE()
+        @HODID, @BusinessHeadID, @Role, @IsActive, @IsPasswordChanged, CASE WHEN @IsPasswordChanged = 1 THEN 0 ELSE 1 END, GETDATE()
       )
     `);
 
@@ -189,6 +189,7 @@ const changePassword = async (passwordData) => {
       UPDATE Users
       SET PasswordHash = @PasswordHash,
           IsPasswordChanged = @IsPasswordChanged,
+          DefaultPasswordFlag = CASE WHEN @IsPasswordChanged = 1 THEN 0 ELSE 1 END,
           PasswordChangedDate = GETDATE(),
           ModifiedDate = GETDATE()
       WHERE UserID = @UserID

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { handlePasswordChangeRequired } from '../utils/passwordChange';
 
 // FIX: this previously read `VITE_API_BASE_URL` and defaulted to
 // 'http://localhost:5000/api' — but the actual .env only sets
@@ -34,6 +35,18 @@ api.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// A user still on a temporary password is blocked by every protected API;
+// send them to the force-reset screen.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 403) {
+      handlePasswordChangeRequired(error.response.data);
+    }
+    return Promise.reject(error);
+  }
 );
 
 export default api;

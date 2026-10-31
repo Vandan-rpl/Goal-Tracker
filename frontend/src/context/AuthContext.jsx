@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../api/axios"; // Updated import to match your axios.js service path
+import { withPasswordChangeState } from "../utils/passwordChange";
 
 export const AuthContext = createContext(null);
 
@@ -85,6 +86,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // After a successful forced password change. Updates the context as well
+  // as localStorage, otherwise ProtectedRoute (which reads the context) keeps
+  // sending the user back to the force-reset screen until a reload.
+  const markPasswordChanged = () => {
+    setUser((current) => {
+      if (!current) return current;
+      const updated = withPasswordChangeState(current, false);
+      localStorage.setItem("user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -92,7 +105,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, markPasswordChanged, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

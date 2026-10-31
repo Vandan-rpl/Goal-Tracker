@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
 const { poolPromise } = require('./config/db');
-const { decodeAuthToken } = require('./middleware/authMiddleware');
+const { decodeAuthToken, getAccountState } = require('./middleware/authMiddleware');
 const { setIO } = require('./sockets/io');
 const { requireOtpSecret } = require('./utils/passwordResetCrypto');
 const { logAuthMailMode } = require('./services/authMailService');
@@ -115,7 +115,7 @@ const io = new Server(httpServer, {
 // Authenticate every socket handshake using the SAME token-decoding logic
 // as the regular Express routes (decodeAuthToken, exported from
 // authMiddleware.js). The frontend sends the JWT via `socket.handshake.auth.token`.
-io.use((socket, next) => {
+io.use(async (socket, next) => {
     try {
         const token =
             socket.handshake.auth?.token ||
@@ -126,9 +126,24 @@ io.use((socket, next) => {
         }
 
         socket.user = decodeAuthToken(token); // { userId, username, role, isPasswordChanged, iat, exp }
+    } catch (error) {
+        return next(new Error('Authentication error: invalid or expired token.'));
+    }
+
+    // Same account checks as verifyToken: inactive users and users still on a
+    // temporary password (DefaultPasswordFlag = 1) don't get a socket.
+    try {
+        const account = await getAccountState(socket.user.userId);
+        if (!account) {
+            return next(new Error('Authentication error: account is not active.'));
+        }
+        if (account.mustChangePassword) {
+            return next(new Error('Authentication error: password change required.'));
+        }
         next();
     } catch (error) {
-        next(new Error('Authentication error: invalid or expired token.'));
+        console.error('[SOCKET] Account check failed:', error);
+        next(new Error('Authentication error: could not verify account.'));
     }
 });
 

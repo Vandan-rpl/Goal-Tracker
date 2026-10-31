@@ -1,4 +1,5 @@
 import axios from "axios";
+import { handlePasswordChangeRequired } from "../utils/passwordChange";
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1",
@@ -51,7 +52,9 @@ axiosInstance.interceptors.response.use(
         break;
 
       case 403:
-        console.error("Access Denied");
+        if (!handlePasswordChangeRequired(data)) {
+          console.error("Access Denied");
+        }
         break;
 
       case 404:

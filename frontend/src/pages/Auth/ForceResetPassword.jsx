@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import useAuth from '../../hooks/useAuth';
 
 const ForceResetPassword = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -8,6 +9,12 @@ const ForceResetPassword = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { user, markPasswordChanged } = useAuth();
+
+  // Public route: without a session there is nothing to change.
+  if (!user || !localStorage.getItem('token')) {
+    return <Navigate to="/login" replace />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,6 +26,11 @@ const ForceResetPassword = () => {
       return;
     }
 
+    if (newPassword === currentPassword) {
+      setError('New password must be different from your current password.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const response = await api.post(
@@ -27,16 +39,12 @@ const ForceResetPassword = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Update local storage user state so that the protected route allows dashboard access
-      const userString = localStorage.getItem('user');
-      if (userString) {
-        const user = JSON.parse(userString);
-        user.isPasswordChanged = true;
-        localStorage.setItem('user', JSON.stringify(user));
-      }
-
       setMessage(response.data.message || 'Password reset successfully!');
-      setTimeout(() => navigate('/dashboard'), 2000);
+      // Updates context + localStorage so ProtectedRoute lets the user through
+      setTimeout(() => {
+        markPasswordChanged();
+        navigate('/dashboard');
+      }, 2000);
     } catch (err) {
       setError(err.response?.data?.message || 'Error updating password.');
     }
