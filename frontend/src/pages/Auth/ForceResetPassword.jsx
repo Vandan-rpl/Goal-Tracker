@@ -2,12 +2,17 @@ import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
+import PasswordChecklist from '../../components/PasswordChecklist/PasswordChecklist';
+import PasswordErrorList from '../../components/PasswordChecklist/PasswordErrorList';
+import { passwordErrorsFrom } from '../../utils/passwordPolicy';
 
 const ForceResetPassword = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [errorList, setErrorList] = useState([]);
   const navigate = useNavigate();
   const { user, markPasswordChanged } = useAuth();
 
@@ -20,22 +25,14 @@ const ForceResetPassword = () => {
     e.preventDefault();
     setMessage('');
     setError('');
+    setErrorList([]);
 
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long.');
-      return;
-    }
-
-    if (newPassword === currentPassword) {
-      setError('New password must be different from your current password.');
-      return;
-    }
-
+    // The backend checks every password rule and returns all failures.
     try {
       const token = localStorage.getItem('token');
       const response = await api.post(
         '/auth/reset-password',
-        { currentPassword, newPassword },
+        { currentPassword, newPassword, confirmPassword },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -47,6 +44,7 @@ const ForceResetPassword = () => {
       }, 2000);
     } catch (err) {
       setError(err.response?.data?.message || 'Error updating password.');
+      setErrorList(passwordErrorsFrom(err.response?.data));
     }
   };
 
@@ -59,7 +57,19 @@ const ForceResetPassword = () => {
         </p>
         
         {message && <div className="mb-4 bg-green-50 text-green-600 p-3 rounded text-sm">{message}</div>}
-        {error && <div className="mb-4 bg-red-50 text-red-600 p-3 rounded text-sm">{error}</div>}
+        {error && (
+          <div className="mb-4 bg-red-50 text-red-600 p-3 rounded text-sm" role="alert">
+            {/* A single rule is already the message; list them when there are several. */}
+            {errorList.length > 1 ? (
+              <>
+                <p className="mb-1">{error}</p>
+                <PasswordErrorList errors={errorList} />
+              </>
+            ) : (
+              error
+            )}
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -77,11 +87,23 @@ const ForceResetPassword = () => {
             <input 
               type="password" 
               required
-              minLength={6}
+              autoComplete="new-password"
               value={newPassword} 
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+            <input 
+              type="password" 
+              required
+              autoComplete="new-password"
+              value={confirmPassword} 
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <PasswordChecklist password={newPassword} confirmPassword={confirmPassword} />
           </div>
           <button 
             type="submit" 

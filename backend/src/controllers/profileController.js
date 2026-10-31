@@ -110,6 +110,15 @@ exports.changePassword = async (req, res) => {
         });
 
     } catch (error) {
+        // Password rule failures carry a status and the full list of errors.
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({
+                success: false,
+                message: error.message,
+                errors: error.errors
+            });
+        }
+
         console.error("Change Password Error:", error);
 
         return res.status(500).json({

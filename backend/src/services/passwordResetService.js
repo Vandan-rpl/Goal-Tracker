@@ -2,7 +2,8 @@ const bcrypt = require("bcryptjs");
 const { poolPromise, sql } = require("../config/db");
 const passwordResetModel = require("../models/passwordResetModel");
 const { sendPasswordResetOtpMail, sendPasswordChangedMail } = require("./authMailService");
-const { validateNewPassword } = require("../validations/passwordValidation");
+const passwordHistoryModel = require("../models/passwordHistoryModel");
+const { validateNewPassword, passwordErrorMessage } = require("../validations/passwordValidation");
 const { createRateLimiter } = require("../utils/rateLimiter");
 const AppError = require("../utils/AppError");
 const logger = require("../utils/logger");
@@ -318,12 +319,6 @@ const verifyOtp = async ({ email, otp, ip }) => {
  * failure never undoes the password change.
  */
 const resetPassword = async ({ resetToken, newPassword, confirmPassword, ip }) => {
-    const validation = validateNewPassword({ newPassword, confirmPassword });
-
-    if (!validation.isValid) {
-        throw new AppError(validation.errors[0], StatusCodes.BAD_REQUEST, [ResetErrorCode.VALIDATION, ...validation.errors]);
-    }
-
     if (!resetIpLimiter.hit(ip)) {
         logEvent("warn", "rate_limited", { scope: "reset_per_ip", ip });
         throw tooManyAttempts();
@@ -359,6 +354,20 @@ const resetPassword = async ({ resetToken, newPassword, confirmPassword, ip }) =
             return { ...base, result: ResetErrorCode.RESET_SESSION_INVALID, reason: "user_inactive" };
         }
 
+        // Password policy needs the user. Rejected before markUsed, so the
+        // reset token stays usable for another try.
+        const user = await passwordHistoryModel.getUserForPasswordChange(transaction, row.UserID, { forUpdate: true });
+        const validation = await validateNewPassword({
+            newPassword,
+            confirmPassword,
+            user,
+            previousHashes: await passwordHistoryModel.getRecentHashes(transaction, row.UserID),
+        });
+
+        if (!validation.isValid) {
+            return { ...base, result: ResetErrorCode.VALIDATION, errors: validation.errors };
+        }
+
         if (!(await passwordResetModel.markUsed(transaction, row.ResetID))) {
             return { ...base, result: ResetErrorCode.RESET_SESSION_INVALID, reason: "no_longer_verified" };
         }
@@ -369,6 +378,10 @@ const resetPassword = async ({ resetToken, newPassword, confirmPassword, ip }) =
             // Rolls back markUsed too.
             throw resetError(ResetErrorCode.RESET_SESSION_INVALID);
         }
+
+        await passwordHistoryModel.archivePassword(
+            transaction, row.UserID, user.PasswordHash, toBool(user.DefaultPasswordFlag)
+        );
 
         await passwordResetModel.invalidateOpenRows(
             transaction, row.UserID, InvalidatedReason.PASSWORD_RESET, row.ResetID
@@ -389,6 +402,16 @@ const resetPassword = async ({ resetToken, newPassword, confirmPassword, ip }) =
     });
 
     const logFields = { userId: outcome.userId, resetId: outcome.resetId, ip };
+
+    if (outcome.result === ResetErrorCode.VALIDATION) {
+        // errors[0] stays the machine-readable code, the failed rules follow.
+        logEvent("warn", "reset_rejected", { ...logFields, reason: "password_policy" });
+        throw new AppError(
+            passwordErrorMessage(outcome.errors),
+            StatusCodes.BAD_REQUEST,
+            [ResetErrorCode.VALIDATION, ...outcome.errors]
+        );
+    }
 
     if (outcome.result !== "RESET") {
         if (outcome.expiredNow) {

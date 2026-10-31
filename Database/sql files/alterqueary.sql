@@ -69,3 +69,6 @@ ALTER TABLE dbo.Goals ADD CONSTRAINT CK_Goals_GoalStatus CHECK (GoalStatus IN (
 
 SELECT definition FROM sys.check_constraints
 WHERE parent_object_id = OBJECT_ID('dbo.Goals') AND definition LIKE '%GoalStatus%';
+
+ALTER TABLE dbo.Users ADD LockoutUntil DATETIME2 NULL;
+GO

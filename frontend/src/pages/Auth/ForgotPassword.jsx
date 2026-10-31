@@ -5,6 +5,9 @@ import {
   AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Lock, Mail,
 } from 'lucide-react';
 import api from '../../services/api';
+import PasswordChecklist from '../../components/PasswordChecklist/PasswordChecklist';
+import PasswordErrorList from '../../components/PasswordChecklist/PasswordErrorList';
+import { passwordErrorsFrom } from '../../utils/passwordPolicy';
 
 /**
  * Forgot Password: one guided screen in three steps.
@@ -52,8 +55,12 @@ const formatMmSs = (totalSeconds) => {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 };
 
+// Password rule failures come after the code: errors = ['VALIDATION', ...rules].
+const PASSWORD_RULES_CODE = 'VALIDATION';
+
 const readError = (err) => ({
   code: err.response?.data?.errors?.[0] || null,
+  errors: passwordErrorsFrom(err.response?.data, PASSWORD_RULES_CODE),
   message: err.response
     ? err.response.data?.message || 'Something went wrong. Please try again.'
     : 'Could not reach the server. Please check your connection and try again.',
@@ -78,6 +85,7 @@ const ForgotPassword = () => {
   const [info, setInfo] = useState('');
   const [error, setError] = useState('');
   const [errorCode, setErrorCode] = useState(null);
+  const [passwordErrors, setPasswordErrors] = useState([]);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
 
@@ -110,15 +118,17 @@ const ForgotPassword = () => {
     }
   };
 
-  const showError = ({ code, message }) => {
+  const showError = ({ code, message, errors = [] }) => {
     setErrorCode(code);
     setError(message);
+    setPasswordErrors(code === PASSWORD_RULES_CODE ? errors : []);
     setInfo('');
   };
 
   const clearMessages = () => {
     setError('');
     setErrorCode(null);
+    setPasswordErrors([]);
     setInfo('');
   };
 
@@ -257,7 +267,11 @@ const ForgotPassword = () => {
         {error && (
           <div role="alert" className="mb-5 flex items-start space-x-3 bg-red-50 border border-red-200 text-red-700 p-3.5 rounded-xl text-sm">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
-            <span className="leading-snug">{error}</span>
+            <div className="leading-snug">
+              {/* A single rule is already the message; list them when there are several. */}
+              <span>{error}</span>
+              {passwordErrors.length > 1 && <PasswordErrorList errors={passwordErrors} className="mt-1" />}
+            </div>
           </div>
         )}
 
@@ -401,6 +415,7 @@ const ForgotPassword = () => {
                     placeholder="Re-enter new password"
                   />
                 </div>
+                <PasswordChecklist password={newPassword} confirmPassword={confirmPassword} />
                 <p className={`mt-2 text-xs ${resetTimedOut ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
                   {resetTimedOut
                     ? 'This password reset session has expired. Please start again.'

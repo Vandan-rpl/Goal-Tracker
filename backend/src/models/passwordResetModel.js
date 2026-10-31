@@ -257,6 +257,7 @@ const updateUserPassword = async (db, userId, passwordHash) => {
                 PasswordChangedDate = GETDATE(),
                 IsLocked = 0,
                 FailedLoginCount = 0,
+                LockoutUntil = NULL,
                 ModifiedDate = GETDATE()
             OUTPUT INSERTED.PasswordChangedDate
             WHERE UserID = @UserID

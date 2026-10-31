@@ -134,33 +134,16 @@ exports.updateProfile = async (userId, data) => {
 };
 
 /**
- * Get Password Hash for Password Verification
+ * Update User Password Hash, inside the caller's transaction (`db`).
+ * Only while the stored hash is still `oldPasswordHash` (the one the
+ * password checks ran against). Returns true if the row was updated.
  */
-exports.getPasswordHash = async (userId) => {
+exports.updatePassword = async (db, userId, passwordHash, oldPasswordHash) => {
     try {
-        const pool = await poolPromise;
-
-        const result = await pool.request()
+        const result = await db.request()
             .input("UserId", sql.Int, userId)
-            .query("SELECT PasswordHash FROM Users WHERE UserID = @UserId");
-
-        return result.recordset[0] || null;
-    } catch (error) {
-        console.error("Model getPasswordHash Error:", error);
-        throw error;
-    }
-};
-
-/**
- * Update User Password Hash
- */
-exports.updatePassword = async (userId, passwordHash) => {
-    try {
-        const pool = await poolPromise;
-
-        await pool.request()
-            .input("UserId", sql.Int, userId)
-            .input("PasswordHash", sql.VarChar, passwordHash)
+            .input("PasswordHash", sql.NVarChar, passwordHash)
+            .input("OldPasswordHash", sql.NVarChar, oldPasswordHash)
             .query(`
                 UPDATE Users 
                 SET PasswordHash = @PasswordHash,
@@ -168,24 +151,13 @@ exports.updatePassword = async (userId, passwordHash) => {
                     DefaultPasswordFlag = 0,
                     PasswordChangedDate = GETDATE(),
                     ModifiedDate = GETDATE() 
-                WHERE UserID = @UserId
+                WHERE UserID = @UserId AND PasswordHash = @OldPasswordHash
             `);
 
-        return true;
+        return result.rowsAffected[0] === 1;
     } catch (error) {
         console.error("Model updatePassword Error:", error);
         throw error;
-    }
-};
-
-/**
- * Save Password History (Optional / If table exists)
- */
-exports.savePasswordHistory = async (userId, passwordHash) => {
-    try {
-        return true;
-    } catch (error) {
-        console.error("Model savePasswordHistory Error:", error);
     }
 };
 

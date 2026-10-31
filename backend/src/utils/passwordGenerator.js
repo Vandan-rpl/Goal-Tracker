@@ -3,12 +3,12 @@ const crypto = require("crypto");
 /**
  * Temporary passwords for new users and Resend Credentials.
  *
- * 11 characters from a CSPRNG (crypto.randomInt), with at least one
+ * 12 characters from a CSPRNG (crypto.randomInt), with at least one
  * uppercase, lowercase, digit and special character, positions shuffled.
  * Look-alike characters 0 O o 1 l I are excluded so the password can be
  * typed from the welcome email without guessing.
  */
-const TEMP_PASSWORD_LENGTH = 11;
+const TEMP_PASSWORD_LENGTH = 12;
 
 const CHARSETS = {
   upper: "ABCDEFGHJKLMNPQRSTUVWXYZ", // no I, O

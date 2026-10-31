@@ -12,6 +12,9 @@ import {
 import LockResetIcon from "@mui/icons-material/LockReset";
 import profileApi from "../../api/profileApi";
 import { useNavigate } from "react-router-dom";
+import PasswordChecklist from "../../components/PasswordChecklist/PasswordChecklist";
+import PasswordErrorList from "../../components/PasswordChecklist/PasswordErrorList";
+import { passwordErrorsFrom } from "../../utils/passwordPolicy";
 
 const ChangePassword = () => {
   const navigate = useNavigate();
@@ -22,7 +25,7 @@ const ChangePassword = () => {
     confirmPassword: "",
   });
 
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [message, setMessage] = useState({ type: "", text: "", errors: [] });
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -34,16 +37,10 @@ const ChangePassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage({ type: "", text: "" });
+    setMessage({ type: "", text: "", errors: [] });
 
-    if (formData.newPassword !== formData.confirmPassword) {
-      setMessage({
-        type: "error",
-        text: "New password and confirm password do not match.",
-      });
-      return;
-    }
-
+    // The backend checks every password rule (including confirm) and
+    // returns all failures together.
     try {
       setLoading(true);
       const response = await profileApi.changePassword({
@@ -55,6 +52,7 @@ const ChangePassword = () => {
       setMessage({
         type: "success",
         text: response.message || "Password changed successfully.",
+        errors: [],
       });
 
       setTimeout(() => {
@@ -64,6 +62,7 @@ const ChangePassword = () => {
       setMessage({
         type: "error",
         text: error.message || error.error || "Failed to change password.",
+        errors: passwordErrorsFrom(error),
       });
     } finally {
       setLoading(false);
@@ -80,7 +79,11 @@ const ChangePassword = () => {
         <CardContent>
           {message.text && (
             <Alert severity={message.type} sx={{ mb: 3 }}>
+              {/* A single rule is already the message; list them when there are several. */}
               {message.text}
+              {message.errors.length > 1 && (
+                <PasswordErrorList errors={message.errors} className="mt-1" />
+              )}
             </Alert>
           )}
 
@@ -114,6 +117,11 @@ const ChangePassword = () => {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 required
+              />
+
+              <PasswordChecklist
+                password={formData.newPassword}
+                confirmPassword={formData.confirmPassword}
               />
 
               <Stack direction="row" spacing={2}>

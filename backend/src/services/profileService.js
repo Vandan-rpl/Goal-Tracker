@@ -1,5 +1,19 @@
 const bcrypt = require("bcrypt");
+const { poolPromise } = require("../config/db");
 const profileModel = require("../models/profileModel");
+const passwordHistoryModel = require("../models/passwordHistoryModel");
+const { validateNewPassword, passwordErrorMessage } = require("../validations/passwordValidation");
+const withTransaction = require("../utils/withTransaction");
+const AppError = require("../utils/AppError");
+const { BCRYPT_SALT_ROUNDS, PasswordMessages } = require("../constants/passwordPolicyConstants");
+
+const toBool = (value) => value === true || value === 1 || value === "1";
+
+/**
+ * Rejected password change: `message` plus every failed rule in `errors`.
+ */
+const passwordRejected = (errors, statusCode = 400) =>
+    new AppError(passwordErrorMessage(errors), statusCode, errors);
 
 /**
  * ============================================================
@@ -99,22 +113,11 @@ const changePassword = async (userData, bodyData) => {
     }
 
     if (!currentPassword) {
-        throw new Error("Current password is required.");
+        throw passwordRejected([PasswordMessages.CURRENT_REQUIRED]);
     }
 
-    if (!newPassword) {
-        throw new Error("New password is required.");
-    }
-
-    if (!confirmPassword) {
-        throw new Error("Confirm password is required.");
-    }
-
-    if (newPassword !== confirmPassword) {
-        throw new Error("New password and confirm password do not match.");
-    }
-
-    const user = await profileModel.getPasswordHash(userId);
+    const pool = await poolPromise;
+    const user = await passwordHistoryModel.getUserForPasswordChange(pool, userId);
 
     if (!user) {
         throw new Error("User not found.");
@@ -126,25 +129,37 @@ const changePassword = async (userData, bodyData) => {
     );
 
     if (!passwordMatched) {
-        throw new Error("Current password is incorrect.");
+        throw passwordRejected([PasswordMessages.CURRENT_INCORRECT]);
     }
 
-    const samePassword = await bcrypt.compare(
+    const validation = await validateNewPassword({
         newPassword,
-        user.PasswordHash
-    );
+        confirmPassword,
+        user,
+        previousHashes: await passwordHistoryModel.getRecentHashes(pool, userId),
+    });
 
-    if (samePassword) {
-        throw new Error(
-            "New password cannot be the same as the current password."
-        );
+    if (!validation.isValid) {
+        throw passwordRejected(validation.errors);
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
 
-    await profileModel.updatePassword(userId, passwordHash);
+    // The old hash goes into PasswordHistory in the same transaction.
+    const changed = await withTransaction(async (transaction) => {
+        if (!(await profileModel.updatePassword(transaction, userId, passwordHash, user.PasswordHash))) {
+            return false;
+        }
 
-    await profileModel.savePasswordHistory(userId, passwordHash);
+        await passwordHistoryModel.archivePassword(
+            transaction, userId, user.PasswordHash, toBool(user.DefaultPasswordFlag)
+        );
+        return true;
+    });
+
+    if (!changed) {
+        throw passwordRejected([PasswordMessages.CHANGED_ELSEWHERE], 409);
+    }
 
     return {
         success: true,

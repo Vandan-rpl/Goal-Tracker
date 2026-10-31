@@ -4,6 +4,8 @@ const ExcelJS = require("exceljs");
 const fs = require("fs");
 const { registerUser, issueTemporaryPassword } = require("../services/authService");
 const welcomeMailQueue = require("../services/welcomeMailQueue");
+const passwordHistoryModel = require("../models/passwordHistoryModel");
+const withTransaction = require("../utils/withTransaction");
 const logger = require("../utils/logger");
 const path = require('path');
 const {
@@ -980,20 +982,38 @@ const resendCredentials = async (req, res) => {
 
     const { temporaryPassword, passwordHash } = await issueTemporaryPassword();
 
-    const updated = await pool
-      .request()
-      .input("UserID", sql.Int, userId)
-      .input("PasswordHash", sql.NVarChar, passwordHash)
-      .query(`
-        UPDATE dbo.Users
-        SET PasswordHash = @PasswordHash,
-            DefaultPasswordFlag = 1,
-            IsPasswordChanged = 0,
-            ModifiedDate = GETDATE()
-        WHERE UserID = @UserID AND IsActive = 1
-      `);
+    // New temporary password, lockout cleared, and the replaced hash into
+    // PasswordHistory, all in one transaction.
+    const updated = await withTransaction(async (transaction) => {
+      const current = await passwordHistoryModel.getUserForPasswordChange(transaction, userId, { forUpdate: true });
+      if (!current || !current.IsActive) return false;
 
-    if (updated.rowsAffected[0] === 0) {
+      await transaction
+        .request()
+        .input("UserID", sql.Int, userId)
+        .input("PasswordHash", sql.NVarChar, passwordHash)
+        .query(`
+          UPDATE dbo.Users
+          SET PasswordHash = @PasswordHash,
+              DefaultPasswordFlag = 1,
+              IsPasswordChanged = 0,
+              FailedLoginCount = 0,
+              IsLocked = 0,
+              LockoutUntil = NULL,
+              ModifiedDate = GETDATE()
+          WHERE UserID = @UserID
+        `);
+
+      await passwordHistoryModel.archivePassword(
+        transaction,
+        userId,
+        current.PasswordHash,
+        current.DefaultPasswordFlag === true || current.DefaultPasswordFlag === 1,
+      );
+      return true;
+    });
+
+    if (!updated) {
       return res.status(400).json({
         success: false,
         message: "Credentials can only be resent to active users.",
