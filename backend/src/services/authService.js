@@ -1,11 +1,10 @@
 const bcrypt = require("bcrypt");
 const SALT_ROUNDS = 10;
-const { DEFAULT_PASSWORD } = require("../constants/constants");
+const { generateTemporaryPassword } = require("../utils/passwordGenerator");
 const {
   getUserByEmployeeCode,
   getUserByUsername,
   getUserByEmail,
-  getUserByLogin,
   createUser,
   getUserById,       // Added helper method configuration
   changePassword: updatePasswordInDb     // Added helper method configuration
@@ -13,14 +12,26 @@ const {
 
 const {
   validateRegister,
-  validateLogin,
 } = require("../validations/authValidation");
 
-const { generateToken } = require("../utils/jwt");
+/**
+ * New random temporary password and its hash. The plain password is only for
+ * the welcome email: never store, log or return it in an API response.
+ */
+const issueTemporaryPassword = async () => {
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, SALT_ROUNDS);
+  return { temporaryPassword, passwordHash };
+};
 
 /**
  * Register New User
- * Used by both Single User Creation and Excel Bulk Upload systems
+ * Used by both Single User Creation and Excel Bulk Upload systems.
+ *
+ * Always gets a fresh temporary password (any PasswordHash passed in is
+ * ignored) and DefaultPasswordFlag = 1 / IsPasswordChanged = 0. On success
+ * the plain password is returned as `temporaryPassword`, beside `data`, so
+ * the caller can send the welcome email; it must not go into a response.
  */
 const registerUser = async (userData) => {
   try {
@@ -80,29 +91,15 @@ const registerUser = async (userData) => {
       };
     }
     
-    // If password parameter is omitted or blank, fall back to default password
-    const plainPassword =
-      userData.PasswordHash && userData.PasswordHash.trim() !== ""
-        ? userData.PasswordHash
-        : DEFAULT_PASSWORD;
+    const { temporaryPassword, passwordHash } = await issueTemporaryPassword();
 
-    // Hash selected password string
-    const hashedPassword = await bcrypt.hash(plainPassword, SALT_ROUNDS);
-
-    // Replace plaintext field parameters with hashed string
-    userData.PasswordHash = hashedPassword;
-    
-    // Explicitly set database flag default to 0 for tracking first-login status
-    userData.IsPasswordChanged = 0;
-
-    console.log("========== REGISTER REQUEST ==========");
-    console.log(userData);
-    console.log("======================================");
-
-    // -------------------------------
-    // Create User Profile Row
-    // -------------------------------
-    const createdUser = await createUser(userData);
+    // IsPasswordChanged = 0 makes createUser store DefaultPasswordFlag = 1:
+    // the user must change the temporary password on first login.
+    const createdUser = await createUser({
+      ...userData,
+      PasswordHash: passwordHash,
+      IsPasswordChanged: 0,
+    });
 
     return {
       success: true,
@@ -110,97 +107,7 @@ const registerUser = async (userData) => {
       data: {
         UserID: createdUser.UserID,
       },
-    };
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Login User
- * Authenticates credentials and returns forcePasswordChange conditional flags
- */
-const loginUser = async (loginData) => {
-  try {
-    // -------------------------------
-    // Validate Request
-    // -------------------------------
-    const validation = validateLogin(loginData);
-
-    if (!validation.isValid) {
-      return {
-        success: false,
-        message: "Validation failed.",
-        errors: validation.errors,
-      };
-    }
-
-    // -------------------------------
-    // Find User
-    // -------------------------------
-    const user = await getUserByLogin(loginData.LoginID);
-
-    if (!user) {
-      return {
-        success: false,
-        message: "Invalid username/email or password.",
-        errors: ["Invalid credentials."],
-      };
-    }
-
-    // -------------------------------
-    // Check User Active Status
-    // -------------------------------
-    if (user.hasOwnProperty("IsActive") && !user.IsActive) {
-      return {
-        success: false,
-        message: "Your account has been deactivated.",
-        errors: ["Inactive account."],
-      };
-    }
-
-    // -------------------------------
-    // Compare Password
-    // -------------------------------
-    const passwordMatched = await bcrypt.compare(
-      loginData.Password,
-      user.PasswordHash
-    );
-
-    if (!passwordMatched) {
-      return {
-        success: false,
-        message: "Invalid username/email or password.",
-        errors: ["Invalid credentials."],
-      };
-    }
-
-    // -------------------------------
-    // Generate JWT
-    // -------------------------------
-    const token = generateToken({
-      UserID: user.UserID,
-      EmployeeCode: user.EmployeeCode,
-      Username: user.Username,
-      Role: user.Role,
-    });
-
-    // -------------------------------
-    // Check First Login Flag (true if status value equals 0 or false)
-    // -------------------------------
-    const forcePasswordChange = user.IsPasswordChanged === 0 || user.IsPasswordChanged === false || !user.IsPasswordChanged;
-
-    // Remove sensitive information from return payload
-    delete user.PasswordHash;
-
-    return {
-      success: true,
-      message: "Login successful.",
-      data: {
-        token,
-        user,
-        forcePasswordChange,
-      },
+      temporaryPassword,
     };
   } catch (error) {
     throw error;
@@ -248,7 +155,7 @@ const changeUserPassword = async (userId, passwordData) => {
 };
 
 module.exports = {
+  issueTemporaryPassword,
   registerUser,
-  loginUser,
   changeUserPassword,
 };

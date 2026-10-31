@@ -1,6 +1,5 @@
-const bcrypt = require("bcrypt");
 const { poolPromise, sql } = require("../config/db");
-const { DEFAULT_PASSWORD } = require("../constants/constants");
+const { issueTemporaryPassword } = require("./authService");
 const {
   parseEmployeeWorkbook,
   baseUsername,
@@ -11,9 +10,6 @@ const {
   matchKey,
   EMAIL_RE,
 } = require("../utils/employeeImportParser");
-
-// Same library and rounds as authService.registerUser (single Add Employee).
-const SALT_ROUNDS = 10;
 
 const MAX_LENGTHS = {
   EmployeeCode: 20,
@@ -185,6 +181,10 @@ const validateRows = (rows, { deptMap, existingByCode, usersByEmail, businessHea
 /**
  * Import employees from HR's Excel export.
  * Everything runs in one transaction; dryRun rolls back after building the report.
+ *
+ * Returns { report, welcomeMails }. welcomeMails holds each created user with
+ * their own temporary password, for the welcome email after the commit (empty
+ * on a dry run). It must never be sent back in the response; report is safe.
  */
 const importEmployees = async (buffer, { dryRun = false, deactivateMissing = false } = {}) => {
   let parsed;
@@ -277,11 +277,15 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
     };
 
     // ---------- Pass 1: insert / update ----------
-    const needsPassword = records.some((rec) => !rec.existing);
-    // One hash for the shared default password; each user is forced to change it on first login.
-    const passwordHash = needsPassword
-      ? await bcrypt.hash(process.env.DEFAULT_EMPLOYEE_PASSWORD || DEFAULT_PASSWORD, SALT_ROUNDS)
-      : null;
+    // Every new user gets their own temporary password (DefaultPasswordFlag = 1 below forces a
+    // change on first login). Hashed up front and in parallel to keep the transaction short.
+    const credentials = new Map();
+    await Promise.all(
+      records
+        .filter((rec) => !rec.existing)
+        .map(async (rec) => credentials.set(rec, await issueTemporaryPassword())),
+    );
+    const welcomeMails = [];
 
     // First + Last Name (from the file) -> [{ UserID, middle }], for manager linking in pass 2.
     const fileNames = new Map();
@@ -324,7 +328,7 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
 
         const result = await req
           .input("Username", sql.VarChar(100), username)
-          .input("PasswordHash", sql.NVarChar(sql.MAX), passwordHash)
+          .input("PasswordHash", sql.NVarChar(sql.MAX), credentials.get(rec).passwordHash)
           .query(`
             INSERT INTO dbo.Users (
               EmployeeCode, Username, PasswordHash, Email, FirstName, LastName, MobileNo,
@@ -341,6 +345,17 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
         rec.UserID = result.recordset[0].UserID;
         report.inserted++;
         report.newUsers.push({ row: rec.row, employeeCode: rec.EmployeeCode, name: rec.name, username });
+        welcomeMails.push({
+          user: {
+            UserID: rec.UserID,
+            Username: username,
+            EmployeeCode: rec.EmployeeCode,
+            FirstName: rec.FirstName,
+            LastName: rec.LastName,
+            Email: rec.Email,
+          },
+          temporaryPassword: credentials.get(rec).temporaryPassword,
+        });
       }
 
       pushTo(fileNames, nameKey(rec.FirstName, rec.LastName), { UserID: rec.UserID, middle: rec.middleName });
@@ -479,9 +494,12 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
       h.roleChanged = roleChanges.has(h.userId);
     });
 
-    if (dryRun) await transaction.rollback();
-    else await transaction.commit();
-    return report;
+    if (dryRun) {
+      await transaction.rollback();
+      return { report, welcomeMails: [] };
+    }
+    await transaction.commit();
+    return { report, welcomeMails };
   } catch (error) {
     try {
       await transaction.rollback();

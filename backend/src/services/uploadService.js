@@ -69,7 +69,7 @@ const processBulkUserUpload = async (filePath) => {
           HODID: row.HODID ? parseInt(row.HODID, 10) : null,
           BusinessHeadID: row.BusinessHeadID ? parseInt(row.BusinessHeadID, 10) : null,
           Role: row.Role ? String(row.Role).trim() : "User",
-          PasswordHash: "" // Triggers default password hashing inside registerUser service
+          // registerUser generates a random temporary password
         };
 
         // 5. Reuse the existing registerUser service

@@ -23,6 +23,12 @@ router.post('/employees', verifyToken, adminController.createEmployee);
 router.post('/employees/import', verifyToken, verifyRole([Roles.ADMIN]), employeeImportUpload, adminController.importEmployees);
 
 router.put('/employees/:userId', verifyToken, adminController.updateEmployee);
+
+// New temporary password + welcome email (Admin only)
+router.post('/employees/:userId/resend-credentials', verifyToken, verifyRole([Roles.ADMIN]), adminController.resendCredentials);
+
+// Sent / failed counts for a bulk upload's welcome emails (Admin only)
+router.get('/welcome-mail-batches/:batchId', verifyToken, verifyRole([Roles.ADMIN]), adminController.getWelcomeMailBatch);
 router.delete('/employees/:userId', verifyToken, adminController.deleteEmployee);
 
 // Route to upload and process employees via Excel spreadsheet

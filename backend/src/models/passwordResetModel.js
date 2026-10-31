@@ -241,8 +241,9 @@ const markUsed = async (db, resetId) => {
 };
 
 /**
- * Same Users columns the old reset-link flow set. Returns the new
- * PasswordChangedDate, or null if the user is no longer active.
+ * Same Users columns the old reset-link flow set, plus unlocking the account:
+ * proving ownership of the mailbox via OTP clears a failed-login lock.
+ * Returns the new PasswordChangedDate, or null if the user is no longer active.
  */
 const updateUserPassword = async (db, userId, passwordHash) => {
     const result = await db.request()
@@ -254,6 +255,8 @@ const updateUserPassword = async (db, userId, passwordHash) => {
                 IsPasswordChanged = 1,
                 DefaultPasswordFlag = 0,
                 PasswordChangedDate = GETDATE(),
+                IsLocked = 0,
+                FailedLoginCount = 0,
                 ModifiedDate = GETDATE()
             OUTPUT INSERTED.PasswordChangedDate
             WHERE UserID = @UserID

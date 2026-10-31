@@ -2,8 +2,9 @@ const { poolPromise, sql } = require("../config/db");
 const xlsx = require("xlsx");
 const ExcelJS = require("exceljs");
 const fs = require("fs");
-const { registerUser } = require("../services/authService");
-const { DEFAULT_PASSWORD } = require("../constants/constants");
+const { registerUser, issueTemporaryPassword } = require("../services/authService");
+const welcomeMailQueue = require("../services/welcomeMailQueue");
+const logger = require("../utils/logger");
 const path = require('path');
 const {
   importEmployees: importEmployeeFile,
@@ -430,14 +431,13 @@ const createEmployee = async (req, res) => {
     const lastSlug = slugify(LastName);
     const finalUsername =
       Username || (firstSlug && lastSlug ? `${firstSlug}.${lastSlug}` : "");
-    const finalEmail =
-      Email ||
-      (firstSlug && lastSlug ? `${firstSlug}.${lastSlug}@rubamin.com` : "");
 
+    // Email is mandatory (the welcome email carries the temporary password),
+    // so it is no longer made up from the name; registerUser rejects it blank.
     const userData = {
       EmployeeCode: EmployeeCode || null,
       Username: finalUsername,
-      Email: finalEmail,
+      Email: typeof Email === "string" ? Email.trim() : Email,
       FirstName: FirstName,
       LastName: LastName,
       MobileNo: MobileNo || null,
@@ -449,7 +449,6 @@ const createEmployee = async (req, res) => {
       HODID: HODID || null,
       BusinessHeadID: BusinessHeadID || null,
       Role: roleValue,
-      PasswordHash: DEFAULT_PASSWORD || "Rubamin@123",
     };
 
     const result = await registerUser(userData);
@@ -462,10 +461,26 @@ const createEmployee = async (req, res) => {
       });
     }
 
+    // The user is committed at this point; a mail failure does not undo it.
+    let welcomeMailSent = true;
+    try {
+      await welcomeMailQueue.sendNow({
+        user: { ...userData, UserID: result.data.UserID },
+        temporaryPassword: result.temporaryPassword,
+        source: "single-add",
+      });
+    } catch (mailError) {
+      // Already logged by the queue (without the password).
+      welcomeMailSent = false;
+    }
+
     return res.status(201).json({
       success: true,
-      message: `Employee created successfully. Default password is '${DEFAULT_PASSWORD || "Rubamin@123"}'.`,
-      data: result.data,
+      message: welcomeMailSent
+        ? "Employee created successfully. A welcome email with a temporary password has been sent."
+        : "User created, but the welcome email could not be sent. Use Resend Credentials.",
+      warning: !welcomeMailSent,
+      data: { ...result.data, welcomeMailSent },
     });
   } catch (error) {
     console.error("Create Employee Error:", error);
@@ -634,6 +649,21 @@ const deleteEmployee = async (req, res) => {
 // Safely convert any Excel/DB value to trimmed text (null/undefined/numbers safe)
 const clean = (v) => (v === null || v === undefined ? "" : String(v).trim());
 
+/**
+ * Queue one welcome email per created user. Returns the summary the admin
+ * sees; mailsFailed counts mails that could not be queued; failures while
+ * sending show up later in GET /admin/welcome-mail-batches/:batchId.
+ */
+const queueWelcomeMails = (items, source) => {
+  try {
+    const batchId = welcomeMailQueue.enqueueBatch(items, { source });
+    return { batchId, mailsQueued: items.length, mailsFailed: 0 };
+  } catch (error) {
+    logger.error(`[WELCOME MAIL] Could not queue ${items.length} mail(s) for ${source}: ${error.message}`);
+    return { batchId: null, mailsQueued: 0, mailsFailed: items.length };
+  }
+};
+
 const uploadEmployeesExcel = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({
@@ -730,6 +760,9 @@ const uploadEmployeesExcel = async (req, res) => {
     let successCount = 0;
     let errorCount = 0;
     const errors = [];
+    // Created users and their temporary passwords, mailed after the loop.
+    const createdUsers = [];
+    let inactiveNoMail = 0;
 
     for (let i = 0; i < sheetData.length; i++) {
       const row = sheetData[i];
@@ -764,9 +797,9 @@ const uploadEmployeesExcel = async (req, res) => {
       const finalUsername =
         clean(row.Username) ||
         (firstSlug && lastSlug ? `${firstSlug}.${lastSlug}` : "");
-      const finalEmail =
-        clean(row.Email) ||
-        (firstSlug && lastSlug ? `${firstSlug}.${lastSlug}@rubamin.com` : "");
+      // Email is mandatory (no address made up from the name): registerUser
+      // skips the row as "Email is required." / "Invalid email format."
+      const finalEmail = clean(row.Email);
 
       // IsActive: Yes/No/1/0/True/False; blank = active
       const activeText = clean(row.IsActive).toLowerCase();
@@ -792,7 +825,6 @@ const uploadEmployeesExcel = async (req, res) => {
         BusinessHeadID: bh.id,
         Role: clean(row.Role) || "Employee",
         IsActive: isActive,
-        PasswordHash: DEFAULT_PASSWORD || "Rubamin@123",
       };
 
       if (getRoleRank(userData.Role) === null) {
@@ -807,18 +839,38 @@ const uploadEmployeesExcel = async (req, res) => {
 
       if (result.success) {
         successCount++;
+        // Inactive users cannot log in, so they get no credentials now;
+        // Resend Credentials once they are activated.
+        if (isActive) {
+          createdUsers.push({
+            user: { ...userData, UserID: result.data.UserID },
+            temporaryPassword: result.temporaryPassword,
+          });
+        } else {
+          inactiveNoMail++;
+        }
       } else {
         errorCount++;
-        errors.push(`Row ${rowNo}: ${result.message}`);
+        const reasons = result.errors && result.errors.length ? result.errors.join(" ") : result.message;
+        errors.push(`Row ${rowNo}: ${reasons}`);
       }
     }
 
     fs.unlinkSync(filePath);
 
+    // Each user is committed by registerUser, so mails can go now. The queue
+    // sends them in the background (30 per minute); this request does not wait.
+    const mail = queueWelcomeMails(createdUsers, "upload-excel");
+
     return res.status(200).json({
       success: true,
-      message: `Employee Excel processing completed. Success: ${successCount}, Errors: ${errorCount}.`,
-      data: { successCount, errorCount, errors },
+      message: `Employee Excel processing completed. Created: ${successCount}, Skipped: ${errorCount}, Welcome emails queued: ${mail.mailsQueued}.`,
+      data: {
+        successCount,
+        errorCount,
+        errors,
+        mail: { ...mail, inactiveNoMail },
+      },
     });
   } catch (error) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -849,16 +901,24 @@ const importEmployees = async (req, res) => {
     String(req.query.deactivateMissing).toLowerCase() === "true";
 
   try {
-    const report = await importEmployeeFile(req.file.buffer, {
+    const { report, welcomeMails } = await importEmployeeFile(req.file.buffer, {
       dryRun,
       deactivateMissing,
     });
+
+    // After the commit: one welcome email per created user, sent in the
+    // background (30 per minute); this request does not wait for them.
+    const mail = dryRun
+      ? { batchId: null, mailsQueued: 0, mailsFailed: 0 }
+      : queueWelcomeMails(welcomeMails, "import-employees");
+
     return res.status(200).json({
       success: true,
       message: dryRun
         ? "Preview generated. No changes were saved."
-        : `Import completed. Created: ${report.inserted}, Updated: ${report.updated}, Not uploaded: ${report.notUploaded.length}, Manager not linked: ${report.managerNotLinked.length}, Skipped (not active): ${report.skippedInactive.length}, Deactivated: ${report.deactivated}.`,
+        : `Import completed. Created: ${report.inserted}, Updated: ${report.updated}, Not uploaded: ${report.notUploaded.length}, Manager not linked: ${report.managerNotLinked.length}, Skipped (not active): ${report.skippedInactive.length}, Deactivated: ${report.deactivated}, Welcome emails queued: ${mail.mailsQueued}.`,
       ...report,
+      mail,
     });
   } catch (error) {
     if (error instanceof ImportValidationError) {
@@ -877,7 +937,115 @@ const importEmployees = async (req, res) => {
   }
 };
 
+/**
+ * Resend Credentials (Admin only).
+ * POST /admin/employees/:userId/resend-credentials
+ *
+ * New temporary password (the old one stops working at once), forced change
+ * on next login, then the welcome email. Only for active users with an email.
+ */
+const resendCredentials = async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid employee ID." });
+  }
+
+  const admin = `userId=${req.user.userId} (${req.user.username})`;
+
+  try {
+    const pool = await poolPromise;
+    const found = await pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .query(
+        "SELECT UserID, EmployeeCode, Username, FirstName, LastName, Email, IsActive FROM dbo.Users WHERE UserID = @UserID",
+      );
+
+    const user = found.recordset[0];
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Employee not found." });
+    }
+    if (!user.IsActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Credentials can only be resent to active users.",
+      });
+    }
+    if (!user.Email || !String(user.Email).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "This user has no email address. Add one before resending credentials.",
+      });
+    }
+
+    const { temporaryPassword, passwordHash } = await issueTemporaryPassword();
+
+    const updated = await pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .input("PasswordHash", sql.NVarChar, passwordHash)
+      .query(`
+        UPDATE dbo.Users
+        SET PasswordHash = @PasswordHash,
+            DefaultPasswordFlag = 1,
+            IsPasswordChanged = 0,
+            ModifiedDate = GETDATE()
+        WHERE UserID = @UserID AND IsActive = 1
+      `);
+
+    if (updated.rowsAffected[0] === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Credentials can only be resent to active users.",
+      });
+    }
+
+    logger.info(`[CREDENTIALS] Resend by admin ${admin} for userId=${userId} at ${new Date().toISOString()}: password reset`);
+
+    try {
+      await welcomeMailQueue.sendNow({ user, temporaryPassword, source: "resend-credentials" });
+    } catch (mailError) {
+      // Already logged by the queue (without the password).
+      return res.status(502).json({
+        success: false,
+        message:
+          "A new temporary password was set, but the email could not be sent. The old password no longer works. Please try Resend Credentials again.",
+      });
+    }
+
+    logger.info(`[CREDENTIALS] Resend by admin ${admin} for userId=${userId}: welcome email sent`);
+
+    return res.json({
+      success: true,
+      message: `New credentials have been sent to ${user.Email}.`,
+    });
+  } catch (error) {
+    console.error("Resend Credentials Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to resend credentials.",
+    });
+  }
+};
+
+/**
+ * Progress of a bulk upload's welcome emails (Admin only).
+ * GET /admin/welcome-mail-batches/:batchId
+ */
+const getWelcomeMailBatch = (req, res) => {
+  const status = welcomeMailQueue.getBatchStatus(req.params.batchId);
+  if (!status) {
+    return res.status(404).json({
+      success: false,
+      message: "Mail batch not found. It may have expired or the server was restarted.",
+    });
+  }
+  return res.json({ success: true, data: status });
+};
+
 module.exports = {
+  resendCredentials,
+  getWelcomeMailBatch,
   importEmployees,
   getDropdownData,
   getAllEmployees,
