@@ -9,6 +9,10 @@ const {
     IdeaStatus,
     IDEA_STATUSES,
     IdeaAction,
+    IdeaActor,
+    IdeaRequestType,
+    IDEA_EXTENSION_DATE_PREFIX,
+    IDEA_EXTENSION_REASON_SEPARATOR,
     IdeaRejectedStage,
     IdeaMailEvent,
     IDEA_TRANSITIONS,
@@ -208,6 +212,7 @@ const getIdeaById = async (ideaIdParam, user) => {
     const isSubmitter = idea.UserID === userId;
     const isLead = idea.AssignedLeadID === userId;
     const isFinalApprover = idea.FinalApproverID === userId;
+    const canRequest = isSubmitter && !idea.PendingRequestType;
 
     return {
         ...details,
@@ -216,8 +221,13 @@ const getIdeaById = async (ideaIdParam, user) => {
         IsFinalApprover: isFinalApprover,
         IsPendingWithMe:
             (isLead && idea.Status === IdeaStatus.SUBMITTED) ||
-            (isFinalApprover && idea.Status === IdeaStatus.PENDING_FINAL_APPROVAL),
+            (isFinalApprover && idea.Status === IdeaStatus.PENDING_FINAL_APPROVAL) ||
+            (isLead && Boolean(idea.PendingRequestType)),
         CanEdit: isSubmitter && idea.Status === IdeaStatus.DRAFT,
+        // Same rules as IDEA_TRANSITIONS.requestClosure / requestExtension.
+        CanRequestClosure: canRequest && IDEA_TRANSITIONS.requestClosure.from.includes(idea.Status),
+        CanRequestExtension:
+            canRequest && Boolean(idea.IsOverdue) && IDEA_TRANSITIONS.requestExtension.from.includes(idea.Status),
         Activity: activity,
     };
 };
@@ -385,6 +395,7 @@ const parseRemark = (value, label, { required }) => {
 
 // Wrong person, wrong status, or someone acted first.
 const NOT_ACTIONABLE_MESSAGE = "This idea has already been actioned or you are not the approver.";
+const NOT_REQUESTABLE_MESSAGE = "Only the idea's owner can send this request, and only while the idea is in a status that allows it.";
 
 /**
  * Shared flow for every action, in one transaction:
@@ -414,7 +425,10 @@ const performTransition = async (ideaIdParam, user, transition, apply, mailConte
         const actorColumn = ideaModel.ACTOR_COLUMNS[transition.actor];
 
         if (idea[actorColumn] !== actorId || !transition.from.includes(idea.Status)) {
-            throw new AppError(NOT_ACTIONABLE_MESSAGE, StatusCodes.CONFLICT);
+            throw new AppError(
+                transition.actor === IdeaActor.SUBMITTER ? NOT_REQUESTABLE_MESSAGE : NOT_ACTIONABLE_MESSAGE,
+                StatusCodes.CONFLICT
+            );
         }
 
         const { updated, logRemark } = await apply(transaction, idea, { transition, ideaId, actorId });
@@ -491,7 +505,7 @@ const managerReject = async (ideaIdParam, body = {}, user) => {
 };
 
 /**
- * Final Approve (Pending Final Approval -> Active). Target date = today +
+ * Final Approve (Pending Final Approval -> In Implementation). Target date = today +
  * the timeline days the manager set.
  */
 const finalApprove = async (ideaIdParam, body = {}, user) => {
@@ -526,7 +540,8 @@ const finalReject = async (ideaIdParam, body = {}, user) => {
 };
 
 /**
- * Start Implementation (Active -> In Implementation)
+ * Start Implementation (Active -> In Implementation), for ideas that were
+ * final-approved before approval went straight to In Implementation
  */
 const startImplementation = async (ideaIdParam, body = {}, user) => {
     const remark = parseRemark(body.remark, "Remark", { required: false });
@@ -538,59 +553,194 @@ const startImplementation = async (ideaIdParam, body = {}, user) => {
 };
 
 /**
- * Mark Implemented (In Implementation -> Implemented)
+ * ------------------------------------------------------------
+ * Close / extend requests (IDEA_REQUESTS): the idea's owner requests, the
+ * reporting manager approves or rejects. One pending request per idea;
+ * the status does not change until the request is approved.
+ * ------------------------------------------------------------
  */
-const markImplemented = async (ideaIdParam, body = {}, user) => {
-    const remark = parseRemark(body.remark, "Remark", { required: false });
 
-    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.markImplemented, async (transaction, idea, base) => ({
-        updated: await ideaModel.markImplemented(transaction, { ...base, remark }),
-        logRemark: remark,
-    }));
+const REQUEST_LABELS = {
+    [IdeaRequestType.CLOSE]: "closure",
+    [IdeaRequestType.EXTEND]: "timeline extension",
+};
+
+// SQL DATE value (a JS Date at UTC midnight) as 'YYYY-MM-DD'
+const toDateKey = (value) => new Date(value).toISOString().slice(0, 10);
+
+// Owner's request: no other request pending and an active reporting manager.
+const assertCanRequest = (idea) => {
+    if (idea.PendingRequestType) {
+        throw new AppError(
+            `A ${REQUEST_LABELS[idea.PendingRequestType]} request is already pending with the reporting manager for this idea.`,
+            StatusCodes.CONFLICT
+        );
+    }
+
+    if (!idea.AssignedLeadID || !idea.LeadIsActive) {
+        throw new AppError(
+            "This idea has no active reporting manager, so the request can't be sent. Please contact the Admin.",
+            StatusCodes.CONFLICT
+        );
+    }
+};
+
+// Reporting manager's approve / reject: that request must be pending.
+const assertPendingRequest = (idea, type) => {
+    if (idea.PendingRequestType !== type) {
+        throw new AppError(`There is no pending ${REQUEST_LABELS[type]} request for this idea.`, StatusCodes.CONFLICT);
+    }
 };
 
 /**
- * Extend Timeline (Active / In Implementation, only when overdue).
- * Status does not change.
+ * Request Closure (owner; In Implementation). Closing an idea = marking it
+ * Implemented once the reporting manager approves.
  */
-const extendTimeline = async (ideaIdParam, body = {}, user) => {
-    const additionalDays = parseDays(body.additionalDays, "Additional days");
+const requestClosure = async (ideaIdParam, body = {}, user) => {
+    const remark = parseRemark(body.remark, "Closure remark", { required: true });
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.requestClosure, async (transaction, idea, base) => {
+        assertCanRequest(idea);
+
+        return {
+            updated: await ideaModel.recordRequestStep(transaction, { ...base, remark }),
+            logRemark: remark,
+        };
+    }, { remark });
+};
+
+/**
+ * Approve Closure (reporting manager; In Implementation -> Implemented)
+ */
+const approveClosure = async (ideaIdParam, body = {}, user) => {
+    const remark = parseRemark(body.remark, "Remark", { required: false });
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.approveClosure, async (transaction, idea, base) => {
+        assertPendingRequest(idea, IdeaRequestType.CLOSE);
+
+        return {
+            updated: await ideaModel.markImplemented(transaction, { ...base, remark }),
+            logRemark: remark,
+        };
+    }, { remark });
+};
+
+/**
+ * Reject Closure (reporting manager; status unchanged)
+ */
+const rejectClosure = async (ideaIdParam, body = {}, user) => {
+    const remark = parseRemark(body.remark, "Rejection remark", { required: true });
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.rejectClosure, async (transaction, idea, base) => {
+        assertPendingRequest(idea, IdeaRequestType.CLOSE);
+
+        return {
+            updated: await ideaModel.recordRequestStep(transaction, { ...base, remark }),
+            logRemark: remark,
+        };
+    }, { remark });
+};
+
+/**
+ * Request Extension (owner; Active / In Implementation, only when overdue).
+ * body: { newTargetDate: 'YYYY-MM-DD' (after today), reason }
+ */
+const requestExtension = async (ideaIdParam, body = {}, user) => {
+    const newTargetDate = typeof body.newTargetDate === "string" ? body.newTargetDate.trim() : "";
     const reason = parseRemark(body.reason, "Reason", { required: true });
 
-    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.extendTimeline, async (transaction, idea, base) => {
+    if (!isValidDateKey(newTargetDate)) {
+        throw new AppError("Validation failed.", StatusCodes.BAD_REQUEST, [
+            "New target date is required (YYYY-MM-DD).",
+        ]);
+    }
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.requestExtension, async (transaction, idea, base) => {
+        assertCanRequest(idea);
+
         if (!idea.IsOverdue) {
             throw new AppError(
-                `The timeline can only be extended once the idea is overdue. Current target date: ${formatDate(idea.TargetDate)}.`,
+                `An extension can only be requested once the idea is overdue. Current target date: ${formatDate(idea.TargetDate)}.`,
                 StatusCodes.CONFLICT
             );
         }
 
-        // New target = TargetDate + additionalDays, which must be today or
-        // later, i.e. additionalDays >= days the target has already passed.
-        const minimumDays = idea.DaysPastTarget;
-
-        if (additionalDays < minimumDays) {
+        if (newTargetDate <= toDateKey(idea.Today)) {
             throw new AppError("Validation failed.", StatusCodes.BAD_REQUEST, [
-                `Extending by ${pluralDays(additionalDays)} still leaves the target date in the past. ` +
-                `Add at least ${pluralDays(minimumDays)} so the new target date is today or later.`,
+                "New target date must be a future date.",
             ]);
+        }
+
+        return {
+            updated: await ideaModel.recordRequestStep(transaction, { ...base, remark: reason }),
+            // Read back by ideaModel PENDING_REQUEST_APPLY; keep this format.
+            logRemark: `${IDEA_EXTENSION_DATE_PREFIX}${formatDate(newTargetDate)}${IDEA_EXTENSION_REASON_SEPARATOR}${reason}`,
+        };
+    }, { remark: reason, newTargetDate });
+};
+
+/**
+ * Approve Extension (reporting manager). The requested date becomes the
+ * target date; the previous date stays in the activity log.
+ */
+const approveExtension = async (ideaIdParam, body = {}, user) => {
+    const remark = parseRemark(body.remark, "Remark", { required: false });
+    // Filled in below, read by the email after commit.
+    const mailContext = { remark };
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.approveExtension, async (transaction, idea, base) => {
+        assertPendingRequest(idea, IdeaRequestType.EXTEND);
+
+        if (!idea.PendingRequestedTargetDate) {
+            throw new AppError("The requested target date could not be read. Please reject this request.", StatusCodes.CONFLICT);
+        }
+
+        const newTargetDate = toDateKey(idea.PendingRequestedTargetDate);
+
+        if (newTargetDate < toDateKey(idea.Today)) {
+            throw new AppError(
+                `The requested target date (${formatDate(newTargetDate)}) has already passed. Reject this request so the owner can ask for a new date.`,
+                StatusCodes.CONFLICT
+            );
         }
 
         const updated = await ideaModel.extendTimeline(transaction, {
             ...base,
             // Only the status that was just read, so the status can't change underneath.
             fromStatuses: [idea.Status],
-            additionalDays,
-            remark: reason,
+            newTargetDate,
+            remark,
         });
+
+        mailContext.previousTargetDate = idea.TargetDate;
 
         return {
             updated,
             logRemark: updated
-                ? `Extended by ${pluralDays(additionalDays)}. New target date: ${formatDate(updated.TargetDate)}. Reason: ${reason}`
+                ? `Target date changed from ${formatDate(idea.TargetDate)} to ${formatDate(updated.TargetDate)}.${remark ? ` ${remark}` : ""}`
                 : null,
         };
-    });
+    }, mailContext);
+};
+
+/**
+ * Reject Extension (reporting manager; target date unchanged, the owner can
+ * request again)
+ */
+const rejectExtension = async (ideaIdParam, body = {}, user) => {
+    const remark = parseRemark(body.remark, "Rejection remark", { required: true });
+    const mailContext = { remark };
+
+    return await performTransition(ideaIdParam, user, IDEA_TRANSITIONS.rejectExtension, async (transaction, idea, base) => {
+        assertPendingRequest(idea, IdeaRequestType.EXTEND);
+
+        mailContext.requestedTargetDate = idea.PendingRequestedTargetDate;
+
+        return {
+            updated: await ideaModel.recordRequestStep(transaction, { ...base, remark }),
+            logRemark: remark,
+        };
+    }, mailContext);
 };
 
 /**
@@ -931,6 +1081,10 @@ module.exports = {
     finalApprove,
     finalReject,
     startImplementation,
-    markImplemented,
-    extendTimeline,
+    requestClosure,
+    approveClosure,
+    rejectClosure,
+    requestExtension,
+    approveExtension,
+    rejectExtension,
 };

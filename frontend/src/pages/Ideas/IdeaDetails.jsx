@@ -7,6 +7,7 @@ import { getIdea, getIdeaApiError } from "../../services/ideaService";
 import { IDEAS_HOME_PATH } from "../../utils/ideasMenu";
 import {
   IDEA_ACTIONS,
+  IDEA_PENDING_REQUEST_LABELS,
   formatIdeaDate,
   formatIdeaDateTime,
   getIdeaActionDisplay,
@@ -136,7 +137,11 @@ const IdeaDetails = () => {
     (entry) => entry.Action === IDEA_ACTIONS.TIMELINE_EXTENDED,
   ).length;
   const isRejected = idea.Status === "Rejected";
-  const canAct = idea.IsLead || idea.IsFinalApprover;
+  // The owner gets the section for close / extend requests.
+  const canAct =
+    idea.IsLead ||
+    idea.IsFinalApprover ||
+    (idea.IsSubmitter && Boolean(idea.CanRequestClosure || idea.CanRequestExtension || idea.PendingRequestType));
 
   return (
     <div className="flex-1 bg-slate-50 min-h-screen overflow-y-auto py-10 px-4 sm:px-6 lg:px-8 text-slate-800">
@@ -152,7 +157,7 @@ const IdeaDetails = () => {
             <span>Back</span>
           </button>
 
-          <IdeaStatusBadge status={idea.Status} overdue={idea.IsOverdue} />
+          <IdeaStatusBadge status={idea.Status} overdue={idea.IsOverdue} pendingRequest={idea.PendingRequestType} />
         </div>
 
         {/* Main Container Card */}
@@ -226,6 +231,26 @@ const IdeaDetails = () => {
             </p>
           </section>
 
+          {/* Owner's request waiting for the reporting manager */}
+          {idea.PendingRequestType && (
+            <div role="status" className="p-4 rounded-2xl text-sm border bg-sky-50 border-sky-200 text-sky-900 space-y-1">
+              <p className="font-bold">
+                {IDEA_PENDING_REQUEST_LABELS[idea.PendingRequestType]}: waiting for {idea.LeadName || "the reporting manager"}
+              </p>
+              <p className="text-xs text-sky-700">Requested on {formatIdeaDateTime(idea.PendingRequestDate)}</p>
+              {idea.PendingRequestType === "Extend" && (
+                <p>
+                  Requested target date:{" "}
+                  <span className="font-semibold">{formatIdeaDate(idea.PendingRequestedTargetDate)}</span>
+                </p>
+              )}
+              <p className="whitespace-pre-wrap break-words">
+                <span className="font-semibold">{idea.PendingRequestType === "Extend" ? "Reason: " : "Closure remark: "}</span>
+                {idea.PendingRequestRemark}
+              </p>
+            </div>
+          )}
+
           {/* Latest Remark */}
           {idea.Remarks && (
             <div
@@ -270,9 +295,10 @@ const IdeaDetails = () => {
 
                       {/* The backend writes the details into the remark: Manager
                           Approved = "Final approver: ... Timeline: N days. ...",
-                          Final Approved = "Target date: ... ...", Timeline
-                          Extended = "Extended by N days. New target date: ...
-                          Reason: ..." */}
+                          Final Approved = "Target date: ... ...", Extension
+                          Requested = "Requested target date: ... Reason: ...",
+                          Timeline Extended = "Target date changed from ... to
+                          ..." (older entries: "Extended by N days. ...") */}
                       {entry.Remark && (
                         <p className="text-sm text-slate-700 mt-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 whitespace-pre-wrap break-words">
                           {entry.Remark}
@@ -289,7 +315,7 @@ const IdeaDetails = () => {
           {canAct && (
             <section className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-5 space-y-3">
               <h2 className="text-xs font-bold text-indigo-700 uppercase tracking-wider">
-                {idea.IsFinalApprover && !idea.IsLead ? "Final Approver Actions" : "Your Actions"}
+                {idea.IsFinalApprover && !idea.IsLead && !idea.IsSubmitter ? "Final Approver Actions" : "Your Actions"}
               </h2>
               <IdeaLeadActions
                 idea={idea}

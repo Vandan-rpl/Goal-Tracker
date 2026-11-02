@@ -316,40 +316,120 @@ exports.startImplementation = async (req, res) => {
 };
 
 /**
- * Mark Implemented
- * POST /api/v1/ideas/:ideaId/implement
+ * Request Closure
+ * POST /api/v1/ideas/:ideaId/request-closure
  */
-exports.markImplemented = async (req, res) => {
+exports.requestClosure = async (req, res) => {
 
     try {
 
-        const idea = await ideaService.markImplemented(req.params.ideaId, req.body, req.user);
+        const idea = await ideaService.requestClosure(req.params.ideaId, req.body, req.user);
 
-        return successResponse(res, 200, "Idea marked as implemented.", idea);
+        return successResponse(res, 200, "Closure request sent to the reporting manager.", idea);
 
     } catch (error) {
 
-        return handleError(res, error, "Mark Implemented", "Failed to mark idea as implemented.");
+        return handleError(res, error, "Request Closure", "Failed to send the closure request.");
 
     }
 
 };
 
 /**
- * Extend Timeline
- * POST /api/v1/ideas/:ideaId/extend-timeline
+ * Approve Closure
+ * POST /api/v1/ideas/:ideaId/approve-closure
  */
-exports.extendTimeline = async (req, res) => {
+exports.approveClosure = async (req, res) => {
 
     try {
 
-        const idea = await ideaService.extendTimeline(req.params.ideaId, req.body, req.user);
+        const idea = await ideaService.approveClosure(req.params.ideaId, req.body, req.user);
 
-        return successResponse(res, 200, "Timeline extended successfully.", idea);
+        return successResponse(res, 200, "Closure approved. The idea is now Implemented.", idea);
 
     } catch (error) {
 
-        return handleError(res, error, "Extend Timeline", "Failed to extend timeline.");
+        return handleError(res, error, "Approve Closure", "Failed to approve the closure.");
+
+    }
+
+};
+
+/**
+ * Reject Closure
+ * POST /api/v1/ideas/:ideaId/reject-closure
+ */
+exports.rejectClosure = async (req, res) => {
+
+    try {
+
+        const idea = await ideaService.rejectClosure(req.params.ideaId, req.body, req.user);
+
+        return successResponse(res, 200, "Closure request rejected.", idea);
+
+    } catch (error) {
+
+        return handleError(res, error, "Reject Closure", "Failed to reject the closure request.");
+
+    }
+
+};
+
+/**
+ * Request Extension
+ * POST /api/v1/ideas/:ideaId/request-extension
+ */
+exports.requestExtension = async (req, res) => {
+
+    try {
+
+        const idea = await ideaService.requestExtension(req.params.ideaId, req.body, req.user);
+
+        return successResponse(res, 200, "Extension request sent to the reporting manager.", idea);
+
+    } catch (error) {
+
+        return handleError(res, error, "Request Extension", "Failed to send the extension request.");
+
+    }
+
+};
+
+/**
+ * Approve Extension
+ * POST /api/v1/ideas/:ideaId/approve-extension
+ */
+exports.approveExtension = async (req, res) => {
+
+    try {
+
+        const idea = await ideaService.approveExtension(req.params.ideaId, req.body, req.user);
+
+        return successResponse(res, 200, "Extension approved. The target date has been updated.", idea);
+
+    } catch (error) {
+
+        return handleError(res, error, "Approve Extension", "Failed to approve the extension.");
+
+    }
+
+};
+
+/**
+ * Reject Extension
+ * POST /api/v1/ideas/:ideaId/reject-extension
+ */
+exports.rejectExtension = async (req, res) => {
+
+    try {
+
+        const idea = await ideaService.rejectExtension(req.params.ideaId, req.body, req.user);
+
+        return successResponse(res, 200, "Extension request rejected.", idea);
+
+    } catch (error) {
+
+        return handleError(res, error, "Reject Extension", "Failed to reject the extension request.");
 
     }
 

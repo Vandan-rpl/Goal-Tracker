@@ -67,7 +67,7 @@ const IDEA_MAIL_EVENTS = Object.freeze({
         purpose: "Idea approved",
         actionRequired: false,
         message: (idea) =>
-            `Your idea has been approved by the final approver, ${idea.FinalApproverName}, and is now Active.`,
+            `Your idea has been approved by the final approver, ${idea.FinalApproverName}, and is now In Implementation.`,
         details: (idea, context) => [
             ["Target date", formatDate(idea.TargetDate)],
             ["Final approver's remark", context.remark],
@@ -79,6 +79,67 @@ const IDEA_MAIL_EVENTS = Object.freeze({
         actionRequired: false,
         message: (idea) => `Your idea has been rejected by the final approver, ${idea.FinalApproverName}.`,
         details: (idea, context) => [["Rejection remark", context.remark]],
+    },
+    [IdeaMailEvent.CLOSURE_REQUESTED]: {
+        recipient: IdeaMailRecipient.MANAGER,
+        purpose: "Closure approval required",
+        actionRequired: true,
+        message: (idea) =>
+            `${idea.SubmitterName} has requested to close this idea (mark it as Implemented).`,
+        details: (idea, context) => [["Closure remark", context.remark]],
+    },
+    [IdeaMailEvent.CLOSURE_APPROVED]: {
+        recipient: IdeaMailRecipient.SUBMITTER,
+        purpose: "Closure approved",
+        actionRequired: false,
+        message: (idea) =>
+            `Your request to close this idea has been approved by your reporting manager, ${idea.LeadName}. The idea is now Implemented.`,
+        details: (idea, context) => [["Reporting manager's remark", context.remark]],
+    },
+    [IdeaMailEvent.CLOSURE_REJECTED]: {
+        recipient: IdeaMailRecipient.SUBMITTER,
+        purpose: "Closure rejected",
+        actionRequired: false,
+        message: (idea) =>
+            `Your request to close this idea has been rejected by your reporting manager, ${idea.LeadName}. The idea stays ${idea.Status}.`,
+        details: (idea, context) => [["Rejection remark", context.remark]],
+    },
+    [IdeaMailEvent.EXTENSION_REQUESTED]: {
+        recipient: IdeaMailRecipient.MANAGER,
+        purpose: "Extension approval required",
+        actionRequired: true,
+        message: (idea) =>
+            `${idea.SubmitterName} has requested a timeline extension for this overdue idea.`,
+        details: (idea, context) => [
+            ["Current target date", formatDate(idea.TargetDate)],
+            ["Requested target date", formatDate(context.newTargetDate)],
+            ["Reason", context.remark],
+        ],
+    },
+    [IdeaMailEvent.EXTENSION_APPROVED]: {
+        recipient: IdeaMailRecipient.SUBMITTER,
+        purpose: "Extension approved",
+        actionRequired: false,
+        message: (idea) =>
+            `Your timeline extension request has been approved by your reporting manager, ${idea.LeadName}.`,
+        details: (idea, context) => [
+            ["Previous target date", formatDate(context.previousTargetDate)],
+            ["New target date", formatDate(idea.TargetDate)],
+            ["Reporting manager's remark", context.remark],
+        ],
+    },
+    [IdeaMailEvent.EXTENSION_REJECTED]: {
+        recipient: IdeaMailRecipient.SUBMITTER,
+        purpose: "Extension rejected",
+        actionRequired: false,
+        message: (idea) =>
+            `Your timeline extension request has been rejected by your reporting manager, ${idea.LeadName}. ` +
+            "The target date is unchanged; you can send a new request.",
+        details: (idea, context) => [
+            ["Target date", formatDate(idea.TargetDate)],
+            ["Requested target date", formatDate(context.requestedTargetDate)],
+            ["Rejection remark", context.remark],
+        ],
     },
 });
 
@@ -155,7 +216,10 @@ const buildHtml = (definition, idea, context, recipient, testRecipient) => {
  * @param {string} event              IdeaMailEvent value
  * @param {object} context
  * @param {number} context.ideaId
- * @param {string} [context.remark]   remark entered with the action
+ * @param {string} [context.remark]   remark entered with the action (closure
+ *                                    remark / extension reason for requests)
+ * @param {*} [context.newTargetDate] / previousTargetDate / requestedTargetDate
+ *                                    extension request emails only
  */
 const sendIdeaMail = async (event, context = {}) => {
     const definition = IDEA_MAIL_EVENTS[event];

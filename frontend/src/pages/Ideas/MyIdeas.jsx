@@ -313,7 +313,7 @@ const MyIdeas = () => {
                           {formatIdeaDate(idea.TargetDate)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <IdeaStatusBadge status={idea.Status} overdue={idea.IsOverdue} />
+                          <IdeaStatusBadge status={idea.Status} overdue={idea.IsOverdue} pendingRequest={idea.PendingRequestType} />
                         </td>
                       </tr>
                     );

@@ -2,14 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import ConfirmDialog from "../ConfirmDialog/ConfirmDialog";
 import SearchableSelect from "../SearchableSelect/SearchableSelect";
 import {
-  extendIdeaTimeline,
+  approveIdeaClosure,
+  approveIdeaExtension,
   finalApproveIdea,
   finalRejectIdea,
   getIdeaApiError,
   getIdeaFinalApprovers,
   managerApproveIdea,
   managerRejectIdea,
-  markIdeaImplemented,
+  rejectIdeaClosure,
+  rejectIdeaExtension,
+  requestIdeaClosure,
+  requestIdeaExtension,
   startIdeaImplementation,
 } from "../../services/ideaService";
 import {
@@ -41,10 +45,18 @@ const REJECT_REMARK = {
   helper: "Please explain why the idea is being rejected; the submitter will see this.",
 };
 
+const REJECT_REQUEST_REMARK = {
+  label: "Reason for rejection",
+  required: true,
+  helper: "Please explain why the request is being rejected; the idea owner will see this.",
+};
+
 // Each action: its button, dialog fields and API call.
 //   finalApprover -> final approver dropdown
 //   days          -> number input (1-365)
+//   date          -> date input (after today)
 //   remark        -> textarea
+//   showRequest   -> shows the owner's pending request
 const ACTIONS = {
   managerApprove: {
     label: "Approve",
@@ -77,12 +89,12 @@ const ACTIONS = {
     label: "Approve",
     buttonStyle: "primary",
     title: "Give final approval",
-    message: "The idea becomes Active and the reporting manager can start implementation.",
+    message: "The idea moves straight to In Implementation, and the target date is counted from today.",
     remark: { label: "Remark", required: false, placeholder: "Optional" },
     confirmLabel: "Approve",
     busyLabel: "Approving...",
     tone: "success",
-    successMessage: "Idea approved. It is now Active.",
+    successMessage: "Idea approved. It is now In Implementation.",
     submit: (ideaId, { remark }) => finalApproveIdea(ideaId, { remark }),
   },
   finalReject: {
@@ -108,41 +120,110 @@ const ACTIONS = {
     successMessage: "Implementation started.",
     submit: (ideaId, { remark }) => startIdeaImplementation(ideaId, { remark }),
   },
-  implement: {
-    label: "Mark Completed",
+  // Idea owner's requests (the reporting manager approves or rejects them).
+  requestClosure: {
+    label: "Request Closure",
     buttonStyle: "primary",
-    title: "Mark as implemented?",
-    message: "The idea will be marked as Implemented. This is the final step.",
-    remark: { label: "Remark", required: false, placeholder: "Optional" },
-    confirmLabel: "Mark Implemented",
-    busyLabel: "Saving...",
+    title: "Request closure",
+    message:
+      "Your reporting manager will be asked to approve closing this idea. Once approved, it is marked as Implemented.",
+    remark: { label: "Closure remark", required: true, placeholder: "What was implemented and why the idea can be closed" },
+    confirmLabel: "Send Request",
+    busyLabel: "Sending...",
     tone: "success",
-    successMessage: "Idea marked as implemented.",
-    submit: (ideaId, { remark }) => markIdeaImplemented(ideaId, { remark }),
+    successMessage: "Closure request sent to your reporting manager.",
+    submit: (ideaId, { remark }) => requestIdeaClosure(ideaId, { remark }),
   },
-  extend: {
-    label: "Extend Timeline",
+  requestExtension: {
+    label: "Request Extension",
     buttonStyle: "warning",
-    title: "Extend timeline",
-    days: { label: "Additional days" },
+    title: "Request timeline extension",
+    message: "Your reporting manager will be asked to approve the new target date.",
+    date: { label: "New target date" },
     remark: { label: "Reason", required: true, placeholder: "Why is more time needed?" },
-    confirmLabel: "Extend Timeline",
-    busyLabel: "Extending...",
+    confirmLabel: "Send Request",
+    busyLabel: "Sending...",
     tone: "success",
-    successMessage: "Timeline extended.",
-    submit: (ideaId, { days, remark }) => extendIdeaTimeline(ideaId, { additionalDays: days, reason: remark }),
+    successMessage: "Extension request sent to your reporting manager.",
+    submit: (ideaId, { date, remark }) => requestIdeaExtension(ideaId, { newTargetDate: date, reason: remark }),
+  },
+  // Reporting manager's decision on the owner's request.
+  approveClosure: {
+    label: "Approve Closure",
+    buttonStyle: "primary",
+    title: "Approve closure?",
+    message: "The idea will be marked as Implemented. This is the final step.",
+    showRequest: true,
+    remark: { label: "Remark", required: false, placeholder: "Optional note for the idea owner" },
+    confirmLabel: "Approve Closure",
+    busyLabel: "Approving...",
+    tone: "success",
+    successMessage: "Closure approved. The idea is now Implemented.",
+    submit: (ideaId, { remark }) => approveIdeaClosure(ideaId, { remark }),
+  },
+  rejectClosure: {
+    label: "Reject Closure",
+    buttonStyle: "danger",
+    title: "Reject closure request",
+    message: "The idea stays In Implementation.",
+    showRequest: true,
+    remark: REJECT_REQUEST_REMARK,
+    confirmLabel: "Reject",
+    busyLabel: "Rejecting...",
+    tone: "danger",
+    successMessage: "Closure request rejected.",
+    submit: (ideaId, { remark }) => rejectIdeaClosure(ideaId, { remark }),
+  },
+  approveExtension: {
+    label: "Approve Extension",
+    buttonStyle: "primary",
+    title: "Approve timeline extension?",
+    message: "The requested date becomes the new target date.",
+    showRequest: true,
+    remark: { label: "Remark", required: false, placeholder: "Optional note for the idea owner" },
+    confirmLabel: "Approve Extension",
+    busyLabel: "Approving...",
+    tone: "success",
+    successMessage: "Extension approved. The target date has been updated.",
+    submit: (ideaId, { remark }) => approveIdeaExtension(ideaId, { remark }),
+  },
+  rejectExtension: {
+    label: "Reject Extension",
+    buttonStyle: "danger",
+    title: "Reject extension request",
+    message: "The target date stays unchanged. The idea owner can send a new request.",
+    showRequest: true,
+    remark: REJECT_REQUEST_REMARK,
+    confirmLabel: "Reject",
+    busyLabel: "Rejecting...",
+    tone: "danger",
+    successMessage: "Extension request rejected.",
+    submit: (ideaId, { remark }) => rejectIdeaExtension(ideaId, { remark }),
   },
 };
 
-// Buttons available to the viewer for the idea's status: the reporting
-// manager (IsLead) or the final approver (IsFinalApprover). The backend
-// checks the same rules.
+// Reporting manager's buttons for the owner's pending request.
+const PENDING_REQUEST_ACTIONS = {
+  Close: ["approveClosure", "rejectClosure"],
+  Extend: ["approveExtension", "rejectExtension"],
+};
+
+// Buttons available to the viewer for the idea's status: the idea owner
+// (IsSubmitter; CanRequest* from the backend), the reporting manager
+// (IsLead) or the final approver (IsFinalApprover). The backend checks the
+// same rules.
 const getAvailableActions = (idea) => {
   if (idea.IsFinalApprover && idea.Status === "Pending Final Approval") return ["finalApprove", "finalReject"];
+  if (idea.IsSubmitter) {
+    return [idea.CanRequestClosure && "requestClosure", idea.CanRequestExtension && "requestExtension"].filter(Boolean);
+  }
   if (!idea.IsLead) return [];
   if (idea.Status === "Submitted") return ["managerApprove", "managerReject"];
-  if (idea.Status === "Active") return idea.IsOverdue ? ["start", "extend"] : ["start"];
-  if (idea.Status === "In Implementation") return idea.IsOverdue ? ["implement", "extend"] : ["implement"];
+
+  const requestActions = PENDING_REQUEST_ACTIONS[idea.PendingRequestType] || [];
+  // Active = final-approved before approval went straight to In Implementation.
+  if (idea.Status === "Active") return ["start", ...requestActions];
+  if (idea.Status === "In Implementation") return requestActions;
   return [];
 };
 
@@ -155,6 +236,7 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
 
   const [finalApproverId, setFinalApproverId] = useState(null);
   const [days, setDays] = useState("");
+  const [date, setDate] = useState("");
   const [remark, setRemark] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [apiError, setApiError] = useState(null);
@@ -200,13 +282,13 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
   const daysValue = parseDays(days);
   const daysValid = isValidDays(daysValue);
   const todayKey = getTodayKey();
+  // The new target date must be a future date.
+  const minDateKey = addDaysToDateKey(todayKey, 1);
 
   // Live previews
   const finalTargetKey =
     actionKey === "finalApprove" && idea.TimelineDays ? addDaysToDateKey(todayKey, idea.TimelineDays) : "";
-  const extendTargetKey = actionKey === "extend" && daysValid ? addDaysToDateKey(idea.TargetDate, daysValue) : "";
   const overdueDays = idea.IsOverdue ? Math.abs(idea.DaysRemaining ?? 0) : 0;
-  const extendStillPast = Boolean(extendTargetKey) && extendTargetKey < todayKey;
 
   const validate = () => {
     const errors = {};
@@ -217,6 +299,12 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
 
     if (action.days && !daysValid) {
       errors.days = `Enter a whole number from ${DAYS_MIN} to ${DAYS_MAX}.`;
+    }
+
+    if (action.date && !date) {
+      errors.date = `${action.date.label} is required.`;
+    } else if (action.date && date < minDateKey) {
+      errors.date = `${action.date.label} must be a future date.`;
     }
 
     if (action.remark.required && !remark.trim()) {
@@ -231,7 +319,7 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
   const handleConfirm = async () => {
     const errors = validate();
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0 || extendStillPast) return;
+    if (Object.keys(errors).length > 0) return;
 
     setBusy(true);
     setApiError(null);
@@ -240,6 +328,7 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
       const updatedIdea = await action.submit(idea.IdeaID, {
         finalApproverId,
         days: daysValue,
+        date,
         remark: remark.trim(),
       });
       onCompleted(updatedIdea, action.successMessage);
@@ -258,13 +347,27 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
       busyLabel={action.busyLabel}
       tone={action.tone}
       busy={busy}
-      confirmDisabled={extendStillPast}
       autoFocusConfirm={false}
       onConfirm={handleConfirm}
       onCancel={onClose}
     >
       <div className="space-y-4">
-        {actionKey === "extend" && (
+        {action.showRequest && idea.PendingRequestType && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 space-y-1">
+            {idea.PendingRequestType === "Extend" && (
+              <p>
+                Target date: <span className="font-semibold">{formatIdeaDate(idea.TargetDate)}</span> &rarr; requested{" "}
+                <span className="font-semibold">{formatIdeaDate(idea.PendingRequestedTargetDate)}</span>
+              </p>
+            )}
+            <p className="font-semibold">
+              {idea.PendingRequestType === "Extend" ? "Owner's reason" : "Owner's closure remark"}
+            </p>
+            <p className="whitespace-pre-wrap break-words">{idea.PendingRequestRemark || "—"}</p>
+          </div>
+        )}
+
+        {actionKey === "requestExtension" && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             <p>
               Current target date: <span className="font-semibold">{formatIdeaDate(idea.TargetDate)}</span>
@@ -351,18 +454,29 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
               className={inputClass(fieldErrors.days)}
             />
             {fieldErrors.days && <p className="text-red-600 text-xs mt-1 font-medium">{fieldErrors.days}</p>}
+          </div>
+        )}
 
-            {extendTargetKey && !extendStillPast && (
-              <p className="text-sm text-slate-700 mt-2">
-                New target date will be <span className="font-semibold">{formatIdeaDate(extendTargetKey)}</span>.
-              </p>
-            )}
-            {extendStillPast && (
-              <p className="text-sm text-red-700 font-medium mt-2" role="alert">
-                The new target date ({formatIdeaDate(extendTargetKey)}) would still be in the past. Add at least{" "}
-                {formatDays(overdueDays)}.
-              </p>
-            )}
+        {action.date && (
+          <div>
+            <label htmlFor="lead-action-date" className="block text-xs font-semibold text-slate-700 mb-1">
+              {action.date.label} <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="lead-action-date"
+              type="date"
+              min={minDateKey}
+              autoFocus
+              disabled={busy}
+              value={date}
+              onChange={(e) => {
+                setDate(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, date: undefined }));
+              }}
+              aria-invalid={Boolean(fieldErrors.date)}
+              className={inputClass(fieldErrors.date)}
+            />
+            {fieldErrors.date && <p className="text-red-600 text-xs mt-1 font-medium">{fieldErrors.date}</p>}
           </div>
         )}
 
@@ -379,7 +493,7 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
             id="lead-action-remark"
             rows={4}
             maxLength={REMARK_MAX}
-            autoFocus={!action.days && !action.finalApprover}
+            autoFocus={!action.days && !action.finalApprover && !action.date}
             disabled={busy}
             value={remark}
             onChange={(e) => {
@@ -402,8 +516,9 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
 }
 
 /**
- * Action buttons for Idea Details, for the idea's reporting manager (lead)
- * or final approver; shows the buttons their role and the status allow.
+ * Action buttons for Idea Details, for the idea's owner (close / extend
+ * requests), reporting manager (lead) or final approver; shows the buttons
+ * their role and the status allow.
  * `onUpdated(updatedIdea, successMessage)` receives the idea returned by the
  * API (with its refreshed activity log).
  */
@@ -412,7 +527,23 @@ export default function IdeaLeadActions({ idea, onUpdated }) {
   const available = getAvailableActions(idea);
 
   if (available.length === 0) {
-    return <p className="text-sm text-slate-500">No further actions.</p>;
+    return (
+      <p className="text-sm text-slate-500">
+        {idea.IsSubmitter && idea.PendingRequestType
+          ? "Your request is pending with your reporting manager."
+          : "No further actions."}
+      </p>
+    );
+  }
+
+  // Requests go to the reporting manager; the backend blocks them too.
+  if (idea.IsSubmitter && !idea.LeadIsActive) {
+    return (
+      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        This idea has no active reporting manager, so a closure or extension can't be requested. Please contact the
+        Admin.
+      </p>
+    );
   }
 
   return (

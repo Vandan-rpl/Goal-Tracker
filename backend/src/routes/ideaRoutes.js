@@ -237,23 +237,63 @@ router.post(
 );
 
 /**
- * Mark Implemented (In Implementation -> Implemented)
- * POST /api/v1/ideas/:ideaId/implement
+ * Request Closure (idea owner; In Implementation)
+ * POST /api/v1/ideas/:ideaId/request-closure
  */
 router.post(
-    "/:ideaId/implement",
+    "/:ideaId/request-closure",
     verifyToken,
-    ideaController.markImplemented
+    ideaController.requestClosure
 );
 
 /**
- * Extend Timeline (Active / In Implementation, only when overdue)
- * POST /api/v1/ideas/:ideaId/extend-timeline
+ * Approve Closure (reporting manager; In Implementation -> Implemented)
+ * POST /api/v1/ideas/:ideaId/approve-closure
  */
 router.post(
-    "/:ideaId/extend-timeline",
+    "/:ideaId/approve-closure",
     verifyToken,
-    ideaController.extendTimeline
+    ideaController.approveClosure
+);
+
+/**
+ * Reject Closure (reporting manager; status unchanged)
+ * POST /api/v1/ideas/:ideaId/reject-closure
+ */
+router.post(
+    "/:ideaId/reject-closure",
+    verifyToken,
+    ideaController.rejectClosure
+);
+
+/**
+ * Request Extension (idea owner; Active / In Implementation, only when overdue)
+ * POST /api/v1/ideas/:ideaId/request-extension
+ */
+router.post(
+    "/:ideaId/request-extension",
+    verifyToken,
+    ideaController.requestExtension
+);
+
+/**
+ * Approve Extension (reporting manager; requested date becomes the target date)
+ * POST /api/v1/ideas/:ideaId/approve-extension
+ */
+router.post(
+    "/:ideaId/approve-extension",
+    verifyToken,
+    ideaController.approveExtension
+);
+
+/**
+ * Reject Extension (reporting manager; target date unchanged)
+ * POST /api/v1/ideas/:ideaId/reject-extension
+ */
+router.post(
+    "/:ideaId/reject-extension",
+    verifyToken,
+    ideaController.rejectExtension
 );
 
 module.exports = router;

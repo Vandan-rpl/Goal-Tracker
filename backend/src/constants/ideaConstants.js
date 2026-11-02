@@ -18,6 +18,9 @@ const IdeaStatus = Object.freeze({
   DRAFT: "Draft",
   SUBMITTED: "Submitted",
   PENDING_FINAL_APPROVAL: "Pending Final Approval",
+  // Only ideas final-approved before 2026-11-02 are Active (the reporting
+  // manager still starts their implementation); final approval now goes
+  // straight to In Implementation.
   ACTIVE: "Active",
   IN_IMPLEMENTATION: "In Implementation",
   IMPLEMENTED: "Implemented",
@@ -44,11 +47,47 @@ const IdeaAction = Object.freeze({
   IMPLEMENTATION_STARTED: "Implementation Started",
   IMPLEMENTED: "Implemented",
   TIMELINE_EXTENDED: "Timeline Extended",
+  CLOSURE_REQUESTED: "Closure Requested",
+  CLOSURE_REJECTED: "Closure Rejected",
+  EXTENSION_REQUESTED: "Extension Requested",
+  EXTENSION_REJECTED: "Extension Rejected",
 });
 
+// Owner requests (close / extend) that the reporting manager approves or
+// rejects. No dbo.Ideas columns hold them: a request is pending while the
+// newest IdeaActivityLog row among `actions` is its `requested` action
+// (approved = IMPLEMENTED / TIMELINE_EXTENDED, the same actions the
+// reporting manager used to log directly). Status does not change while a
+// request is pending, so a rejection leaves the idea in its previous status.
+const IdeaRequestType = Object.freeze({
+  CLOSE: "Close",
+  EXTEND: "Extend",
+});
+
+const IDEA_REQUESTS = Object.freeze({
+  [IdeaRequestType.CLOSE]: {
+    requested: IdeaAction.CLOSURE_REQUESTED,
+    approved: IdeaAction.IMPLEMENTED,
+    rejected: IdeaAction.CLOSURE_REJECTED,
+  },
+  [IdeaRequestType.EXTEND]: {
+    requested: IdeaAction.EXTENSION_REQUESTED,
+    approved: IdeaAction.TIMELINE_EXTENDED,
+    rejected: IdeaAction.EXTENSION_REJECTED,
+  },
+});
+
+// An Extension Requested log remark is written as
+// "<prefix>DD/MM/YYYY<separator><reason>" so the requested date and the
+// reason can be read back from it (ideaModel PENDING_REQUEST_APPLY).
+const IDEA_EXTENSION_DATE_PREFIX = "Requested target date: ";
+const IDEA_EXTENSION_REASON_SEPARATOR = ". Reason: ";
+
 // Who may act on an idea. The model maps each to its dbo.Ideas column
-// (MANAGER -> AssignedLeadID, FINAL_APPROVER -> FinalApproverID).
+// (SUBMITTER -> UserID, MANAGER -> AssignedLeadID, FINAL_APPROVER ->
+// FinalApproverID).
 const IdeaActor = Object.freeze({
+  SUBMITTER: "submitter",
   MANAGER: "manager",
   FINAL_APPROVER: "finalApprover",
 });
@@ -67,6 +106,12 @@ const IdeaMailEvent = Object.freeze({
   MANAGER_REJECTED: "managerRejected",
   FINAL_APPROVED: "finalApproved",
   FINAL_REJECTED: "finalRejected",
+  CLOSURE_REQUESTED: "closureRequested",
+  CLOSURE_APPROVED: "closureApproved",
+  CLOSURE_REJECTED: "closureRejected",
+  EXTENSION_REQUESTED: "extensionRequested",
+  EXTENSION_APPROVED: "extensionApproved",
+  EXTENSION_REJECTED: "extensionRejected",
 });
 
 // Every status change after submit: allowed current statuses, the new status
@@ -89,7 +134,7 @@ const IDEA_TRANSITIONS = Object.freeze({
   },
   finalApprove: {
     from: [IdeaStatus.PENDING_FINAL_APPROVAL],
-    to: IdeaStatus.ACTIVE,
+    to: IdeaStatus.IN_IMPLEMENTATION,
     actor: IdeaActor.FINAL_APPROVER,
     action: IdeaAction.FINAL_APPROVED,
     mailEvent: IdeaMailEvent.FINAL_APPROVED,
@@ -101,33 +146,69 @@ const IDEA_TRANSITIONS = Object.freeze({
     action: IdeaAction.FINAL_REJECTED,
     mailEvent: IdeaMailEvent.FINAL_REJECTED,
   },
+  // Older Active ideas only (see IdeaStatus.ACTIVE).
   startImplementation: {
     from: [IdeaStatus.ACTIVE],
     to: IdeaStatus.IN_IMPLEMENTATION,
     actor: IdeaActor.MANAGER,
     action: IdeaAction.IMPLEMENTATION_STARTED,
   },
-  markImplemented: {
+  // Close = Mark Implemented: the owner requests it, the reporting manager
+  // approves (-> Implemented) or rejects (status unchanged).
+  requestClosure: {
+    from: [IdeaStatus.IN_IMPLEMENTATION],
+    to: null,
+    actor: IdeaActor.SUBMITTER,
+    action: IdeaAction.CLOSURE_REQUESTED,
+    mailEvent: IdeaMailEvent.CLOSURE_REQUESTED,
+  },
+  approveClosure: {
     from: [IdeaStatus.IN_IMPLEMENTATION],
     to: IdeaStatus.IMPLEMENTED,
     actor: IdeaActor.MANAGER,
     action: IdeaAction.IMPLEMENTED,
+    mailEvent: IdeaMailEvent.CLOSURE_APPROVED,
   },
-  extendTimeline: {
+  rejectClosure: {
+    from: [IdeaStatus.IN_IMPLEMENTATION],
+    to: null,
+    actor: IdeaActor.MANAGER,
+    action: IdeaAction.CLOSURE_REJECTED,
+    mailEvent: IdeaMailEvent.CLOSURE_REJECTED,
+  },
+  // Extend timeline: the owner requests a new target date (only when
+  // overdue), the reporting manager approves or rejects. Status unchanged.
+  requestExtension: {
+    from: [IdeaStatus.ACTIVE, IdeaStatus.IN_IMPLEMENTATION],
+    to: null,
+    actor: IdeaActor.SUBMITTER,
+    action: IdeaAction.EXTENSION_REQUESTED,
+    mailEvent: IdeaMailEvent.EXTENSION_REQUESTED,
+  },
+  approveExtension: {
     from: [IdeaStatus.ACTIVE, IdeaStatus.IN_IMPLEMENTATION],
     to: null,
     actor: IdeaActor.MANAGER,
     action: IdeaAction.TIMELINE_EXTENDED,
+    mailEvent: IdeaMailEvent.EXTENSION_APPROVED,
+  },
+  rejectExtension: {
+    from: [IdeaStatus.ACTIVE, IdeaStatus.IN_IMPLEMENTATION],
+    to: null,
+    actor: IdeaActor.MANAGER,
+    action: IdeaAction.EXTENSION_REJECTED,
+    mailEvent: IdeaMailEvent.EXTENSION_REJECTED,
   },
 });
 
-// Manager approve timeline days and Extend Timeline additional days.
+// Manager approve timeline days.
 const IDEA_TIMELINE_DAYS_MIN = 1;
 const IDEA_TIMELINE_DAYS_MAX = 365;
 
-// Action remarks / extension reasons. Kept under the 1000-character Remark
-// columns so the activity log text ("Final approver: ... Timeline: N days.
-// ..." or "Extended by N days. New target date: ... Reason: ...") still fits.
+// Action remarks / closure remarks / extension reasons. Kept under the
+// 1000-character Remark columns so the activity log text ("Final approver:
+// ... Timeline: N days. ..." or "Requested target date: ... Reason: ...")
+// still fits.
 const IDEA_LEAD_REMARK_MAX_LENGTH = 900;
 
 // dbo.IdeaActivityLog.Remark column size.
@@ -150,6 +231,10 @@ module.exports = {
   IDEA_STATUSES,
   IDEA_OVERDUE_STATUSES,
   IdeaAction,
+  IdeaRequestType,
+  IDEA_REQUESTS,
+  IDEA_EXTENSION_DATE_PREFIX,
+  IDEA_EXTENSION_REASON_SEPARATOR,
   IdeaActor,
   IdeaRejectedStage,
   IdeaMailEvent,

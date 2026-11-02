@@ -347,7 +347,7 @@ const AssignedIdeas = () => {
                         {formatIdeaDate(idea.TargetDate)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <IdeaStatusBadge status={idea.Status} />
+                        <IdeaStatusBadge status={idea.Status} pendingRequest={idea.PendingRequestType} />
                         {idea.IsPendingWithMe && (
                           <div className="mt-1 text-xs font-semibold text-indigo-700">Awaiting your action</div>
                         )}

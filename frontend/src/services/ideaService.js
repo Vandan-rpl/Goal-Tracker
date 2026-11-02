@@ -97,13 +97,36 @@ export const startIdeaImplementation = async (ideaId, { remark }) => {
     return response.data.data;
 };
 
-export const markIdeaImplemented = async (ideaId, { remark }) => {
-    const response = await api.post(`/ideas/${ideaId}/implement`, { remark });
+// Close / extend: the idea owner requests, the reporting manager approves
+// or rejects.
+export const requestIdeaClosure = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/request-closure`, { remark });
     return response.data.data;
 };
 
-export const extendIdeaTimeline = async (ideaId, { additionalDays, reason }) => {
-    const response = await api.post(`/ideas/${ideaId}/extend-timeline`, { additionalDays, reason });
+export const approveIdeaClosure = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/approve-closure`, { remark });
+    return response.data.data;
+};
+
+export const rejectIdeaClosure = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/reject-closure`, { remark });
+    return response.data.data;
+};
+
+// newTargetDate: 'YYYY-MM-DD', after today.
+export const requestIdeaExtension = async (ideaId, { newTargetDate, reason }) => {
+    const response = await api.post(`/ideas/${ideaId}/request-extension`, { newTargetDate, reason });
+    return response.data.data;
+};
+
+export const approveIdeaExtension = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/approve-extension`, { remark });
+    return response.data.data;
+};
+
+export const rejectIdeaExtension = async (ideaId, { remark }) => {
+    const response = await api.post(`/ideas/${ideaId}/reject-extension`, { remark });
     return response.data.data;
 };
 

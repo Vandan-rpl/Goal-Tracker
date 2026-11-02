@@ -1,7 +1,9 @@
-import { getIdeaStatusClasses } from "../../utils/ideaStatus";
+import { IDEA_PENDING_REQUEST_LABELS, getIdeaStatusClasses } from "../../utils/ideaStatus";
 
-// Idea status label, plus a red "Overdue" label when `overdue` is true.
-export default function IdeaStatusBadge({ status, overdue = false }) {
+// Idea status label, plus a red "Overdue" label when `overdue` is true and a
+// "Closure / Extension Pending" label for `pendingRequest` ('Close' /
+// 'Extend').
+export default function IdeaStatusBadge({ status, overdue = false, pendingRequest = null }) {
   return (
     <div className="flex items-center gap-2">
       <span
@@ -14,6 +16,11 @@ export default function IdeaStatusBadge({ status, overdue = false }) {
       {overdue && (
         <span className="px-2 py-0.5 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-red-50 text-red-700 border border-red-200">
           Overdue
+        </span>
+      )}
+      {IDEA_PENDING_REQUEST_LABELS[pendingRequest] && (
+        <span className="px-2 py-0.5 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-sky-50 text-sky-800 border border-sky-200">
+          {IDEA_PENDING_REQUEST_LABELS[pendingRequest]}
         </span>
       )}
     </div>

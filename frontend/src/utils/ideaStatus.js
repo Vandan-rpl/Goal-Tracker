@@ -78,6 +78,10 @@ export const IDEA_ACTIONS = {
   IMPLEMENTATION_STARTED: "Implementation Started",
   IMPLEMENTED: "Implemented",
   TIMELINE_EXTENDED: "Timeline Extended",
+  CLOSURE_REQUESTED: "Closure Requested",
+  CLOSURE_REJECTED: "Closure Rejected",
+  EXTENSION_REQUESTED: "Extension Requested",
+  EXTENSION_REJECTED: "Extension Rejected",
 };
 
 const IDEA_ACTION_DISPLAY = {
@@ -93,6 +97,16 @@ const IDEA_ACTION_DISPLAY = {
   [IDEA_ACTIONS.IMPLEMENTATION_STARTED]: { label: "Implementation Started", dot: "bg-orange-500" },
   [IDEA_ACTIONS.IMPLEMENTED]: { label: "Implemented", dot: "bg-emerald-500" },
   [IDEA_ACTIONS.TIMELINE_EXTENDED]: { label: "Timeline Extended", dot: "bg-amber-500" },
+  [IDEA_ACTIONS.CLOSURE_REQUESTED]: { label: "Closure Requested by Owner", dot: "bg-sky-500" },
+  [IDEA_ACTIONS.CLOSURE_REJECTED]: { label: "Closure Rejected by Reporting Manager", dot: "bg-red-500" },
+  [IDEA_ACTIONS.EXTENSION_REQUESTED]: { label: "Extension Requested by Owner", dot: "bg-sky-500" },
+  [IDEA_ACTIONS.EXTENSION_REJECTED]: { label: "Extension Rejected by Reporting Manager", dot: "bg-red-500" },
+};
+
+// Owner request waiting for the reporting manager (idea.PendingRequestType).
+export const IDEA_PENDING_REQUEST_LABELS = {
+  Close: "Closure Pending",
+  Extend: "Extension Pending",
 };
 
 export const getIdeaActionDisplay = (action) =>

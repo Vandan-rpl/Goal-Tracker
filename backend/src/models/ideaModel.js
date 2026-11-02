@@ -1,5 +1,13 @@
 const { sql } = require("../config/db");
-const { IDEA_OVERDUE_STATUSES, IDEA_LEAD_ROLES, IdeaActor } = require("../constants/ideaConstants");
+const {
+    IDEA_OVERDUE_STATUSES,
+    IDEA_LEAD_ROLES,
+    IdeaActor,
+    IdeaRequestType,
+    IDEA_REQUESTS,
+    IDEA_EXTENSION_DATE_PREFIX,
+    IDEA_EXTENSION_REASON_SEPARATOR,
+} = require("../constants/ideaConstants");
 
 /**
  * ============================================================
@@ -38,6 +46,59 @@ const DAYS_REMAINING = `
         WHEN i.Status IN (${OVERDUE_STATUS_LIST})
         THEN DATEDIFF(DAY, ${TODAY}, i.TargetDate)
     END
+`;
+
+const sqlList = (values) => values.map((value) => `N'${value}'`).join(", ");
+
+const CLOSE_REQUEST = IDEA_REQUESTS[IdeaRequestType.CLOSE];
+const EXTEND_REQUEST = IDEA_REQUESTS[IdeaRequestType.EXTEND];
+
+const REQUEST_LOG_ACTIONS = sqlList(
+    Object.values(IDEA_REQUESTS).flatMap((request) => [request.requested, request.approved, request.rejected])
+);
+
+// 1-based positions of the date (DD/MM/YYYY) and the reason in an Extension
+// Requested remark.
+const EXTENSION_DATE_START = IDEA_EXTENSION_DATE_PREFIX.length + 1;
+const EXTENSION_REASON_START = EXTENSION_DATE_START + "DD/MM/YYYY".length + IDEA_EXTENSION_REASON_SEPARATOR.length;
+
+// The owner's pending close / extend request (see IDEA_REQUESTS): pending
+// while the newest request-related log row is a request and the idea is
+// still Active / In Implementation. Select PENDING_REQUEST_COLUMNS with it.
+const PENDING_REQUEST_APPLY = `
+    OUTER APPLY (
+        SELECT
+            CASE lastRequest.Action
+                WHEN N'${CLOSE_REQUEST.requested}' THEN N'${IdeaRequestType.CLOSE}'
+                ELSE N'${IdeaRequestType.EXTEND}'
+            END AS PendingRequestType,
+            CASE
+                WHEN lastRequest.Action = N'${EXTEND_REQUEST.requested}'
+                THEN SUBSTRING(lastRequest.Remark, ${EXTENSION_REASON_START}, 1000)
+                ELSE lastRequest.Remark
+            END AS PendingRequestRemark,
+            CASE
+                WHEN lastRequest.Action = N'${EXTEND_REQUEST.requested}'
+                THEN TRY_CONVERT(DATE, SUBSTRING(lastRequest.Remark, ${EXTENSION_DATE_START}, 10), 103)
+            END AS PendingRequestedTargetDate,
+            lastRequest.ActionDate AS PendingRequestDate
+        FROM (
+            SELECT TOP (1) a.Action, a.Remark, a.ActionDate
+            FROM dbo.IdeaActivityLog a
+            WHERE a.IdeaID = i.IdeaID
+              AND a.Action IN (${REQUEST_LOG_ACTIONS})
+            ORDER BY a.LogID DESC
+        ) lastRequest
+        WHERE lastRequest.Action IN (${sqlList([CLOSE_REQUEST.requested, EXTEND_REQUEST.requested])})
+          AND i.Status IN (${OVERDUE_STATUS_LIST})
+    ) pendingRequest
+`;
+
+const PENDING_REQUEST_COLUMNS = `
+    pendingRequest.PendingRequestType,
+    pendingRequest.PendingRequestRemark,
+    pendingRequest.PendingRequestedTargetDate,
+    pendingRequest.PendingRequestDate
 `;
 
 /**
@@ -158,8 +219,14 @@ const getIdeaRow = async (db, ideaId, lock = false) => {
                 i.TargetDate,
                 ${IS_OVERDUE} AS IsOverdue,
                 -- Days from TargetDate to today (positive when it has passed)
-                DATEDIFF(DAY, i.TargetDate, ${TODAY}) AS DaysPastTarget
+                DATEDIFF(DAY, i.TargetDate, ${TODAY}) AS DaysPastTarget,
+                ${TODAY} AS Today,
+                CAST(ISNULL(lead.IsActive, 0) AS BIT) AS LeadIsActive,
+                ${PENDING_REQUEST_COLUMNS}
             FROM dbo.Ideas i ${lock ? "WITH (UPDLOCK, ROWLOCK)" : ""}
+            LEFT JOIN dbo.Users lead
+                ON lead.UserID = i.AssignedLeadID
+            ${PENDING_REQUEST_APPLY}
             WHERE i.IdeaID = @IdeaID;
         `);
 
@@ -296,6 +363,7 @@ const getIdeasByUser = async (db, userId, status) => {
                 ${fullName("finalApprover")} AS FinalApproverName,
                 i.TargetDate,
                 ${IS_OVERDUE} AS IsOverdue,
+                ${PENDING_REQUEST_COLUMNS},
                 i.SubmittedDate,
                 i.CreatedDate,
                 i.ModifiedDate
@@ -304,6 +372,7 @@ const getIdeasByUser = async (db, userId, status) => {
                 ON lead.UserID = i.AssignedLeadID
             LEFT JOIN dbo.Users finalApprover
                 ON finalApprover.UserID = i.FinalApproverID
+            ${PENDING_REQUEST_APPLY}
             WHERE i.UserID = @UserID
               AND (@Status IS NULL OR i.Status = @Status)
             ORDER BY i.CreatedDate DESC, i.IdeaID DESC;
@@ -342,6 +411,7 @@ const getAssignedIdeas = async (db, userId) => {
                 ${DAYS_REMAINING} AS DaysRemaining,
                 CAST(CASE WHEN i.AssignedLeadID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsLead,
                 CAST(CASE WHEN i.FinalApproverID = @UserID THEN 1 ELSE 0 END AS BIT) AS IsFinalApprover,
+                ${PENDING_REQUEST_COLUMNS},
                 pending.IsPendingWithMe
             FROM dbo.Ideas i
             INNER JOIN dbo.Users submitter
@@ -352,10 +422,12 @@ const getAssignedIdeas = async (db, userId) => {
                 ON lead.UserID = i.AssignedLeadID
             LEFT JOIN dbo.Users finalApprover
                 ON finalApprover.UserID = i.FinalApproverID
+            ${PENDING_REQUEST_APPLY}
             CROSS APPLY (
                 SELECT CAST(CASE
                     WHEN i.Status = N'Submitted' AND i.AssignedLeadID = @UserID THEN 1
                     WHEN i.Status = N'Pending Final Approval' AND i.FinalApproverID = @UserID THEN 1
+                    WHEN pendingRequest.PendingRequestType IS NOT NULL AND i.AssignedLeadID = @UserID THEN 1
                     ELSE 0
                 END AS BIT) AS IsPendingWithMe
             ) pending
@@ -791,6 +863,7 @@ const getTrackIdeaInitiators = async (db) => {
 
 // Column holding each actor's user id.
 const ACTOR_COLUMNS = {
+    [IdeaActor.SUBMITTER]: "UserID",
     [IdeaActor.MANAGER]: "AssignedLeadID",
     [IdeaActor.FINAL_APPROVER]: "FinalApproverID",
 };
@@ -914,14 +987,19 @@ const markImplemented = (db, options) =>
         setClause: "ImplementedDate = SYSDATETIME()",
     });
 
-// Status unchanged. Adding to TimelineDays moves the computed TargetDate by
-// the same number of days.
-const extendTimeline = (db, { additionalDays, ...options }) =>
+// Status unchanged. TargetDate is computed (TimelineSetDate + TimelineDays),
+// so TimelineDays becomes the days from TimelineSetDate to the new date.
+// `newTargetDate` is 'YYYY-MM-DD'.
+const extendTimeline = (db, { newTargetDate, ...options }) =>
     applyTransition(db, {
         ...options,
-        inputs: { AdditionalDays: [sql.Int, additionalDays] },
-        setClause: "TimelineDays = TimelineDays + @AdditionalDays",
+        inputs: { NewTargetDate: [sql.NVarChar(10), newTargetDate] },
+        setClause: "TimelineDays = DATEDIFF(DAY, CAST(TimelineSetDate AS DATE), CAST(@NewTargetDate AS DATE))",
     });
+
+// Owner's close / extend request, or the reporting manager's rejection of
+// it. Status unchanged; the request itself lives in IdeaActivityLog.
+const recordRequestStep = (db, options) => applyTransition(db, options);
 
 /**
  * Full idea details with submitter / lead / final approver / reviewer names.
@@ -952,11 +1030,13 @@ const getIdeaDetails = async (db, ideaId, viewer) => {
                 finalApproverDept.DepartmentName AS FinalApproverDepartment,
                 i.TimelineDays,
                 i.TimelineSetDate,
+                CAST(ISNULL(lead.IsActive, 0) AS BIT) AS LeadIsActive,
                 -- Set by the final approval; the target date counts from it
                 CAST(i.TimelineSetDate AS DATE) AS ActiveDate,
                 i.TargetDate,
                 ${IS_OVERDUE} AS IsOverdue,
                 ${DAYS_REMAINING} AS DaysRemaining,
+                ${PENDING_REQUEST_COLUMNS},
                 i.Remarks,
                 i.Status,
                 i.ManagerActionDate,
@@ -988,6 +1068,7 @@ const getIdeaDetails = async (db, ideaId, viewer) => {
                 ON finalApproverDept.DepartmentID = finalApprover.DepartmentID
             LEFT JOIN dbo.Users reviewer
                 ON reviewer.UserID = i.ReviewedBy
+            ${PENDING_REQUEST_APPLY}
             WHERE i.IdeaID = @IdeaID;
         `);
 
@@ -1089,6 +1170,7 @@ module.exports = {
     startImplementation,
     markImplemented,
     extendTimeline,
+    recordRequestStep,
     getIdeaDetails,
     getIdeaActivity,
     getIdeaMailData,
