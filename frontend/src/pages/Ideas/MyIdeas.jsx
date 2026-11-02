@@ -187,7 +187,7 @@ const MyIdeas = () => {
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex-[2]">
+          <div className="flex-2">
             <label htmlFor="idea-search" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
               Search
             </label>

@@ -66,7 +66,9 @@ const labelClass = "inline-flex border px-1.5 py-0.5 text-[10px] font-semibold w
  *   filterKeys             any of department, employee, status, priority,
  *                          dueRange, source
  *   showEmployee           Employee Name and Department columns
- *   allowAdd               Add Task button
+ *   groupByEmployee        one collapsible row per employee; click it to
+ *                          list that employee's tasks underneath
+ *   allowAdd              Add Task button
  *   cfoEditable            CFO's Remarks editable with Submit (rows with
  *                          CanEditCFORemarks)
  *   markSeenOnLoad         highlight unseen rows as New and mark them seen
@@ -83,6 +85,7 @@ export default function TaskListView({
   loadFilterOptions,
   filterKeys = [],
   showEmployee = false,
+  groupByEmployee = false,
   allowAdd = false,
   cfoEditable = false,
   markSeenOnLoad = false,
@@ -115,6 +118,9 @@ export default function TaskListView({
 
   const [cfoDrafts, setCfoDrafts] = useState({});
   const [cfoSavingId, setCfoSavingId] = useState(null);
+
+  // groupByEmployee: UserIDs whose task rows are shown.
+  const [expandedIds, setExpandedIds] = useState(() => new Set());
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
@@ -198,9 +204,43 @@ export default function TaskListView({
     });
   }, [tasks, search, overdueOnly]);
 
-  const totalPages = Math.max(1, Math.ceil(visibleTasks.length / PAGE_SIZE));
+  // groupByEmployee: one group per employee, by name, keeping task order.
+  const employeeGroups = useMemo(() => {
+    if (!groupByEmployee) return [];
+    const groups = new Map();
+    visibleTasks.forEach((task) => {
+      if (!groups.has(task.UserID)) {
+        groups.set(task.UserID, {
+          userId: task.UserID,
+          name: task.EmployeeName,
+          code: task.EmployeeCode,
+          department: task.DepartmentName,
+          tasks: [],
+        });
+      }
+      groups.get(task.UserID).tasks.push(task);
+    });
+    return [...groups.values()].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }, [groupByEmployee, visibleTasks]);
+
+  // Pages count employees when grouped, tasks otherwise.
+  const pageItems = groupByEmployee ? employeeGroups : visibleTasks;
+  const totalPages = Math.max(1, Math.ceil(pageItems.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageTasks = visibleTasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageGroups = employeeGroups.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const toggleEmployee = (userId) =>
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+
+  const allExpanded = employeeGroups.length > 0 && employeeGroups.every((g) => expandedIds.has(g.userId));
+  const toggleAllEmployees = () =>
+    setExpandedIds(allExpanded ? new Set() : new Set(employeeGroups.map((g) => g.userId)));
 
   const hasFilters = Object.values(filters).some((value) => value !== "") || Boolean(search) || overdueOnly;
   const hasActions = useMemo(
@@ -305,7 +345,8 @@ export default function TaskListView({
 
   const headings = [
     "Sr.No.",
-    ...(showEmployee ? ["Employee Name", "Department"] : []),
+    // Grouped rows carry the employee in their group header instead.
+    ...(showEmployee && !groupByEmployee ? ["Employee Name", "Department"] : []),
     "Task Name",
     "Priority",
     "Due Date",
@@ -314,6 +355,90 @@ export default function TaskListView({
     "User's Remarks",
     ...(hasActions ? ["Actions"] : []),
   ];
+
+  const renderTaskRow = (task, srNo) => {
+    const isNew = markSeenOnLoad && newTaskIds.has(task.TaskID);
+    const canEdit = task.CanEditDetails || task.CanEditStatus || task.CanEditUserRemarks;
+    return (
+      <tr key={task.TaskID} className={`${isNew ? "bg-blue-50" : "bg-white"} hover:bg-[#f4f6fa]`}>
+        <td className={`${cellClass} w-14 bg-[#edf1f7] text-center font-medium text-slate-600`}>
+          {srNo}
+        </td>
+        {showEmployee && !groupByEmployee && (
+          <>
+            <td className={`${cellClass} whitespace-nowrap`}>
+              <p className="font-semibold text-slate-900">{task.EmployeeName}</p>
+              {task.EmployeeCode && <p className="text-[10px] text-slate-500">{task.EmployeeCode}</p>}
+            </td>
+            <td className={`${cellClass} whitespace-nowrap text-slate-600`}>{task.DepartmentName || "—"}</td>
+          </>
+        )}
+        <td className={`${cellClass} min-w-[220px] max-w-sm`}>
+          {(isNew || task.IsAssignedByBusinessHead) && (
+            <div className="mb-1 flex flex-wrap gap-1">
+              {isNew && <span className="bg-[#2c3e82] px-1.5 py-0.5 text-[10px] font-bold text-white">New</span>}
+              {task.IsAssignedByBusinessHead && (
+                <span className={`${labelClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
+                  Assigned by Business Head
+                </span>
+              )}
+            </div>
+          )}
+          <p className="font-semibold whitespace-pre-wrap break-words">{task.TaskName}</p>
+        </td>
+        <td className={cellClass}>
+          <span className={`${labelClass} ${PRIORITY_LABEL_CLASSES[task.Priority] || PRIORITY_LABEL_CLASSES.Low}`}>
+            {task.Priority}
+          </span>
+        </td>
+        <td className={`${cellClass} whitespace-nowrap ${task.IsOverdue ? "font-semibold text-[#b3403f]" : ""}`}>
+          {formatTaskDate(task.DueDate)}
+        </td>
+        <td className={`${cellClass} whitespace-nowrap`}>
+          <div className="flex flex-wrap items-center gap-1">
+            <span className={`${labelClass} ${STATUS_LABEL_CLASSES[task.Status] || STATUS_LABEL_CLASSES.Pending}`}>
+              {task.Status}
+            </span>
+            {task.IsOverdue && (
+              <span className={`${labelClass} border-red-200 bg-red-50 text-[#b3403f]`}>Overdue</span>
+            )}
+          </div>
+        </td>
+        <td className={cellClass}>{renderCfoRemarks(task)}</td>
+        <td className={`${cellClass} min-w-[180px]`}>
+          {task.UserRemarks ? (
+            <p className="max-w-xs whitespace-pre-wrap break-words">{task.UserRemarks}</p>
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
+        </td>
+        {hasActions && (
+          <td className={`${cellClass} whitespace-nowrap`}>
+            <div className="flex flex-col items-start gap-1.5">
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setEditing(task)}
+                  className="cursor-pointer text-[11px] font-semibold text-[#2c3e82] hover:underline"
+                >
+                  Edit
+                </button>
+              )}
+              {task.CanDelete && (
+                <button
+                  type="button"
+                  onClick={() => setDeleting(task)}
+                  className="cursor-pointer text-[11px] font-semibold text-[#b3403f] hover:underline"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </td>
+        )}
+      </tr>
+    );
+  };
 
   const employeeOptions = options.employees || [];
 
@@ -522,6 +647,18 @@ export default function TaskListView({
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>
       )}
 
+      {groupByEmployee && !loading && employeeGroups.length > 0 && (
+        <div className="mb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={toggleAllEmployees}
+            className="cursor-pointer text-xs font-semibold text-[#2c3e82] hover:underline"
+          >
+            {allExpanded ? "Collapse all" : "Expand all"}
+          </button>
+        </div>
+      )}
+
       {/* Task Grid */}
       <div className="max-w-full overflow-x-auto border border-[#aeb9cc] bg-white [scrollbar-color:#aeb9cc_#edf1f7] scrollbar-thin">
         <table className="min-w-full border-separate border-spacing-0">
@@ -541,90 +678,54 @@ export default function TaskListView({
                   Loading tasks...
                 </td>
               </tr>
-            ) : pageTasks.length > 0 ? (
-              pageTasks.map((task, index) => {
-                const isNew = markSeenOnLoad && newTaskIds.has(task.TaskID);
-                const canEdit = task.CanEditDetails || task.CanEditStatus || task.CanEditUserRemarks;
+            ) : groupByEmployee && pageGroups.length > 0 ? (
+              pageGroups.map((group) => {
+                const expanded = expandedIds.has(group.userId);
+                const open = group.tasks.filter((t) => t.Status !== "Done").length;
+                const overdue = group.tasks.filter((t) => t.IsOverdue).length;
                 return (
-                  <tr key={task.TaskID} className={`${isNew ? "bg-blue-50" : "bg-white"} hover:bg-[#f4f6fa]`}>
-                    <td className={`${cellClass} w-14 bg-[#edf1f7] text-center font-medium text-slate-600`}>
-                      {(currentPage - 1) * PAGE_SIZE + index + 1}
-                    </td>
-                    {showEmployee && (
-                      <>
-                        <td className={`${cellClass} whitespace-nowrap`}>
-                          <p className="font-semibold text-slate-900">{task.EmployeeName}</p>
-                          {task.EmployeeCode && <p className="text-[10px] text-slate-500">{task.EmployeeCode}</p>}
-                        </td>
-                        <td className={`${cellClass} whitespace-nowrap text-slate-600`}>{task.DepartmentName || "—"}</td>
-                      </>
-                    )}
-                    <td className={`${cellClass} min-w-[220px] max-w-sm`}>
-                      {(isNew || task.IsAssignedByBusinessHead) && (
-                        <div className="mb-1 flex flex-wrap gap-1">
-                          {isNew && <span className="bg-[#2c3e82] px-1.5 py-0.5 text-[10px] font-bold text-white">New</span>}
-                          {task.IsAssignedByBusinessHead && (
-                            <span className={`${labelClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
-                              Assigned by Business Head
+                  <React.Fragment key={group.userId}>
+                    <tr
+                      onClick={() => toggleEmployee(group.userId)}
+                      className="cursor-pointer bg-[#f4f6fa] hover:bg-[#e8edf6]"
+                    >
+                      <td colSpan={headings.length} className={cellClass}>
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleEmployee(group.userId);
+                          }}
+                          className="flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 text-left"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`inline-block w-3 text-[#2c3e82] transition-transform ${expanded ? "rotate-90" : ""}`}
+                          >
+                            ▶
+                          </span>
+                          <span className="font-semibold text-slate-900">{group.name}</span>
+                          {group.code && <span className="text-[11px] text-slate-500">{group.code}</span>}
+                          {group.department && <span className="text-[11px] text-slate-600">· {group.department}</span>}
+                          <span className="ml-auto flex flex-wrap items-center gap-1">
+                            <span className={`${labelClass} border-blue-200 bg-white text-[#2c3e82]`}>
+                              {group.tasks.length} {group.tasks.length === 1 ? "task" : "tasks"}
                             </span>
-                          )}
-                        </div>
-                      )}
-                      <p className="font-semibold whitespace-pre-wrap break-words">{task.TaskName}</p>
-                    </td>
-                    <td className={cellClass}>
-                      <span className={`${labelClass} ${PRIORITY_LABEL_CLASSES[task.Priority] || PRIORITY_LABEL_CLASSES.Low}`}>
-                        {task.Priority}
-                      </span>
-                    </td>
-                    <td className={`${cellClass} whitespace-nowrap ${task.IsOverdue ? "font-semibold text-[#b3403f]" : ""}`}>
-                      {formatTaskDate(task.DueDate)}
-                    </td>
-                    <td className={`${cellClass} whitespace-nowrap`}>
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span className={`${labelClass} ${STATUS_LABEL_CLASSES[task.Status] || STATUS_LABEL_CLASSES.Pending}`}>
-                          {task.Status}
-                        </span>
-                        {task.IsOverdue && (
-                          <span className={`${labelClass} border-red-200 bg-red-50 text-[#b3403f]`}>Overdue</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className={cellClass}>{renderCfoRemarks(task)}</td>
-                    <td className={`${cellClass} min-w-[180px]`}>
-                      {task.UserRemarks ? (
-                        <p className="max-w-xs whitespace-pre-wrap break-words">{task.UserRemarks}</p>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    {hasActions && (
-                      <td className={`${cellClass} whitespace-nowrap`}>
-                        <div className="flex flex-col items-start gap-1.5">
-                          {canEdit && (
-                            <button
-                              type="button"
-                              onClick={() => setEditing(task)}
-                              className="cursor-pointer text-[11px] font-semibold text-[#2c3e82] hover:underline"
-                            >
-                              Edit
-                            </button>
-                          )}
-                          {task.CanDelete && (
-                            <button
-                              type="button"
-                              onClick={() => setDeleting(task)}
-                              className="cursor-pointer text-[11px] font-semibold text-[#b3403f] hover:underline"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
+                            <span className={`${labelClass} ${STATUS_LABEL_CLASSES.Pending}`}>{open} open</span>
+                            {overdue > 0 && (
+                              <span className={`${labelClass} border-red-200 bg-red-50 text-[#b3403f]`}>{overdue} overdue</span>
+                            )}
+                          </span>
+                        </button>
                       </td>
-                    )}
-                  </tr>
+                    </tr>
+                    {expanded && group.tasks.map((task, index) => renderTaskRow(task, index + 1))}
+                  </React.Fragment>
                 );
               })
+            ) : !groupByEmployee && pageTasks.length > 0 ? (
+              pageTasks.map((task, index) => renderTaskRow(task, (currentPage - 1) * PAGE_SIZE + index + 1))
             ) : (
               <tr>
                 <td colSpan={headings.length} className="px-4 py-10 text-center">
@@ -648,11 +749,12 @@ export default function TaskListView({
       </div>
 
       {/* Pagination */}
-      {!loading && visibleTasks.length > PAGE_SIZE && (
+      {!loading && pageItems.length > PAGE_SIZE && (
         <div className="mt-3 flex flex-col items-center justify-between gap-3 text-xs text-slate-600 sm:flex-row">
           <span>
-            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, visibleTasks.length)} of{" "}
-            {visibleTasks.length}
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, pageItems.length)} of{" "}
+            {pageItems.length}
+            {groupByEmployee ? " employees" : ""}
           </span>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1} className={pagerButtonClass}>

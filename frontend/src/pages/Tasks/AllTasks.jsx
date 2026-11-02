@@ -10,8 +10,9 @@ const tabClass = (active) =>
   }`;
 
 // Every user's tasks (Business Head; Admin read-only), in two views:
-//   Tasks     - the task grid with filters; the Business Head can add or
-//               change CFO's Remarks on any row with Submit
+//   Tasks     - the task grid with filters, one collapsible row per employee;
+//               the Business Head can add or change CFO's Remarks on any
+//               row with Submit
 //   Employees - every active user, with or without tasks, in one sheet with
 //               a blank row each, so the Business Head assigns by typing and
 //               pressing Submit
@@ -47,8 +48,9 @@ const AllTasks = () => {
       footer="Use the Employees view to assign new tasks. The Overdue box shows only overdue tasks; click it again to show all."
       loadTasks={getAllTasks}
       loadFilterOptions={getAllTaskFilterOptions}
-      filterKeys={["department", "employee", "status", "priority", "dueRange", "source"]}
+      filterKeys={["department", "employee", "status", "priority"]}
       showEmployee
+      groupByEmployee
       cfoEditable
       emptyTitle="No tasks yet."
       headerActions={headerActions}
