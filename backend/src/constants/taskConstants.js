@@ -38,6 +38,12 @@ const TaskMailEvent = Object.freeze({
 const TASK_BUSINESS_HEAD_ROLE = "BUSINESSHEAD";
 const TASK_VIEW_ALL_ROLES = Object.freeze(["ADMIN", TASK_BUSINESS_HEAD_ROLE]);
 
+// Users.Role 'Manager', upper-cased. Managers (and the Business Head) can
+// create projects; a Manager runs only the projects they created, with
+// their own reportees as members.
+const TASK_MANAGER_ROLE = "MANAGER";
+const PROJECT_CREATOR_ROLES = Object.freeze([TASK_BUSINESS_HEAD_ROLE, TASK_MANAGER_ROLE]);
+
 // Match the column sizes in dbo.Tasks.
 const TASK_NAME_MAX_LENGTH = 500;
 const TASK_REMARKS_MAX_LENGTH = 2000;
@@ -45,6 +51,15 @@ const TASK_REMARKS_MAX_LENGTH = 2000;
 // With no Status filter, lists show every task not Done plus tasks Done in
 // the last this many days.
 const TASK_DONE_RECENT_DAYS = 30;
+
+// Projects: dbo.Projects.ProjectName size; Description is NVARCHAR(MAX) but
+// capped here like the remarks.
+const PROJECT_NAME_MAX_LENGTH = 200;
+const PROJECT_DESCRIPTION_MAX_LENGTH = 2000;
+
+// Assign a project task to every current member (one copy each, linked by
+// AssignmentGroupID) instead of one member.
+const PROJECT_ASSIGN_ALL = "all";
 
 module.exports = {
   TASK_PRIORITIES,
@@ -54,7 +69,12 @@ module.exports = {
   TaskMailEvent,
   TASK_BUSINESS_HEAD_ROLE,
   TASK_VIEW_ALL_ROLES,
+  TASK_MANAGER_ROLE,
+  PROJECT_CREATOR_ROLES,
   TASK_NAME_MAX_LENGTH,
   TASK_REMARKS_MAX_LENGTH,
   TASK_DONE_RECENT_DAYS,
+  PROJECT_NAME_MAX_LENGTH,
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_ASSIGN_ALL,
 };

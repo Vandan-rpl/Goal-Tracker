@@ -39,25 +39,45 @@ const logTaskMailMode = () => {
     }
 };
 
+// " - Project: X" on project task subjects, "" on personal tasks.
+const projectSuffix = (task) => (task.ProjectName ? ` - Project: ${task.ProjectName}` : "");
+
+// Who acted: "Business Head", or a Manager by name (project tasks).
+const actorLabel = (role, name) =>
+    String(role || "").toUpperCase() === "MANAGER" ? `${name || "your Manager"} (Manager)` : "Business Head";
+
+// The same at the start of a sentence: "The Business Head" / "Name (Manager)".
+const actorSentence = (role, name) =>
+    String(role || "").toUpperCase() === "MANAGER" ? actorLabel(role, name) : "The Business Head";
+
+// Project tasks call the remarks "Manager / CFO Remarks".
+const remarksLabel = (task) => (task.ProjectName ? "Manager / CFO Remarks" : "CFO's Remarks");
+
 /**
  * Event -> subject, opening line and detail rows ([label, value]; empty
- * values are left out).
+ * values are left out). Project tasks also name the project, and the
+ * assigner / remarker may be a Manager.
  */
 const TASK_MAIL_EVENTS = Object.freeze({
     [TaskMailEvent.ASSIGNED]: {
-        subject: "New task assigned to you by Business Head",
-        message: () => "The Business Head has assigned a new task to you.",
+        subject: (task) => `New task assigned to you by ${actorLabel(task.AssignedByRole, task.AssignedByName)}${projectSuffix(task)}`,
+        message: (task) => (task.ProjectName
+            ? `${actorSentence(task.AssignedByRole, task.AssignedByName)} has assigned a new task to you in the project "${task.ProjectName}".`
+            : "The Business Head has assigned a new task to you."),
         details: (task) => [
+            ["Project", task.ProjectName],
             ["Task Name", task.TaskName],
             ["Priority", task.Priority],
             ["Due Date", formatDate(task.DueDate)],
-            ["CFO's Remarks", task.CFORemarks],
+            ["Responsible Person", task.ResponsiblePersonName],
+            [remarksLabel(task), task.CFORemarks],
         ],
     },
     [TaskMailEvent.CFO_REMARK]: {
-        subject: "Business Head added a remark on your task",
-        message: () => "The Business Head has added a remark on your task.",
+        subject: (task) => `${actorLabel(task.CFORemarksByRole, task.CFORemarksByName)} added a remark on your task${projectSuffix(task)}`,
+        message: (task) => `${actorSentence(task.CFORemarksByRole, task.CFORemarksByName)} has added a remark on your task.`,
         details: (task) => [
+            ["Project", task.ProjectName],
             ["Task Name", task.TaskName],
             ["Remark", task.CFORemarks],
         ],
@@ -152,10 +172,11 @@ const sendTaskMail = async (event, taskId) => {
         }
 
         const redirectTo = redirectAddress();
+        const subject = definition.subject(task);
 
         await sendEmail({
             to: redirectTo || recipient.email,
-            subject: redirectTo ? `[TEST] ${definition.subject} (for ${recipient.email})` : definition.subject,
+            subject: redirectTo ? `[TEST] ${subject} (for ${recipient.email})` : subject,
             html: buildHtml(definition, task, redirectTo ? recipient : null),
         });
 

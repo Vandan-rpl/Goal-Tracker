@@ -10,8 +10,17 @@ export const TASK_REMARKS_MAX = 2000;
 // Self-added / Assigned filter (backend `source`).
 export const TASK_SOURCES = [
   { value: "self", label: "Self-added" },
-  { value: "assigned", label: "Assigned by Business Head" },
+  { value: "assigned", label: "Assigned (Business Head / Manager)" },
 ];
+
+// Who assigned a task: the Business Head, or a Manager in their project.
+export const getAssignerLabel = (task) =>
+  String(task?.AssignedByRole || "").toLowerCase() === "manager"
+    ? `${task.AssignedByName || "Manager"} (Manager)`
+    : "Business Head";
+
+// Remarks column / label: "Manager / CFO Remarks" on project tasks.
+export const PROJECT_REMARKS_LABEL = "Manager / CFO Remarks";
 
 const STATUS_CLASSES = {
   Pending: "bg-gray-100 text-gray-700",

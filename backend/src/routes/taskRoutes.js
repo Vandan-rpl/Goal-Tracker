@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const taskController = require("../controllers/taskController");
+const projectController = require("../controllers/projectController");
 const { verifyToken } = require("../middleware/authMiddleware");
 
 /**
@@ -10,7 +11,8 @@ const { verifyToken } = require("../middleware/authMiddleware");
  * Base URL : /api/v1/tasks
  * ============================================================
  * Fixed paths (/access, /unseen-count, /my, /team, /all, /employees,
- * /assign) are declared before /:taskId so they aren't captured as an id.
+ * /assign, /projects) are declared before /:taskId so they aren't captured
+ * as an id.
  * Who may do what is checked in taskService (403 otherwise).
  */
 
@@ -80,6 +82,75 @@ router.get("/employees", verifyToken, taskController.getAssignableEmployees);
  * POST /api/v1/tasks/assign
  */
 router.post("/assign", verifyToken, taskController.assignTask);
+
+/**
+ * ------------------------------------------------------------
+ * Projects (who may do what: projectService)
+ * ------------------------------------------------------------
+ */
+
+/**
+ * Projects: Business Head / Admin all, members their own
+ * GET /api/v1/tasks/projects
+ */
+router.get("/projects", verifyToken, projectController.getProjects);
+
+/**
+ * Create Project (Business Head)
+ * POST /api/v1/tasks/projects   body: { projectName, description, memberIds: [] }
+ */
+router.post("/projects", verifyToken, projectController.createProject);
+
+/**
+ * Users that can be added as members (Business Head)
+ * GET /api/v1/tasks/projects/member-options
+ */
+router.get("/projects/member-options", verifyToken, projectController.getMemberOptions);
+
+/**
+ * Project details, members and tasks
+ * GET /api/v1/tasks/projects/:projectId
+ */
+router.get("/projects/:projectId", verifyToken, projectController.getProject);
+
+/**
+ * Update Project name / description (Business Head)
+ * PUT /api/v1/tasks/projects/:projectId
+ */
+router.put("/projects/:projectId", verifyToken, projectController.updateProject);
+
+/**
+ * Add Members (Business Head; re-adding reactivates the old row)
+ * POST /api/v1/tasks/projects/:projectId/members   body: { userIds: [] }
+ */
+router.post("/projects/:projectId/members", verifyToken, projectController.addMembers);
+
+/**
+ * Remove Member (Business Head)
+ * DELETE /api/v1/tasks/projects/:projectId/members/:userId
+ */
+router.delete("/projects/:projectId/members/:userId", verifyToken, projectController.removeMember);
+
+/**
+ * Add own task to the project (member)
+ * POST /api/v1/tasks/projects/:projectId/tasks
+ */
+router.post("/projects/:projectId/tasks", verifyToken, projectController.createProjectTask);
+
+/**
+ * Assign project task (Business Head)
+ * POST /api/v1/tasks/projects/:projectId/assign
+ *   body: { assignTo: userId | "all", responsiblePersonId, taskName, priority, dueDate, cfoRemarks }
+ */
+router.post("/projects/:projectId/assign", verifyToken, projectController.assignProjectTask);
+
+/**
+ * Change / delete an "All members" task for every copy (Business Head)
+ * PUT    /api/v1/tasks/projects/:projectId/groups/:groupId
+ * DELETE /api/v1/tasks/projects/:projectId/groups/:groupId
+ */
+router.put("/projects/:projectId/groups/:groupId", verifyToken, projectController.updateGroup);
+router.delete("/projects/:projectId/groups/:groupId", verifyToken, projectController.deleteGroup);
 
 /**
  * Add Task (self-added)

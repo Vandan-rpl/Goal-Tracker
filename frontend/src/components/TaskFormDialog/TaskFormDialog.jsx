@@ -5,7 +5,9 @@ import {
   TASK_PRIORITIES,
   TASK_REMARKS_MAX,
   TASK_STATUSES,
+  PROJECT_REMARKS_LABEL,
   formatTaskDateTime,
+  getAssignerLabel,
 } from "../../utils/taskStatus";
 
 const worksheetInputClass =
@@ -161,7 +163,7 @@ export default function TaskFormDialog({ task = null, onClose, onSaved }) {
         <div className="space-y-4 p-3 sm:p-5">
           {!isNew && task.IsAssignedByBusinessHead && canEditStatus && (
             <p className="border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-[#2c3e82]">
-              This task was assigned by the Business Head. You can change only its Status and your remarks.
+              This task was assigned to you by {getAssignerLabel(task)}. You can change only its Status and your remarks.
             </p>
           )}
 
@@ -298,7 +300,7 @@ export default function TaskFormDialog({ task = null, onClose, onSaved }) {
 
           {!isNew && task.CFORemarks && (
             <div className="border border-[#cbd4e2] bg-[#f8faff] p-3">
-              <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#30415f]">CFO's Remarks</p>
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#30415f]">{task?.ProjectID ? PROJECT_REMARKS_LABEL : "CFO's Remarks"}</p>
               <p className="whitespace-pre-wrap text-sm text-slate-800">{task.CFORemarks}</p>
               {task.CFORemarksDate && (
                 <p className="mt-1 text-[11px] text-slate-500">

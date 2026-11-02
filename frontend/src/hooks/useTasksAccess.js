@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import useAuth from "./useAuth";
 import { getTaskAccess } from "../services/taskService";
 
-// GET /tasks/access (isBusinessHead, canViewAll, hasDirectReports) — the
+// GET /tasks/access (isBusinessHead, canViewAll, hasDirectReports,
+// hasProjects, canCreateProjects) — the
 // same checks the backend applies. Cached per token so the sidebar and the
 // route guard share one request and a different login re-checks.
 let cachedToken = null;
 let cachedRequest = null;
 
-const NO_ACCESS = { isBusinessHead: false, canViewAll: false, hasDirectReports: false };
+const NO_ACCESS = { isBusinessHead: false, canViewAll: false, hasDirectReports: false, hasProjects: false, canCreateProjects: false };
 
 const fetchTaskAccess = () => {
   const token = localStorage.getItem("token");
@@ -40,6 +41,8 @@ const useTasksAccess = () => {
         isBusinessHead: Boolean(result?.isBusinessHead),
         canViewAll: Boolean(result?.canViewAll),
         hasDirectReports: Boolean(result?.hasDirectReports),
+        hasProjects: Boolean(result?.hasProjects),
+        canCreateProjects: Boolean(result?.canCreateProjects),
       });
       setLoading(false);
     });

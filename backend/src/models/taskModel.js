@@ -55,17 +55,25 @@ const TASK_SELECT = `
     t.UserRemarks,
     t.AssignedBy,
     ${fullName("assigner")} AS AssignedByName,
+    assigner.Role AS AssignedByRole,
     t.AssignedDate,
     t.CompletedDate,
     t.IsSeenByUser,
     ${IS_OVERDUE} AS IsOverdue,
     t.CreatedBy,
     t.CreatedDate,
-    t.ModifiedDate
+    t.ModifiedDate,
+    t.ProjectID,
+    p.ProjectName,
+    p.CreatedBy AS ProjectCreatedBy,
+    t.ResponsiblePersonID,
+    ${fullName("rp")} AS ResponsiblePersonName,
+    t.AssignmentGroupID
 `;
 
-const TASK_FROM = `
-    FROM dbo.Tasks t
+// Joins after "FROM dbo.Tasks t" for TASK_SELECT (p = project, rp =
+// Responsible Person; both NULL on personal tasks).
+const TASK_JOINS = `
     INNER JOIN dbo.Users owner
         ON owner.UserID = t.UserID
     LEFT JOIN dbo.Departments ownerDept
@@ -74,6 +82,15 @@ const TASK_FROM = `
         ON assigner.UserID = t.AssignedBy
     LEFT JOIN dbo.Users cfo
         ON cfo.UserID = t.CFORemarksBy
+    LEFT JOIN dbo.Projects p
+        ON p.ProjectID = t.ProjectID
+    LEFT JOIN dbo.Users rp
+        ON rp.UserID = t.ResponsiblePersonID
+`;
+
+const TASK_FROM = `
+    FROM dbo.Tasks t
+    ${TASK_JOINS}
 `;
 
 /**
@@ -92,14 +109,7 @@ const getTask = async (db, taskId, lock = false) => {
                 owner.HODID AS OwnerHODID,
                 owner.IsActive AS OwnerIsActive
             FROM dbo.Tasks t ${lock ? "WITH (UPDLOCK, ROWLOCK)" : ""}
-            INNER JOIN dbo.Users owner
-                ON owner.UserID = t.UserID
-            LEFT JOIN dbo.Departments ownerDept
-                ON ownerDept.DepartmentID = owner.DepartmentID
-            LEFT JOIN dbo.Users assigner
-                ON assigner.UserID = t.AssignedBy
-            LEFT JOIN dbo.Users cfo
-                ON cfo.UserID = t.CFORemarksBy
+            ${TASK_JOINS}
             WHERE t.TaskID = @TaskID
               AND t.IsDeleted = 0;
         `);
@@ -110,6 +120,8 @@ const getTask = async (db, taskId, lock = false) => {
 /**
  * Insert a task, returns the new TaskID. `assignedBy` set = assigned by the
  * Business Head (AssignedDate = now, IsSeenByUser = 0); null = self-added.
+ * Project tasks also pass projectId, responsiblePersonId and, for an
+ * "All members" assignment, assignmentGroupId (all NULL on personal tasks).
  */
 const insertTask = async (db, task) => {
     const isAssigned = Boolean(task.assignedBy);
@@ -125,12 +137,16 @@ const insertTask = async (db, task) => {
         .input("AssignedBy", sql.Int, task.assignedBy || null)
         .input("IsAssigned", sql.Bit, isAssigned ? 1 : 0)
         .input("CreatedBy", sql.Int, task.createdBy)
+        .input("ProjectID", sql.Int, task.projectId || null)
+        .input("ResponsiblePersonID", sql.Int, task.responsiblePersonId || null)
+        .input("AssignmentGroupID", sql.UniqueIdentifier, task.assignmentGroupId || null)
         .query(`
             INSERT INTO dbo.Tasks
                 (UserID, TaskName, Priority, DueDate, Status,
                  CFORemarks, CFORemarksBy, CFORemarksDate,
                  UserRemarks, AssignedBy, AssignedDate, CompletedDate,
-                 IsSeenByUser, IsDeleted, CreatedBy, CreatedDate)
+                 IsSeenByUser, IsDeleted, CreatedBy, CreatedDate,
+                 ProjectID, ResponsiblePersonID, AssignmentGroupID)
             OUTPUT INSERTED.TaskID
             VALUES
                 (@UserID, @TaskName, @Priority, @DueDate, @Status,
@@ -142,7 +158,8 @@ const insertTask = async (db, task) => {
                  CASE WHEN @IsAssigned = 1 THEN SYSDATETIME() END,
                  CASE WHEN @Status = N'${TaskStatus.DONE}' THEN SYSDATETIME() END,
                  CASE WHEN @IsAssigned = 1 THEN 0 ELSE 1 END,
-                 0, @CreatedBy, SYSDATETIME());
+                 0, @CreatedBy, SYSDATETIME(),
+                 @ProjectID, @ResponsiblePersonID, @AssignmentGroupID);
         `);
 
     return result.recordset[0].TaskID;
@@ -158,6 +175,7 @@ const UPDATABLE_COLUMNS = {
     CFORemarks: sql.NVarChar(2000),
     CFORemarksBy: sql.Int,
     IsSeenByUser: sql.Bit,
+    ResponsiblePersonID: sql.Int,
 };
 
 /**
@@ -518,15 +536,87 @@ const getTaskMailData = async (db, taskId) => {
                 t.UserID AS EmployeeID,
                 ${fullName("owner")} AS EmployeeName,
                 owner.Email AS EmployeeEmail,
-                owner.IsActive AS EmployeeIsActive
+                owner.IsActive AS EmployeeIsActive,
+                p.ProjectName,
+                ${fullName("rp")} AS ResponsiblePersonName,
+                ${fullName("assigner")} AS AssignedByName,
+                assigner.Role AS AssignedByRole,
+                ${fullName("cfo")} AS CFORemarksByName,
+                cfo.Role AS CFORemarksByRole
             FROM dbo.Tasks t
             INNER JOIN dbo.Users owner
                 ON owner.UserID = t.UserID
+            LEFT JOIN dbo.Users assigner
+                ON assigner.UserID = t.AssignedBy
+            LEFT JOIN dbo.Users cfo
+                ON cfo.UserID = t.CFORemarksBy
+            LEFT JOIN dbo.Projects p
+                ON p.ProjectID = t.ProjectID
+            LEFT JOIN dbo.Users rp
+                ON rp.UserID = t.ResponsiblePersonID
             WHERE t.TaskID = @TaskID
               AND t.IsDeleted = 0;
         `);
 
     return result.recordset[0] || null;
+};
+
+/**
+ * ------------------------------------------------------------
+ * Project tasks
+ * ------------------------------------------------------------
+ */
+
+/**
+ * Every task of a project (deleted ones left out), with no Done cut-off so
+ * group progress counts every copy. `ownerId` set = only that user's tasks.
+ * AssigneeIsMember = the owner is still an active member of the project
+ * (0 once removed; their tasks stay listed).
+ */
+const listProjectTasks = async (db, projectId, { ownerId = null } = {}) => {
+
+    const result = await db.request()
+        .input("ProjectID", sql.Int, projectId)
+        .input("OwnerID", sql.Int, ownerId)
+        .query(`
+            SELECT
+                ${TASK_SELECT},
+                CAST(CASE WHEN pm.ProjectMemberID IS NULL THEN 0 ELSE 1 END AS BIT) AS AssigneeIsMember
+            ${TASK_FROM}
+            LEFT JOIN dbo.ProjectMembers pm
+                ON pm.ProjectID = t.ProjectID
+               AND pm.UserID = t.UserID
+               AND pm.IsActive = 1
+            WHERE t.ProjectID = @ProjectID
+              AND t.IsDeleted = 0
+              AND (@OwnerID IS NULL OR t.UserID = @OwnerID)
+            ORDER BY
+                CASE WHEN t.Status = N'${TaskStatus.DONE}' THEN 1 ELSE 0 END,
+                t.DueDate,
+                t.TaskID;
+        `);
+
+    return result.recordset;
+};
+
+/**
+ * The copies (not deleted) of an "All members" assignment, locked for update
+ * when `lock` is true. Empty array if none.
+ */
+const getGroupTasks = async (db, assignmentGroupId, lock = false) => {
+
+    const result = await db.request()
+        .input("AssignmentGroupID", sql.UniqueIdentifier, assignmentGroupId)
+        .query(`
+            SELECT ${TASK_SELECT}
+            FROM dbo.Tasks t ${lock ? "WITH (UPDLOCK, ROWLOCK)" : ""}
+            ${TASK_JOINS}
+            WHERE t.AssignmentGroupID = @AssignmentGroupID
+              AND t.IsDeleted = 0
+            ORDER BY t.TaskID;
+        `);
+
+    return result.recordset;
 };
 
 module.exports = {
@@ -543,4 +633,6 @@ module.exports = {
     getTaskFilterOptions,
     getEmployeeTaskSummary,
     getTaskMailData,
+    listProjectTasks,
+    getGroupTasks,
 };

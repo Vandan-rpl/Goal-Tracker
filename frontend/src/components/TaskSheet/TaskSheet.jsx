@@ -2,11 +2,15 @@ import React, { useState } from "react";
 import { toast } from "react-toastify";
 import ConfirmDialog from "../ConfirmDialog/ConfirmDialog";
 import {
+  assignProjectTask,
   assignTask,
+  createProjectTask,
   createTask,
+  deleteProjectGroup,
   deleteTask,
   getTaskApiError,
   submitCFORemarks,
+  updateProjectGroup,
   updateTask,
 } from "../../services/taskService";
 import {
@@ -14,9 +18,14 @@ import {
   TASK_PRIORITIES,
   TASK_REMARKS_MAX,
   TASK_STATUSES,
+  PROJECT_REMARKS_LABEL,
+  getAssignerLabel,
   getTodayKey,
 } from "../../utils/taskStatus";
 import { worksheetControlClass, worksheetLineAddClass } from "../../utils/goalWorksheet";
+
+// Assigned To value for "All members" (backend PROJECT_ASSIGN_ALL).
+const ASSIGN_ALL = "all";
 
 const EMPTY_DRAFT = {
   taskName: "",
@@ -25,6 +34,8 @@ const EMPTY_DRAFT = {
   status: "Pending",
   cfoRemarks: "",
   userRemarks: "",
+  responsiblePersonId: "",
+  assignTo: "",
 };
 
 const draftFromTask = (task) => ({
@@ -34,9 +45,15 @@ const draftFromTask = (task) => ({
   status: task.Status || "Pending",
   cfoRemarks: task.CFORemarks || "",
   userRemarks: task.UserRemarks || "",
+  responsiblePersonId: task.ResponsiblePersonID ? String(task.ResponsiblePersonID) : "",
+  assignTo: "",
 });
 
-const COLUMNS = ["Sr.No.", "Task Name", "Priority", "Due Date", "Status", "CFO's Remarks", "User's Remarks", ""];
+const BASE_COLUMNS = ["Sr.No.", "Task Name", "Priority", "Due Date", "Status"];
+const PROJECT_COLUMNS = ["Responsible Person", "Assigned To"];
+// The remarks column is "Manager / CFO Remarks" on the project page (the
+// assigning Manager or the Business Head writes there).
+const endColumns = (isProject) => [isProject ? PROJECT_REMARKS_LABEL : "CFO's Remarks", "User's Remarks", ""];
 
 // Same look as the Add Goal worksheet (components/GoalWorksheet): pale blue
 // headings, grey-blue grid lines, navy focus border on the cell being edited.
@@ -45,8 +62,10 @@ const headClass =
 const cellClass = "p-0 border-r border-b border-[#d5dce5] last:border-r-0 align-top";
 const cellInputClass = `${worksheetControlClass} disabled:text-slate-500`;
 const readOnlyClass = "px-2.5 py-3 text-xs text-[#202522]";
+const tagClass = "px-1.5 py-0.5 text-[10px] font-semibold border";
 
 const taskKey = (task) => `task-${task.TaskID}`;
+const groupKey = (groupId) => `group-${groupId}`;
 
 let newRowCounter = 0;
 const nextNewRowKey = (employeeId) => `new-${employeeId}-${(newRowCounter += 1)}`;
@@ -58,6 +77,33 @@ const apiErrorText = (err, fallback) => {
 };
 
 const trimmed = (value) => String(value ?? "").trim();
+
+const formatDueDate = (value) => (value ? value.split("-").reverse().join("-") : "");
+
+/**
+ * In project assign mode, "All members" copies (same AssignmentGroupID)
+ * become one group item at the position of the first copy; other tasks stay
+ * as they are.
+ */
+const toSheetItems = (tasks, collapseGroups) => {
+  if (!collapseGroups) return tasks.map((task) => ({ task }));
+
+  const items = [];
+  const groups = new Map();
+  tasks.forEach((task) => {
+    if (!task.AssignmentGroupID) {
+      items.push({ task });
+      return;
+    }
+    if (!groups.has(task.AssignmentGroupID)) {
+      const group = { groupId: task.AssignmentGroupID, copies: [] };
+      groups.set(task.AssignmentGroupID, group);
+      items.push({ group });
+    }
+    groups.get(task.AssignmentGroupID).copies.push(task);
+  });
+  return items;
+};
 
 /**
  * Task sheet: tasks as spreadsheet rows with blank row(s) below for new
@@ -76,10 +122,23 @@ const trimmed = (value) => String(value ?? "").trim();
  * Delete shows on rows with CanDelete. If an email fails the change stays
  * and a warning is shown.
  *
+ * With `project` (project page) the sheet adds Responsible Person and
+ * Assigned To columns, and blank rows add to / assign in that project:
+ *   assign mode - Assigned To = one member or All members (one copy per
+ *                 member); each "All members" task shows as one row with
+ *                 per-member progress, expandable to every member's copy.
+ *                 Its Task Name / Priority / Due Date / Responsible Person
+ *                 are changed (or it is deleted) for every copy at once.
+ *   own mode    - the member's own project tasks, added like My Tasks; the
+ *                 member picks the Responsible Person from the members.
+ * Outside a project, project tasks carry a "Project: name" tag.
+ *
  * Props:
  *   groups          [{ employee: { UserID, FullName, EmployeeCode,
  *                   DepartmentName }, tasks, canAdd }]
  *   mode            "assign" | "own"
+ *   project         optional { ProjectID, members: [{ UserID, FullName,
+ *                   UserIsActive }] }
  *   blankRows       blank rows per group that can add (default 1)
  *   showGroupHeaders  a name row above each employee's tasks
  *   newTaskIds      Set of TaskIDs to highlight as New
@@ -88,22 +147,30 @@ const trimmed = (value) => String(value ?? "").trim();
 export default function TaskSheet({
   groups,
   mode = "assign",
+  project = null,
   blankRows = 1,
   showGroupHeaders = true,
   newTaskIds = null,
   onSaved,
 }) {
   const isAssignMode = mode === "assign";
+  const columns = [...BASE_COLUMNS, ...(project ? PROJECT_COLUMNS : []), ...endColumns(Boolean(project))];
+  const remarksLabel = project ? PROJECT_REMARKS_LABEL : "CFO's Remarks";
+  const collapseGroups = Boolean(project) && isAssignMode;
 
   const [drafts, setDrafts] = useState({}); // rowKey -> draft (edited rows only)
   const [extraRows, setExtraRows] = useState({}); // employeeId -> [rowKey] added with "+ Add row"
   const [baseRowSeed, setBaseRowSeed] = useState({}); // employeeId -> n, to renew used blank rows
   const [rowErrors, setRowErrors] = useState({});
   const [savingKey, setSavingKey] = useState(null);
-  const [deleting, setDeleting] = useState(null);
+  const [deleting, setDeleting] = useState(null); // task, or { group }
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
   const today = getTodayKey();
+
+  // Members that can be picked as Assigned To / Responsible Person.
+  const activeMembers = (project?.members || []).filter((m) => m.UserIsActive !== false && m.UserIsActive !== 0);
 
   const draftOf = (key, task) => drafts[key] || (task ? draftFromTask(task) : EMPTY_DRAFT);
 
@@ -130,6 +197,14 @@ export default function TaskSheet({
 
   const setRowError = (key, message) => setRowErrors((current) => ({ ...current, [key]: message }));
 
+  const toggleGroup = (groupId) =>
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+
   // The fixed blank rows of an employee (keys renew after each add so the
   // submitted row clears), plus rows added with "+ Add row".
   const newRowKeysFor = (employeeId) => {
@@ -141,17 +216,27 @@ export default function TaskSheet({
   // Which cells of a row can be edited.
   const editableCells = (task) => {
     if (!task) {
-      return { details: true, status: !isAssignMode, cfoRemarks: isAssignMode, userRemarks: !isAssignMode };
+      return {
+        details: true,
+        status: !isAssignMode,
+        cfoRemarks: isAssignMode,
+        userRemarks: !isAssignMode,
+        // Both the Business Head and a member adding their own task pick it.
+        responsible: Boolean(project),
+        assignTo: Boolean(project) && isAssignMode,
+      };
     }
     return {
       details: Boolean(task.CanEditDetails),
       status: Boolean(task.CanEditStatus),
       cfoRemarks: Boolean(task.CanEditCFORemarks),
       userRemarks: Boolean(task.CanEditUserRemarks),
+      responsible: Boolean(project) && Boolean(task.CanEditResponsiblePerson),
+      assignTo: false,
     };
   };
 
-  const validate = (draft, { checkDetails, dueMustBeFuture }) => {
+  const validate = (draft, { checkDetails, dueMustBeFuture, checkProject = false }) => {
     if (checkDetails) {
       const name = draft.taskName.trim();
       if (!name) return "Task Name is required.";
@@ -159,14 +244,49 @@ export default function TaskSheet({
       if (!draft.dueDate) return "Due Date is required.";
       if (dueMustBeFuture && draft.dueDate < today) return "Due Date must be today or later.";
     }
-    if (draft.cfoRemarks.trim().length > TASK_REMARKS_MAX) return `CFO's Remarks cannot exceed ${TASK_REMARKS_MAX} characters.`;
+    if (checkProject) {
+      if (isAssignMode && !draft.assignTo) return "Assigned To is required: pick a member or All members.";
+      if (!draft.responsiblePersonId) return "Responsible Person is required.";
+    }
+    if (draft.cfoRemarks.trim().length > TASK_REMARKS_MAX) return `${remarksLabel} cannot exceed ${TASK_REMARKS_MAX} characters.`;
     if (draft.userRemarks.trim().length > TASK_REMARKS_MAX) return `User's Remarks cannot exceed ${TASK_REMARKS_MAX} characters.`;
     return "";
   };
 
+  const assignWithMail = async (draft, employee) => {
+    if (project) {
+      const result = await assignProjectTask(project.ProjectID, {
+        assignTo: draft.assignTo === ASSIGN_ALL ? ASSIGN_ALL : Number(draft.assignTo),
+        responsiblePersonId: Number(draft.responsiblePersonId),
+        taskName: draft.taskName.trim(),
+        priority: draft.priority,
+        dueDate: draft.dueDate,
+        cfoRemarks: draft.cfoRemarks.trim(),
+      });
+      const who = result?.assignedCount > 1 ? `${result.assignedCount} members` : "the member";
+      if (result?.mailWarning) toast.warning(`Task assigned to ${who}. ${result.mailWarning}`);
+      else toast.success(`Task assigned and emailed to ${who}.`);
+      return;
+    }
+
+    const result = await assignTask({
+      employeeId: employee.UserID,
+      taskName: draft.taskName.trim(),
+      priority: draft.priority,
+      dueDate: draft.dueDate,
+      cfoRemarks: draft.cfoRemarks.trim(),
+    });
+    if (result?.mailWarning) toast.warning(`Task assigned. ${result.mailWarning}`);
+    else toast.success(`Task assigned and emailed to ${employee.FullName || "the employee"}.`);
+  };
+
   const submitNewRow = async (key, employee) => {
     const draft = draftOf(key, null);
-    const message = validate(draft, { checkDetails: true, dueMustBeFuture: isAssignMode });
+    const message = validate(draft, {
+      checkDetails: true,
+      dueMustBeFuture: isAssignMode,
+      checkProject: Boolean(project),
+    });
     if (message) {
       setRowError(key, message);
       return;
@@ -175,23 +295,19 @@ export default function TaskSheet({
     try {
       setSavingKey(key);
       if (isAssignMode) {
-        const result = await assignTask({
-          employeeId: employee.UserID,
-          taskName: draft.taskName.trim(),
-          priority: draft.priority,
-          dueDate: draft.dueDate,
-          cfoRemarks: draft.cfoRemarks.trim(),
-        });
-        if (result?.mailWarning) toast.warning(`Task assigned. ${result.mailWarning}`);
-        else toast.success(`Task assigned and emailed to ${employee.FullName || "the employee"}.`);
+        await assignWithMail(draft, employee);
       } else {
-        await createTask({
+        const task = {
           taskName: draft.taskName.trim(),
           priority: draft.priority,
           dueDate: draft.dueDate,
           status: draft.status,
           userRemarks: draft.userRemarks.trim(),
-        });
+        };
+        if (project) {
+          await createProjectTask(project.ProjectID, { ...task, responsiblePersonId: Number(draft.responsiblePersonId) });
+        }
+        else await createTask(task);
         toast.success("Task added.");
       }
 
@@ -224,6 +340,9 @@ export default function TaskSheet({
       if (draft.priority !== base.priority) changes.priority = draft.priority;
       if (draft.dueDate !== base.dueDate) changes.dueDate = draft.dueDate;
     }
+    if (editable.responsible && draft.responsiblePersonId !== base.responsiblePersonId) {
+      changes.responsiblePersonId = Number(draft.responsiblePersonId);
+    }
     if (editable.status && draft.status !== base.status) changes.status = draft.status;
     if (editable.userRemarks && trimmed(draft.userRemarks) !== trimmed(base.userRemarks)) {
       changes.userRemarks = draft.userRemarks.trim();
@@ -237,7 +356,7 @@ export default function TaskSheet({
         checkDetails: detailsChanged,
         // Assigned tasks: a new Due Date must be today or later.
         dueMustBeFuture: Boolean(changes.dueDate) && task.IsAssignedByBusinessHead,
-      }) || (remarksChanged && !remarks ? "CFO's Remarks cannot be cleared; enter a remark." : "");
+      }) || (remarksChanged && !remarks ? `${remarksLabel} cannot be cleared; enter a remark.` : "");
     if (message) {
       setRowError(key, message);
       return;
@@ -264,9 +383,52 @@ export default function TaskSheet({
     }
   };
 
+  // "All members" task: details for every copy at once.
+  const submitGroupRow = async (group) => {
+    const key = groupKey(group.groupId);
+    const first = group.copies[0];
+    const draft = draftOf(key, first);
+    const base = draftFromTask(first);
+
+    const changes = {};
+    if (trimmed(draft.taskName) !== trimmed(base.taskName)) changes.taskName = draft.taskName.trim();
+    if (draft.priority !== base.priority) changes.priority = draft.priority;
+    if (draft.dueDate !== base.dueDate) changes.dueDate = draft.dueDate;
+    if (draft.responsiblePersonId !== base.responsiblePersonId) {
+      changes.responsiblePersonId = Number(draft.responsiblePersonId);
+    }
+
+    const message = validate(draft, { checkDetails: true, dueMustBeFuture: Boolean(changes.dueDate) });
+    if (message) {
+      setRowError(key, message);
+      return;
+    }
+
+    try {
+      setSavingKey(key);
+      await updateProjectGroup(project.ProjectID, group.groupId, changes);
+      toast.success(`Task updated for all ${group.copies.length} members.`);
+      clearRow(key);
+    } catch (err) {
+      setRowError(key, apiErrorText(err, "Failed to save the task."));
+    } finally {
+      setSavingKey(null);
+      await onSaved?.(first.UserID);
+    }
+  };
+
   const handleDelete = async () => {
     try {
       setDeleteBusy(true);
+      if (deleting.group) {
+        const { group } = deleting;
+        await deleteProjectGroup(project.ProjectID, group.groupId);
+        toast.success(`Task deleted for all ${group.copies.length} members.`);
+        clearRow(groupKey(group.groupId));
+        setDeleting(null);
+        await onSaved?.(group.copies[0].UserID);
+        return;
+      }
       await deleteTask(deleting.TaskID);
       toast.success("Task deleted.");
       clearRow(taskKey(deleting));
@@ -288,11 +450,69 @@ export default function TaskSheet({
     }
   };
 
-  const renderRow = ({ key, task, employee, serial }) => {
+  // Responsible Person options: active members, plus the current person if
+  // they have since been removed (so the select still shows them).
+  const responsibleOptions = (currentId, currentName) => {
+    const options = activeMembers.map((m) => ({ value: String(m.UserID), label: m.FullName }));
+    if (currentId && !options.some((o) => o.value === currentId)) {
+      options.unshift({ value: currentId, label: `${currentName || "Unknown"} (removed)` });
+    }
+    return options;
+  };
+
+  const renderResponsibleCell = ({ key, task, draft, editable, saving }) => {
+    if (editable) {
+      return (
+        <select
+          value={draft.responsiblePersonId}
+          onChange={(e) => updateCell(key, task, "responsiblePersonId", e.target.value)}
+          disabled={saving}
+          aria-label="Responsible Person"
+          className={`${cellInputClass} cursor-pointer`}
+        >
+          <option value="">Select...</option>
+          {responsibleOptions(task?.ResponsiblePersonID ? String(task.ResponsiblePersonID) : "", task?.ResponsiblePersonName)
+            .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      );
+    }
+    return <div className={readOnlyClass}>{task?.ResponsiblePersonName || <span className="text-slate-400">—</span>}</div>;
+  };
+
+  const renderAssignedToCell = ({ key, task, draft, editable, saving }) => {
+    if (editable) {
+      return (
+        <select
+          value={draft.assignTo}
+          onChange={(e) => updateCell(key, task, "assignTo", e.target.value)}
+          disabled={saving}
+          aria-label="Assigned To"
+          className={`${cellInputClass} cursor-pointer`}
+        >
+          <option value="">Select...</option>
+          {activeMembers.length > 0 && (
+            <option value={ASSIGN_ALL}>All members ({activeMembers.length})</option>
+          )}
+          {activeMembers.map((m) => <option key={m.UserID} value={String(m.UserID)}>{m.FullName}</option>)}
+        </select>
+      );
+    }
+    if (!task) return <div className={`${readOnlyClass} text-slate-400`}>Me</div>;
+    return (
+      <div className={readOnlyClass}>
+        {task.EmployeeName}
+        {task.AssigneeIsMember === false && (
+          <span className={`${tagClass} ml-1 border-slate-300 bg-slate-50 text-slate-600`}>Removed</span>
+        )}
+      </div>
+    );
+  };
+
+  const renderRow = ({ key, task, employee, serial, nested = false }) => {
     const draft = draftOf(key, task);
     const isNewRow = !task;
     const editable = editableCells(task);
-    const canSubmit = editable.details || editable.status || editable.cfoRemarks || editable.userRemarks;
+    const canSubmit = editable.details || editable.status || editable.cfoRemarks || editable.userRemarks || editable.responsible;
     const dirty = isDirty(key, task);
     const saving = savingKey === key;
     const submit = () => (isNewRow ? submitNewRow(key, employee) : submitTaskRow(task));
@@ -300,8 +520,9 @@ export default function TaskSheet({
     const isNew = Boolean(task && newTaskIds?.has(task.TaskID));
     const dueMin =
       (isNewRow && isAssignMode) || (task?.IsAssignedByBusinessHead && draft.dueDate !== task.DueDate) ? today : undefined;
+    const projectTag = !project && task?.ProjectName;
 
-    const rowBackground = isNew ? "bg-blue-50" : "bg-white";
+    const rowBackground = isNew ? "bg-blue-50" : nested ? "bg-[#fafbfd]" : "bg-white";
 
     return (
       <React.Fragment key={key}>
@@ -311,14 +532,19 @@ export default function TaskSheet({
           </td>
 
           <td className={`${cellClass} min-w-[240px]`}>
-            {task && (isNew || task.IsAssignedByBusinessHead) && (
+            {task && (isNew || task.IsAssignedByBusinessHead || projectTag) && (
               <div className="flex flex-wrap gap-1 px-2 pt-1.5">
                 {isNew && (
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-[#2c3e82] text-white">New</span>
                 )}
-                {task.IsAssignedByBusinessHead && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-semibold border border-blue-200 bg-blue-50 text-[#2c3e82]">
-                    Assigned by Business Head
+                {projectTag && (
+                  <span className={`${tagClass} border-violet-200 bg-violet-50 text-violet-800`}>
+                    Project: {task.ProjectName}
+                  </span>
+                )}
+                {task.IsAssignedByBusinessHead && !nested && (
+                  <span className={`${tagClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
+                    Assigned by {getAssignerLabel(task)}
                   </span>
                 )}
               </div>
@@ -331,12 +557,18 @@ export default function TaskSheet({
                 onChange={(e) => updateCell(key, task, "taskName", e.target.value)}
                 onKeyDown={submitOnEnter(submit)}
                 disabled={saving}
-                placeholder={isNewRow ? (isAssignMode ? `New task for ${employee.FullName}...` : "Type a new task...") : ""}
+                placeholder={
+                  isNewRow
+                    ? isAssignMode
+                      ? project ? "New project task..." : `New task for ${employee.FullName}...`
+                      : "Type a new task..."
+                    : ""
+                }
                 aria-label={isNewRow ? "New task name" : `Task name, row ${serial}`}
                 className={cellInputClass}
               />
             ) : (
-              <div className={readOnlyClass}>{task.TaskName}</div>
+              <div className={`${readOnlyClass} ${nested ? "text-slate-500" : ""}`}>{task.TaskName}</div>
             )}
           </td>
 
@@ -369,9 +601,7 @@ export default function TaskSheet({
                 className={`${cellInputClass} text-center`}
               />
             ) : (
-              <div className={`${readOnlyClass} text-center`}>
-                {task.DueDate ? task.DueDate.split("-").reverse().join("-") : ""}
-              </div>
+              <div className={`${readOnlyClass} text-center`}>{formatDueDate(task.DueDate)}</div>
             )}
           </td>
 
@@ -400,6 +630,17 @@ export default function TaskSheet({
             </div>
           </td>
 
+          {project && (
+            <>
+              <td className={`${cellClass} min-w-[170px]`}>
+                {renderResponsibleCell({ key, task, draft, editable: editable.responsible, saving })}
+              </td>
+              <td className={`${cellClass} min-w-[170px]`}>
+                {renderAssignedToCell({ key, task, draft, editable: editable.assignTo, saving })}
+              </td>
+            </>
+          )}
+
           <td className={`${cellClass} min-w-[220px]`}>
             {editable.cfoRemarks ? (
               <textarea
@@ -408,7 +649,7 @@ export default function TaskSheet({
                 maxLength={TASK_REMARKS_MAX}
                 onChange={(e) => updateCell(key, task, "cfoRemarks", e.target.value)}
                 disabled={saving}
-                aria-label="CFO's Remarks"
+                aria-label={remarksLabel}
                 className={`${cellInputClass} resize-y`}
               />
             ) : (
@@ -459,9 +700,171 @@ export default function TaskSheet({
         </tr>
         {rowError && (
           <tr className="bg-red-50">
-            <td colSpan={COLUMNS.length} className="border-b border-[#d5dce5] px-4 py-1.5 text-[11px] font-medium text-[#b3403f]">{rowError}</td>
+            <td colSpan={columns.length} className="border-b border-[#d5dce5] px-4 py-1.5 text-[11px] font-medium text-[#b3403f]">{rowError}</td>
           </tr>
         )}
+      </React.Fragment>
+    );
+  };
+
+  // One row for an "All members" task: shared details, per-member progress,
+  // and the members' own copies underneath when expanded.
+  const renderGroupRow = ({ group, employee, serial }) => {
+    const key = groupKey(group.groupId);
+    const first = group.copies[0];
+    const draft = draftOf(key, first);
+    // CanDelete on a copy = the Business Head who assigned it.
+    const canManage = Boolean(first.CanDelete);
+    const dirty = isDirty(key, first);
+    const saving = savingKey === key;
+    const submit = () => submitGroupRow(group);
+    const rowError = rowErrors[key];
+    const expanded = expandedGroups.has(group.groupId);
+
+    const total = group.copies.length;
+    const done = group.copies.filter((t) => t.Status === "Done").length;
+    const pending = group.copies.filter((t) => t.Status !== "Done");
+    const overdue = group.copies.some((t) => t.IsOverdue);
+    const hasNew = group.copies.some((t) => newTaskIds?.has(t.TaskID));
+
+    return (
+      <React.Fragment key={key}>
+        <tr className={hasNew ? "bg-blue-50" : "bg-white"}>
+          <td className={`${cellClass} w-14 bg-[#edf1f7] pt-3 text-center text-xs font-medium text-slate-600`}>{serial}</td>
+
+          <td className={`${cellClass} min-w-[240px]`}>
+            <div className="flex flex-wrap gap-1 px-2 pt-1.5">
+              <span className={`${tagClass} border-indigo-200 bg-indigo-50 text-indigo-800`}>All members</span>
+              <span className={`${tagClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>Assigned by {getAssignerLabel(first)}</span>
+            </div>
+            {canManage ? (
+              <input
+                type="text"
+                value={draft.taskName}
+                maxLength={TASK_NAME_MAX}
+                onChange={(e) => updateCell(key, first, "taskName", e.target.value)}
+                onKeyDown={submitOnEnter(submit)}
+                disabled={saving}
+                aria-label={`Task name, row ${serial}`}
+                className={cellInputClass}
+              />
+            ) : (
+              <div className={readOnlyClass}>{first.TaskName}</div>
+            )}
+          </td>
+
+          <td className={`${cellClass} w-32`}>
+            {canManage ? (
+              <select
+                value={draft.priority}
+                onChange={(e) => updateCell(key, first, "priority", e.target.value)}
+                disabled={saving}
+                aria-label="Priority"
+                className={`${cellInputClass} text-center cursor-pointer`}
+              >
+                {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            ) : (
+              <div className={`${readOnlyClass} text-center`}>{first.Priority}</div>
+            )}
+          </td>
+
+          <td className={`${cellClass} w-40`}>
+            {canManage ? (
+              <input
+                type="date"
+                value={draft.dueDate}
+                min={draft.dueDate !== first.DueDate ? today : undefined}
+                onChange={(e) => updateCell(key, first, "dueDate", e.target.value)}
+                onKeyDown={submitOnEnter(submit)}
+                disabled={saving}
+                aria-label="Due date"
+                className={`${cellInputClass} text-center`}
+              />
+            ) : (
+              <div className={`${readOnlyClass} text-center`}>{formatDueDate(first.DueDate)}</div>
+            )}
+          </td>
+
+          <td className={`${cellClass} w-48`}>
+            <div className="px-2.5 py-2 text-xs">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className={`font-semibold ${done === total ? "text-green-800" : "text-[#2c3e82]"}`}>
+                  {done} of {total} done
+                </span>
+                {overdue && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-50 text-[#b3403f] border border-red-200">Overdue</span>
+                )}
+              </div>
+              <div className="mt-1 h-1.5 w-full bg-slate-200" aria-hidden="true">
+                <div className="h-1.5 bg-green-600" style={{ width: `${Math.round((done / total) * 100)}%` }} />
+              </div>
+              {pending.length > 0 && (
+                <p className="mt-1 text-[10px] leading-snug text-slate-600">
+                  Pending: {pending.map((t) => t.EmployeeName).join(", ")}
+                </p>
+              )}
+            </div>
+          </td>
+
+          <td className={`${cellClass} min-w-[170px]`}>
+            {renderResponsibleCell({ key, task: first, draft, editable: canManage, saving })}
+          </td>
+
+          <td className={`${cellClass} min-w-[170px]`}>
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.groupId)}
+              aria-expanded={expanded}
+              className="flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-3 text-left text-xs font-semibold text-[#2c3e82] hover:underline"
+            >
+              <span aria-hidden="true" className={`inline-block w-3 transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>
+              All members ({total})
+            </button>
+          </td>
+
+          <td className={`${cellClass} min-w-[220px]`}>
+            <div className={`${readOnlyClass} text-slate-400`}>Per member — expand to view or add</div>
+          </td>
+
+          <td className={`${cellClass} min-w-[220px]`}>
+            <div className={`${readOnlyClass} text-slate-400`}>Per member</div>
+          </td>
+
+          <td className={`${cellClass} w-28 text-center`}>
+            <div className="flex flex-col items-center gap-1.5 px-2 py-2">
+              {canManage && (
+                <>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={saving || !dirty}
+                    className="w-full cursor-pointer bg-[#2c3e82] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#1f2c61] disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    {saving ? "Saving..." : "Submit"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleting({ group })}
+                    disabled={saving}
+                    className="text-[11px] font-semibold text-[#b3403f] hover:underline disabled:opacity-40 cursor-pointer"
+                  >
+                    Delete for all
+                  </button>
+                </>
+              )}
+            </div>
+          </td>
+        </tr>
+        {rowError && (
+          <tr className="bg-red-50">
+            <td colSpan={columns.length} className="border-b border-[#d5dce5] px-4 py-1.5 text-[11px] font-medium text-[#b3403f]">{rowError}</td>
+          </tr>
+        )}
+        {expanded &&
+          group.copies.map((task, index) =>
+            renderRow({ key: taskKey(task), task, employee, serial: `${serial}.${index + 1}`, nested: true }),
+          )}
       </React.Fragment>
     );
   };
@@ -471,7 +874,7 @@ export default function TaskSheet({
       <table className="min-w-full border-separate border-spacing-0 text-xs text-[#202522]">
         <thead>
           <tr>
-            {COLUMNS.map((heading, i) => (
+            {columns.map((heading, i) => (
               <th key={heading || `col-${i}`} className={`${headClass} ${i === 0 ? "bg-[#e5eaf3] text-center" : ""}`}>{heading}</th>
             ))}
           </tr>
@@ -481,6 +884,7 @@ export default function TaskSheet({
             const newKeys = canAdd ? newRowKeysFor(employee.UserID) : [];
             const openCount = tasks.filter((t) => t.Status !== "Done").length;
             const overdueCount = tasks.filter((t) => t.IsOverdue).length;
+            const items = toSheetItems(tasks, collapseGroups);
             const addRow = () =>
               setExtraRows((current) => ({
                 ...current,
@@ -491,7 +895,7 @@ export default function TaskSheet({
               <React.Fragment key={employee.UserID}>
                 {showGroupHeaders && (
                   <tr>
-                    <td colSpan={COLUMNS.length} className="border-b border-[#cbd4e2] bg-[#e5eaf3] px-3 py-2">
+                    <td colSpan={columns.length} className="border-b border-[#cbd4e2] bg-[#e5eaf3] px-3 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-bold text-[#30415f]">
                           {employee.FullName}
@@ -512,15 +916,17 @@ export default function TaskSheet({
                     </td>
                   </tr>
                 )}
-                {tasks.map((task, index) =>
-                  renderRow({ key: taskKey(task), task, employee, serial: index + 1 }),
+                {items.map((item, index) =>
+                  item.group
+                    ? renderGroupRow({ group: item.group, employee, serial: index + 1 })
+                    : renderRow({ key: taskKey(item.task), task: item.task, employee, serial: index + 1 }),
                 )}
                 {newKeys.map((key) =>
                   renderRow({ key, task: null, employee, serial: null }),
                 )}
                 {!showGroupHeaders && canAdd && (
                   <tr>
-                    <td colSpan={COLUMNS.length} className="px-3 py-2 border-b border-[#d5dce5] bg-white">
+                    <td colSpan={columns.length} className="px-3 py-2 border-b border-[#d5dce5] bg-white">
                       <button type="button" onClick={addRow} className={worksheetLineAddClass}>
                         + Add row
                       </button>
@@ -529,7 +935,7 @@ export default function TaskSheet({
                 )}
                 {tasks.length === 0 && newKeys.length === 0 && (
                   <tr>
-                    <td colSpan={COLUMNS.length} className="border-b border-[#d5dce5] px-4 py-2 text-xs text-slate-400">No tasks.</td>
+                    <td colSpan={columns.length} className="border-b border-[#d5dce5] px-4 py-2 text-xs text-slate-400">No tasks.</td>
                   </tr>
                 )}
               </React.Fragment>
@@ -540,8 +946,12 @@ export default function TaskSheet({
 
       {deleting && (
         <ConfirmDialog
-          title="Delete task?"
-          message={`"${deleting.TaskName}" will be removed from every task list.`}
+          title={deleting.group ? "Delete task for all members?" : "Delete task?"}
+          message={
+            deleting.group
+              ? `"${deleting.group.copies[0].TaskName}" will be removed for all ${deleting.group.copies.length} members.`
+              : `"${deleting.TaskName}" will be removed from every task list.`
+          }
           confirmLabel="Delete"
           busyLabel="Deleting..."
           tone="danger"

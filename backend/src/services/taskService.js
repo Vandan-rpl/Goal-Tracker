@@ -1,5 +1,6 @@
 const { poolPromise } = require("../config/db");
 const taskModel = require("../models/taskModel");
+const projectModel = require("../models/projectModel");
 const AppError = require("../utils/AppError");
 const StatusCodes = require("../constants/statusCodes");
 const withTransaction = require("../utils/withTransaction");
@@ -13,6 +14,7 @@ const {
     TaskMailEvent,
     TASK_BUSINESS_HEAD_ROLE,
     TASK_VIEW_ALL_ROLES,
+    PROJECT_CREATOR_ROLES,
     TASK_NAME_MAX_LENGTH,
     TASK_REMARKS_MAX_LENGTH,
 } = require("../constants/taskConstants");
@@ -31,6 +33,17 @@ const {
  *     Priority / Due Date and delete on tasks they assigned.
  *   Admin: view all (read-only), like All Ideas.
  *   Reporting Manager / HOD: view direct reports' tasks (read-only).
+ * Project tasks (ProjectID set) follow the same rules, plus:
+ *   Manager who created the project: view every task in it and add
+ *     "Manager / CFO Remarks" (CFORemarks) on them; on tasks they assigned,
+ *     the same rights as the Business Head on tasks it assigned.
+ *   Responsible Person (a project member): picked by whoever creates the
+ *     task, and changed only by them (the assigner, or the member on a task
+ *     they added).
+ *   "All members" copies (AssignmentGroupID set): Task Name / Priority /
+ *     Due Date / Responsible Person are changed for the whole group at once
+ *     (projectService.updateGroup), not per copy; each member still has their
+ *     own Status, User's Remarks and CFO's Remarks.
  * Anything else is 403. Every change writes TaskActivityLog rows in the
  * same transaction.
  * ============================================================
@@ -41,6 +54,8 @@ const roleOf = (user) => String(user.role || "").toUpperCase();
 const isBusinessHead = (user) => roleOf(user) === TASK_BUSINESS_HEAD_ROLE;
 
 const canViewAll = (user) => TASK_VIEW_ALL_ROLES.includes(roleOf(user));
+
+const canCreateProjects = (user) => PROJECT_CREATOR_ROLES.includes(roleOf(user));
 
 /**
  * Parse a positive integer id, or throw 400
@@ -92,20 +107,29 @@ const taskPermissions = (task, user) => {
     const isOwner = task.UserID === userId;
     const isSelfAdded = task.AssignedBy === null || task.AssignedBy === undefined;
     const businessHead = isBusinessHead(user);
-    const isAssigner = businessHead && task.AssignedBy === userId;
+    // Whoever assigned it: the Business Head, or a Manager in their project.
+    const isAssigner = !isSelfAdded && task.AssignedBy === userId;
     const isManager =
         (task.OwnerReportingManagerID === userId || task.OwnerHODID === userId) &&
         task.OwnerIsActive !== false && task.OwnerIsActive !== 0;
 
-    const canEditDetails = (isOwner && isSelfAdded) || isAssigner;
+    const isGroupCopy = Boolean(task.AssignmentGroupID);
+    const isProjectTask = task.ProjectID !== null && task.ProjectID !== undefined;
+    // A Manager on any task of a project they created.
+    const isProjectOwner = isProjectTask && task.ProjectCreatedBy === userId && canCreateProjects(user);
+
+    const canChangeTask = (isOwner && isSelfAdded) || isAssigner;
 
     return {
-        canView: isOwner || canViewAll(user) || isManager,
-        canEditDetails,
+        canView: isOwner || canViewAll(user) || isManager || isProjectOwner,
+        canEditDetails: canChangeTask && !isGroupCopy,
         canEditStatus: isOwner,
         canEditUserRemarks: isOwner,
-        canDelete: canEditDetails,
-        canEditCFORemarks: businessHead,
+        canDelete: canChangeTask,
+        // "Manager / CFO Remarks" on project tasks.
+        canEditCFORemarks: businessHead || isProjectOwner,
+        // The assigner, or the member on a task they added.
+        canEditResponsiblePerson: canChangeTask && isProjectTask && !isGroupCopy,
     };
 };
 
@@ -125,6 +149,7 @@ const withPermissions = (task, user) => {
         CanEditUserRemarks: permissions.canEditUserRemarks,
         CanDelete: permissions.canDelete,
         CanEditCFORemarks: permissions.canEditCFORemarks,
+        CanEditResponsiblePerson: permissions.canEditResponsiblePerson,
     };
 };
 
@@ -199,6 +224,16 @@ const checkRemarks = (value, label, errors) => {
     return remarks || null;
 };
 
+// Responsible Person (a project member's UserID): required when sent.
+const checkResponsiblePerson = (value, errors) => {
+    const id = Number(value);
+    if (value === null || value === undefined || value === "" || !Number.isInteger(id) || id <= 0) {
+        errors.push("Responsible Person is required.");
+        return null;
+    }
+    return id;
+};
+
 /**
  * ------------------------------------------------------------
  * Badge (unseen tasks) and access
@@ -229,19 +264,23 @@ const emitUnseenCount = async (userId) => {
 
 /**
  * What the Tasks menu shows: Team Tasks needs direct reports, All Tasks
- * Business Head / Admin, Assign Task Business Head.
+ * Business Head / Admin, Assign Task Business Head, Projects Business Head /
+ * Admin / Manager, or anyone who is in (or created) an active project.
  */
 const getAccess = async (user) => {
     const pool = await poolPromise;
-    const [hasDirectReports, unseenCount] = await Promise.all([
+    const [hasDirectReports, unseenCount, hasProjects] = await Promise.all([
         taskModel.hasDirectReports(pool, user.userId),
         taskModel.countUnseenTasks(pool, user.userId),
+        projectModel.hasActiveProjects(pool, user.userId),
     ]);
 
     return {
         isBusinessHead: isBusinessHead(user),
         canViewAll: canViewAll(user),
         hasDirectReports,
+        hasProjects,
+        canCreateProjects: canCreateProjects(user),
         unseenCount,
     };
 };
@@ -427,6 +466,11 @@ const snapshot = (task) => JSON.stringify({
     CFORemarks: task.CFORemarks ?? null,
     UserRemarks: task.UserRemarks ?? null,
     AssignedBy: task.AssignedBy ?? null,
+    ...(task.ProjectID ? {
+        ProjectID: task.ProjectID,
+        ResponsiblePersonID: task.ResponsiblePersonID ?? null,
+        AssignmentGroupID: task.AssignmentGroupID ?? null,
+    } : {}),
 });
 
 const reloadTask = async (taskId, user) => {
@@ -436,9 +480,13 @@ const reloadTask = async (taskId, user) => {
 };
 
 /**
- * Add Task (self-added; the logged-in user is the owner)
+ * Add Task (self-added; the logged-in user is the owner). `projectId` set =
+ * a task in that project (projectService.createProjectTask); the user must
+ * be an active member and picks the Responsible Person (body
+ * responsiblePersonId, an active member - themselves included). projectId
+ * never comes from the request body.
  */
-const createTask = async (body = {}, user) => {
+const createTask = async (body = {}, user, { projectId = null } = {}) => {
     const userId = Number(user.userId);
     const errors = [];
 
@@ -449,16 +497,26 @@ const createTask = async (body = {}, user) => {
         status: has(body, "status") && text(body.status) ? checkStatus(body.status, errors) : TaskStatus.PENDING,
         userRemarks: checkRemarks(body.userRemarks, "User's Remarks", errors),
     };
+    const responsiblePersonId = projectId ? checkResponsiblePerson(body.responsiblePersonId, errors) : null;
 
     if (errors.length > 0) throw validationError(errors);
 
     const taskId = await withTransaction(async (transaction) => {
+        if (projectId && !(await projectModel.isActiveMember(transaction, projectId, userId))) {
+            throw forbidden("Only members of this project can add tasks to it.");
+        }
+        if (projectId && !(await projectModel.isActiveMember(transaction, projectId, responsiblePersonId))) {
+            throw validationError(["Responsible Person must be a member of the project."]);
+        }
+
         const newTaskId = await taskModel.insertTask(transaction, {
             ...input,
             userId,
             assignedBy: null,
             cfoRemarks: null,
             createdBy: userId,
+            projectId,
+            responsiblePersonId,
         });
 
         await taskModel.insertActivity(transaction, {
@@ -472,6 +530,8 @@ const createTask = async (body = {}, user) => {
                 DueDate: input.dueDate,
                 Status: input.status,
                 UserRemarks: input.userRemarks,
+                ProjectID: projectId,
+                ResponsiblePersonID: responsiblePersonId,
             }),
         });
 
@@ -489,6 +549,52 @@ const mailResult = (result) => ({
         : `The change was saved, but the email to the employee could not be sent (${result.reason}).`,
 });
 
+// Task Name / Priority / Due Date / CFO's Remarks of a Business Head
+// assignment (Assign Task and project assignments). Pushes to `errors`.
+const checkAssignInput = (body, errors) => ({
+    taskName: checkTaskName(body.taskName, errors),
+    priority: checkPriority(body.priority, errors),
+    dueDate: checkDueDate(body.dueDate, errors, { notPast: true }),
+    cfoRemarks: checkRemarks(body.cfoRemarks, "CFO's Remarks", errors),
+});
+
+/**
+ * Insert one Business Head assignment and its Assigned log row, inside the
+ * caller's transaction. `project` = { projectId, responsiblePersonId,
+ * assignmentGroupId } for project tasks. Returns the new TaskID.
+ */
+const insertAssignedTask = async (transaction, { employeeId, input, businessHeadId, project = {} }) => {
+    const newTaskId = await taskModel.insertTask(transaction, {
+        ...input,
+        ...project,
+        userId: employeeId,
+        status: TaskStatus.PENDING,
+        userRemarks: null,
+        assignedBy: businessHeadId,
+        createdBy: businessHeadId,
+    });
+
+    await taskModel.insertActivity(transaction, {
+        taskId: newTaskId,
+        actionBy: businessHeadId,
+        action: TaskAction.ASSIGNED,
+        newValue: snapshot({
+            UserID: employeeId,
+            TaskName: input.taskName,
+            Priority: input.priority,
+            DueDate: input.dueDate,
+            Status: TaskStatus.PENDING,
+            CFORemarks: input.cfoRemarks,
+            AssignedBy: businessHeadId,
+            ProjectID: project.projectId,
+            ResponsiblePersonID: project.responsiblePersonId,
+            AssignmentGroupID: project.assignmentGroupId,
+        }),
+    });
+
+    return newTaskId;
+};
+
 /**
  * Assign Task (Business Head). Email to the employee after commit.
  */
@@ -503,12 +609,7 @@ const assignTask = async (body = {}, user) => {
     if (!employeeId) errors.push("Employee is required.");
     else if (employeeId === businessHeadId) errors.push("You cannot assign a task to yourself.");
 
-    const input = {
-        taskName: checkTaskName(body.taskName, errors),
-        priority: checkPriority(body.priority, errors),
-        dueDate: checkDueDate(body.dueDate, errors, { notPast: true }),
-        cfoRemarks: checkRemarks(body.cfoRemarks, "CFO's Remarks", errors),
-    };
+    const input = checkAssignInput(body, errors);
 
     if (errors.length > 0) throw validationError(errors);
 
@@ -517,31 +618,7 @@ const assignTask = async (body = {}, user) => {
             throw validationError(["Selected employee must be an active user."]);
         }
 
-        const newTaskId = await taskModel.insertTask(transaction, {
-            ...input,
-            userId: employeeId,
-            status: TaskStatus.PENDING,
-            userRemarks: null,
-            assignedBy: businessHeadId,
-            createdBy: businessHeadId,
-        });
-
-        await taskModel.insertActivity(transaction, {
-            taskId: newTaskId,
-            actionBy: businessHeadId,
-            action: TaskAction.ASSIGNED,
-            newValue: snapshot({
-                UserID: employeeId,
-                TaskName: input.taskName,
-                Priority: input.priority,
-                DueDate: input.dueDate,
-                Status: TaskStatus.PENDING,
-                CFORemarks: input.cfoRemarks,
-                AssignedBy: businessHeadId,
-            }),
-        });
-
-        return newTaskId;
+        return await insertAssignedTask(transaction, { employeeId, input, businessHeadId });
     });
 
     // Committed. The DB change stands whatever the email does.
@@ -579,6 +656,7 @@ const updateTask = async (taskIdParam, body = {}, user) => {
             DueDate: toDateKey(task.DueDate),
             Status: task.Status,
             UserRemarks: task.UserRemarks ?? null,
+            ResponsiblePersonID: task.ResponsiblePersonID ?? null,
         };
 
         const next = { ...current };
@@ -592,6 +670,9 @@ const updateTask = async (taskIdParam, body = {}, user) => {
         }
         if (has(body, "status")) next.Status = checkStatus(body.status, errors);
         if (has(body, "userRemarks")) next.UserRemarks = checkRemarks(body.userRemarks, "User's Remarks", errors);
+        if (has(body, "responsiblePersonId")) {
+            next.ResponsiblePersonID = checkResponsiblePerson(body.responsiblePersonId, errors);
+        }
 
         if (errors.length > 0) throw validationError(errors);
 
@@ -602,8 +683,19 @@ const updateTask = async (taskIdParam, body = {}, user) => {
 
         if (detailColumns.length > 0 && !permissions.canEditDetails) {
             throw forbidden(task.AssignedBy !== null && permissions.canEditStatus
-                ? "Task Name, Priority and Due Date of a task assigned by the Business Head cannot be changed."
-                : "You cannot change the Task Name, Priority or Due Date of this task.");
+                ? "Task Name, Priority and Due Date of a task assigned to you cannot be changed."
+                : task.AssignmentGroupID && permissions.canDelete
+                    ? "This task was assigned to all project members; change it on the project page for every member at once."
+                    : "You cannot change the Task Name, Priority or Due Date of this task.");
+        }
+        if (changed.includes("ResponsiblePersonID")) {
+            if (!permissions.canEditResponsiblePerson) {
+                throw forbidden("Only the person who created this project task can change its Responsible Person.");
+            }
+            if (!(await projectModel.isActiveMember(transaction, task.ProjectID, next.ResponsiblePersonID))) {
+                throw validationError(["Responsible Person must be a member of the project."]);
+            }
+            detailColumns.push("ResponsiblePersonID");
         }
         if (changed.includes("Status") && !permissions.canEditStatus) {
             throw forbidden("Only the task's owner can change its Status.");
@@ -657,25 +749,33 @@ const updateTask = async (taskIdParam, body = {}, user) => {
 };
 
 /**
- * Add or change CFO's Remarks (Business Head, any task). The task shows as
- * New to its owner again; email to the employee after commit.
+ * Add or change CFO's Remarks (canEditCFORemarks: the Business Head on any
+ * task, a Manager on tasks of projects they created - "Manager / CFO
+ * Remarks" there). The task shows as New to its owner again; email to the
+ * employee after commit.
  */
 const submitCFORemarks = async (taskIdParam, body = {}, user) => {
     const taskId = parseId(taskIdParam, "task id");
-    assertBusinessHead(user, "Only the Business Head can add CFO's Remarks.");
+    if (!isBusinessHead(user) && !canCreateProjects(user)) {
+        throw forbidden("Only the Business Head or a project's Manager can add remarks.");
+    }
 
     const actorId = Number(user.userId);
     const errors = [];
-    const remarks = checkRemarks(body.cfoRemarks, "CFO's Remarks", errors);
-    if (!remarks) errors.push("CFO's Remarks is required.");
+    const remarks = checkRemarks(body.cfoRemarks, "Remarks", errors);
+    if (!remarks) errors.push("Remarks are required.");
     if (errors.length > 0) throw validationError(errors);
 
     const ownerId = await withTransaction(async (transaction) => {
         const task = await getVisibleTask(transaction, taskId, user, true);
         const previous = task.CFORemarks ?? null;
 
+        if (!taskPermissions(task, user).canEditCFORemarks) {
+            throw forbidden("You can add remarks only on tasks of projects you created.");
+        }
+
         if (previous === remarks) {
-            throw new AppError("CFO's Remarks are unchanged.", StatusCodes.BAD_REQUEST);
+            throw new AppError("Remarks are unchanged.", StatusCodes.BAD_REQUEST);
         }
 
         const updated = await taskModel.updateTask(
@@ -717,7 +817,7 @@ const deleteTask = async (taskIdParam, user) => {
 
         if (!taskPermissions(task, user).canDelete) {
             throw forbidden(task.AssignedBy !== null && task.UserID === actorId
-                ? "A task assigned by the Business Head cannot be deleted."
+                ? "A task assigned to you cannot be deleted."
                 : "You cannot delete this task.");
         }
 
@@ -740,6 +840,29 @@ const deleteTask = async (taskIdParam, user) => {
 };
 
 module.exports = {
+    // Shared with projectService: project tasks follow the same rules.
+    helpers: {
+        isBusinessHead,
+        canViewAll,
+        canCreateProjects,
+        parseId,
+        text,
+        has,
+        toDateKey,
+        forbidden,
+        validationError,
+        assertBusinessHead,
+        withPermissions,
+        checkTaskName,
+        checkPriority,
+        checkDueDate,
+        checkResponsiblePerson,
+        checkAssignInput,
+        insertAssignedTask,
+        snapshot,
+        mailResult,
+        emitUnseenCount,
+    },
     getAccess,
     getUnseenCount,
     getMyTasks,

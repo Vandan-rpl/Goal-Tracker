@@ -18,6 +18,7 @@ import {
   TASK_STATUSES,
   formatTaskDate,
   formatTaskDateTime,
+  getAssignerLabel,
 } from "../../utils/taskStatus";
 
 const PAGE_SIZE = 20;
@@ -199,7 +200,8 @@ export default function TaskListView({
       return (
         (task.TaskName || "").toLowerCase().includes(term) ||
         (task.EmployeeName || "").toLowerCase().includes(term) ||
-        (task.EmployeeCode || "").toLowerCase().includes(term)
+        (task.EmployeeCode || "").toLowerCase().includes(term) ||
+        (task.ProjectName || "").toLowerCase().includes(term)
       );
     });
   }, [tasks, search, overdueOnly]);
@@ -374,12 +376,17 @@ export default function TaskListView({
           </>
         )}
         <td className={`${cellClass} min-w-[220px] max-w-sm`}>
-          {(isNew || task.IsAssignedByBusinessHead) && (
+          {(isNew || task.IsAssignedByBusinessHead || task.ProjectName) && (
             <div className="mb-1 flex flex-wrap gap-1">
               {isNew && <span className="bg-[#2c3e82] px-1.5 py-0.5 text-[10px] font-bold text-white">New</span>}
+              {task.ProjectName && (
+                <span className={`${labelClass} border-violet-200 bg-violet-50 text-violet-800`}>
+                  Project: {task.ProjectName}
+                </span>
+              )}
               {task.IsAssignedByBusinessHead && (
                 <span className={`${labelClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
-                  Assigned by Business Head
+                  Assigned by {getAssignerLabel(task)}
                 </span>
               )}
             </div>
@@ -448,7 +455,7 @@ export default function TaskListView({
     { label: "Pending", value: summary.pending },
     { label: "In Progress", value: summary.inProgress },
     { label: "Done", value: summary.done },
-    { label: "Assigned by BH", value: summary.assigned },
+    { label: "Assigned", value: summary.assigned },
   ].filter(Boolean);
 
   const filterControls = (

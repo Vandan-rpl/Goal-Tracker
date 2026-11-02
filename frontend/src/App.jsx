@@ -43,6 +43,8 @@ import MyTasks from './pages/Tasks/MyTasks';
 import TeamTasks from './pages/Tasks/TeamTasks';
 import AllTasks from './pages/Tasks/AllTasks';
 import AssignTask from './pages/Tasks/AssignTask';
+import Projects from './pages/Tasks/Projects';
+import ProjectDetails from './pages/Tasks/ProjectDetails';
 import { TASKS_HOME_PATH } from './utils/tasksMenu';
 import {ToastContainer} from 'react-toastify';
 
@@ -123,6 +125,10 @@ function App() {
                   switch in the header and shows the Tasks sidebar. */}
               <Route path="/tasks" element={<Navigate to={TASKS_HOME_PATH} replace />} />
               <Route path="/tasks/my-tasks" element={<MyTasks />} />
+              <Route element={<TasksRoute menuKey="projects" />}>
+                <Route path="/tasks/projects" element={<Projects />} />
+                <Route path="/tasks/projects/:projectId" element={<ProjectDetails />} />
+              </Route>
               <Route element={<TasksRoute menuKey="team" />}>
                 <Route path="/tasks/team" element={<TeamTasks />} />
               </Route>

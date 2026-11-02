@@ -29,3 +29,34 @@ GO
 CREATE INDEX IX_Tasks_User_DueDate ON dbo.Tasks (UserID, DueDate) WHERE IsDeleted = 0;
 CREATE INDEX IX_Tasks_Unseen       ON dbo.Tasks (UserID) WHERE IsSeenByUser = 0 AND IsDeleted = 0;
 GO
+
+
+
+-- Alter query for task table
+
+
+IF COL_LENGTH('dbo.Tasks', 'ProjectID') IS NULL
+    ALTER TABLE dbo.Tasks ADD ProjectID INT NULL;
+GO
+IF COL_LENGTH('dbo.Tasks', 'ResponsiblePersonID') IS NULL
+    ALTER TABLE dbo.Tasks ADD ResponsiblePersonID INT NULL;
+GO
+IF COL_LENGTH('dbo.Tasks', 'AssignmentGroupID') IS NULL
+    ALTER TABLE dbo.Tasks ADD AssignmentGroupID UNIQUEIDENTIFIER NULL;
+GO
+
+IF OBJECT_ID('FK_Tasks_Project', 'F') IS NULL
+    ALTER TABLE dbo.Tasks ADD CONSTRAINT FK_Tasks_Project
+        FOREIGN KEY (ProjectID) REFERENCES dbo.Projects(ProjectID);
+GO
+IF OBJECT_ID('FK_Tasks_ResponsiblePerson', 'F') IS NULL
+    ALTER TABLE dbo.Tasks ADD CONSTRAINT FK_Tasks_ResponsiblePerson
+        FOREIGN KEY (ResponsiblePersonID) REFERENCES dbo.Users(UserID);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_ProjectID')
+    CREATE INDEX IX_Tasks_ProjectID ON dbo.Tasks(ProjectID);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_AssignmentGroupID')
+    CREATE INDEX IX_Tasks_AssignmentGroupID ON dbo.Tasks(AssignmentGroupID);
+GO
