@@ -1,8 +1,20 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../api/axios"; // Updated import to match your axios.js service path
+import { jwtDecode } from "jwt-decode";
 import { withPasswordChangeState } from "../utils/passwordChange";
+import { SESSION_EXPIRED_EVENT } from "../utils/authSession";
 
 export const AuthContext = createContext(null);
+
+// A stored token is only usable if it decodes and hasn't passed its expiry.
+const isTokenValid = (token) => {
+  try {
+    const { exp } = jwtDecode(token);
+    return !exp || exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+};
 
 const normalizeUser = (userData = {}) => {
   const firstName = userData.firstName ?? userData.FirstName ?? "";
@@ -40,11 +52,26 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     const token = localStorage.getItem("token");
-    if (storedUser && token) {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(normalizeUser(parsedUser));
+    if (storedUser && token && isTokenValid(token)) {
+      try {
+        setUser(normalizeUser(JSON.parse(storedUser)));
+      } catch {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
+    } else {
+      // Expired or partial session: clear it so protected pages go to login
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
     }
     setLoading(false);
+
+    // The axios interceptor fires this on a 401. Clearing the user makes
+    // ProtectedRoute send them to the login page.
+    const handleSessionExpired = () => setUser(null);
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () =>
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
   const login = async (username, password) => {

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { handlePasswordChangeRequired } from "../utils/passwordChange";
+import { handleSessionExpired } from "../utils/authSession";
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1",
@@ -46,9 +47,11 @@ axiosInstance.interceptors.response.use(
 
     switch (status) {
       case 401:
-        localStorage.removeItem("token");
-        sessionStorage.removeItem("token");
-        // window.location.href = "/login";
+        // A failed login is also a 401; that's a wrong password, not an
+        // expired session, so leave it to the login page to report.
+        if (!error.config?.url?.includes("/auth/login")) {
+          handleSessionExpired();
+        }
         break;
 
       case 403:

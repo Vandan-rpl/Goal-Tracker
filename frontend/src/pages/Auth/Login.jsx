@@ -19,6 +19,14 @@ const Login = () => {
   // Success message passed by Forgot Password after a reset; shown once.
   const [successMessage] = useState(location.state?.successMessage || '');
 
+  // Page the user tried to open before being sent here by ProtectedRoute.
+  const [redirectTo] = useState(() => {
+    const from = location.state?.from;
+    return from?.pathname && from.pathname !== '/login'
+      ? `${from.pathname}${from.search || ''}${from.hash || ''}`
+      : '/dashboard';
+  });
+
   useEffect(() => {
     if (location.state?.successMessage) {
       navigate(location.pathname, { replace: true, state: null });
@@ -40,7 +48,7 @@ const Login = () => {
           navigate(FORCE_RESET_PATH);
         } else {
           toast.success('Login successful!');
-          navigate('/dashboard');
+          navigate(redirectTo, { replace: true });
         }
       } else {
         const errorMsg = res.message || 'Login failed. Please check your credentials.';
