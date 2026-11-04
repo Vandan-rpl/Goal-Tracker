@@ -19,6 +19,8 @@ const {
   getGoalCreationWindow,
   getManagerHodApprovalWindow,
   getCfoApprovalWindow,
+  isGoLiveOpenQuarter,
+  getOpenGoalEntryQuarters,
   isWithinCarryForwardWindow,
 } = require("../utils/fiscalQuarter");
 const { canAccessEvaluation } = require("./evaluationController");
@@ -1051,7 +1053,13 @@ const getAllEmployeeGoals = async (req, res) => {
 
     const result = await request.query(query);
 
-    return res.status(200).json({ success: true, data: result.recordset });
+    return res.status(200).json({
+      success: true,
+      data: result.recordset.map((goal) => ({
+        ...goal,
+        ApprovalWindowExempt: isGoLiveOpenQuarter(goal.Quarter),
+      })),
+    });
   } catch (error) {
     console.error("Get All Employee Goals Error:", error);
     return res
@@ -1275,6 +1283,7 @@ const getGoalById = async (req, res) => {
           ? await jointAccountabilityModel.getJointAccountabilitiesByGoalId(id)
           : [],
         CanApproveOrReject: canApproveOrReject,
+        ApprovalWindowExempt: isGoLiveOpenQuarter(goal.Quarter),
         IsJointParticipant: isJointParticipant,
         JointAccountabilityID: jointAssignment?.JointAccountabilityID || null,
         JointStatus: jointAssignment?.Status || null,
@@ -1474,6 +1483,51 @@ const getTargetGoalQuarterBounds = () =>
 const getGoalCreationWindowClosedMessage = (goalCreationWindow) =>
   `Goal creation is available only during the first 7 days of each quarter. The current window was ${goalCreationWindow.startDate.toLocaleDateString()} through ${goalCreationWindow.endDate.toLocaleDateString()}.`;
 
+const toEntryQuarterSummary = (bounds) => ({
+  quarter: bounds.label,
+  startDate: bounds.startKey,
+  endDate: bounds.endKey,
+});
+
+// The quarter a goal-entry request adds goals for. A requested quarter must
+// be one of the quarters open for entry now (go-live quarters, plus the
+// normal target quarter during its window). Without one, the normal target
+// quarter is used and the normal window applies, as before. Returns
+// { bounds } or { status, message }.
+const resolveGoalEntryQuarter = (requestedQuarter) => {
+  const goalCreationWindow = getGoalCreationWindow();
+  const requested = String(requestedQuarter ?? "").trim();
+
+  if (!requested) {
+    return goalCreationWindow.isOpen
+      ? { bounds: getTargetGoalQuarterBounds() }
+      : {
+          status: 403,
+          message: getGoalCreationWindowClosedMessage(goalCreationWindow),
+        };
+  }
+
+  const openQuarters = getOpenGoalEntryQuarters();
+  const bounds = openQuarters.find((quarter) => quarter.label === requested);
+  if (bounds) return { bounds };
+
+  return openQuarters.length === 0
+    ? {
+        status: 403,
+        message: getGoalCreationWindowClosedMessage(goalCreationWindow),
+      }
+    : {
+        status: 403,
+        message: `Goals cannot be added for ${requested} now. Goal entry is open for ${openQuarters.map((quarter) => quarter.label).join(", ")}.`,
+      };
+};
+
+// SMART Time-bound baseline. Goals in a go-live quarter are entered after
+// their quarter has started or ended, so their End Date is measured from
+// the Start Date instead of the creation date.
+const getTimeBoundBaseline = (quarterLabel, startDateKey, createdDate) =>
+  startDateKey && isGoLiveOpenQuarter(quarterLabel) ? startDateKey : createdDate;
+
 // Goal-level completion used by the review window. Sub-goals do not drive
 // it; a goal counts as 100% only once its completion has been approved.
 const getGoalCompletionPercentage = (goal) =>
@@ -1551,15 +1605,16 @@ const createGoal = async (req, res) => {
     GoalCategory,
     GoalStatus,
     SubGoals,
+    Quarter,
   } = req.body;
 
   const userId = req.user?.UserID || req.user?.userId;
 
-  const goalCreationWindow = getGoalCreationWindow();
-  if (!goalCreationWindow.isOpen) {
-    return res.status(403).json({
+  const entryQuarter = resolveGoalEntryQuarter(Quarter);
+  if (!entryQuarter.bounds) {
+    return res.status(entryQuarter.status).json({
       success: false,
-      message: getGoalCreationWindowClosedMessage(goalCreationWindow),
+      message: entryQuarter.message,
     });
   }
 
@@ -1576,13 +1631,14 @@ const createGoal = async (req, res) => {
   }
 
   // Dates stay as 'YYYY-MM-DD' strings end to end to avoid IST -> UTC shifts.
-  // Quarter is always derived from StartDate; any client Quarter is ignored.
+  // The client Quarter only picks the entry quarter that StartDate must fall
+  // in; the stored Quarter is always derived from StartDate.
   const startDateKey = toDateKey(StartDate);
   const timelineKey = toDateKey(Timeline);
   const dateErrors = getGoalDateErrors(
     startDateKey,
     timelineKey,
-    getTargetGoalQuarterBounds(),
+    entryQuarter.bounds,
   );
   if (dateErrors) {
     return res.status(400).json({
@@ -1632,7 +1688,7 @@ const createGoal = async (req, res) => {
         Weightage,
         GoalCategory,
         Timeline: timelineKey,
-        CreatedDate: new Date(),
+        CreatedDate: getTimeBoundBaseline(goalQuarter, startDateKey, new Date()),
       },
       { pool, userId },
     );
@@ -2113,7 +2169,11 @@ const updateGoal = async (req, res) => {
           Weightage: finalWeightage,
           GoalCategory: finalCategory,
           Timeline: timelineKey || Timeline,
-          CreatedDate: existingGoal.CreatedDate,
+          CreatedDate: getTimeBoundBaseline(
+            newQuarter,
+            startDateKey,
+            existingGoal.CreatedDate,
+          ),
         },
         {
           pool: await poolPromise,
@@ -2406,10 +2466,23 @@ const getSheetGoalAccessError = async (
   };
 };
 
-// 6. Load the user's Draft goals for the target quarter (Add Goal sheet)
+// 6. Load the user's Draft goals for one quarter (Add Goal sheet): the
+// requested ?quarter, which must be open for entry, or else the first open
+// quarter, or else the normal target quarter.
 const getGoalSheet = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
-  const bounds = getTargetGoalQuarterBounds();
+  const openQuarters = getOpenGoalEntryQuarters();
+  const requestedQuarter = String(req.query?.quarter ?? "").trim();
+  const bounds = requestedQuarter
+    ? openQuarters.find((quarter) => quarter.label === requestedQuarter)
+    : openQuarters[0] || getTargetGoalQuarterBounds();
+
+  if (!bounds) {
+    return res.status(400).json({
+      success: false,
+      message: `Goal entry is not open for ${requestedQuarter}.`,
+    });
+  }
 
   try {
     const pool = await poolPromise;
@@ -2478,6 +2551,7 @@ const getGoalSheet = async (req, res) => {
         endDate: bounds.endKey,
         goalNumberStart: getSheetGoalNumberStart(otherGoals),
         maxGoals: getSheetGoalSlots(otherGoals),
+        openQuarters: openQuarters.map(toEntryQuarterSummary),
         goals,
       },
     });
@@ -2494,13 +2568,13 @@ const getGoalSheet = async (req, res) => {
 // 7. Save the whole Add Goal sheet as Draft or Submitted, all or nothing.
 const saveGoalSheet = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
-  const { GoalStatus, Goals } = req.body || {};
+  const { GoalStatus, Goals, Quarter } = req.body || {};
 
-  const goalCreationWindow = getGoalCreationWindow();
-  if (!goalCreationWindow.isOpen) {
-    return res.status(403).json({
+  const entryQuarter = resolveGoalEntryQuarter(Quarter);
+  if (!entryQuarter.bounds) {
+    return res.status(entryQuarter.status).json({
       success: false,
-      message: getGoalCreationWindowClosedMessage(goalCreationWindow),
+      message: entryQuarter.message,
     });
   }
 
@@ -2527,7 +2601,7 @@ const saveGoalSheet = async (req, res) => {
     });
   }
 
-  const bounds = getTargetGoalQuarterBounds();
+  const { bounds } = entryQuarter;
   const rows = Goals.map((goal) => ({
     goal,
     GoalID:
@@ -2617,7 +2691,7 @@ const saveGoalSheet = async (req, res) => {
     if (GoalStatus === "Submitted") {
       // SMART criteria apply only on submission (same as createGoal).
       const smartErrors = await Promise.all(
-        rows.map(async ({ goal, GoalID, timelineKey }) => {
+        rows.map(async ({ goal, GoalID, startDateKey, timelineKey }) => {
           const { valid, errors } = await validateSmartGoal({
             GoalTitle: goal.GoalTitle,
             GoalDescription: goal.GoalDescription,
@@ -2627,9 +2701,11 @@ const saveGoalSheet = async (req, res) => {
             Weightage: goal.Weightage,
             GoalCategory: goal.GoalCategory,
             Timeline: timelineKey,
-            CreatedDate: GoalID
-              ? quarterGoalsById.get(GoalID).CreatedDate
-              : new Date(),
+            CreatedDate: getTimeBoundBaseline(
+              bounds.label,
+              startDateKey,
+              GoalID ? quarterGoalsById.get(GoalID).CreatedDate : new Date(),
+            ),
           });
           return valid ? null : errors;
         }),
@@ -3136,7 +3212,7 @@ const changeGoalStatus = async (req, res) => {
     const oldRes = await checkReq
       .input("GoalID", sql.BigInt, id)
       .query(
-        "SELECT GoalStatus, UserID, GoalTitle FROM dbo.Goals WHERE GoalID = @GoalID",
+        "SELECT GoalStatus, UserID, GoalTitle, Quarter FROM dbo.Goals WHERE GoalID = @GoalID",
       );
     if (oldRes.recordset.length === 0) {
       await transaction.rollback();
@@ -3217,7 +3293,9 @@ const changeGoalStatus = async (req, res) => {
       });
     }
 
-    if (role !== "ADMIN") {
+    // Go-live quarters' normal approval windows have already passed, so
+    // their goals are not held to them.
+    if (role !== "ADMIN" && !isGoLiveOpenQuarter(oldRes.recordset[0].Quarter)) {
       const approvalWindow = isFinalApproval
         ? getCfoApprovalWindow()
         : getManagerHodApprovalWindow();
@@ -4371,36 +4449,60 @@ const getRelevantGoalCreationWindow = (now = new Date()) => {
 };
 
 // 7. Whether the user can add goals now (Goal Management "Add Goal").
-// Blocked while the goal-entry window is closed, or once the target
-// quarter's active goals (every status except Draft, Rejected and
-// Cancelled) total 100%.
+// Blocked while no quarter is open for entry, or once every open quarter's
+// active goals (every status except Draft, Rejected and Cancelled) total
+// 100%. The target-quarter fields describe the normal window.
 const getAddGoalStatus = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
   const window = getRelevantGoalCreationWindow();
+  const openQuarters = getOpenGoalEntryQuarters();
+  const quarterLabels = [
+    ...new Set([
+      window.targetQuarter,
+      ...openQuarters.map((quarter) => quarter.label),
+    ]),
+  ];
 
   try {
     const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input("UserID", sql.Int, userId)
-      .input("Quarter", sql.VarChar, window.targetQuarter).query(`
-        SELECT ISNULL(SUM(Weightage), 0) AS TotalWeightage
+    const request = pool.request().input("UserID", sql.Int, userId);
+    quarterLabels.forEach((label, index) =>
+      request.input(`Quarter${index}`, sql.VarChar, label),
+    );
+    const result = await request.query(`
+        SELECT Quarter, ISNULL(SUM(Weightage), 0) AS TotalWeightage
         FROM dbo.Goals
         WHERE UserID = @UserID
-          AND Quarter = @Quarter
+          AND Quarter IN (${quarterLabels.map((_, index) => `@Quarter${index}`).join(", ")})
           AND GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+        GROUP BY Quarter
       `);
 
-    const activeHundredths = toWeightageHundredths(
-      result.recordset[0]?.TotalWeightage,
+    const activeHundredthsByQuarter = new Map(
+      result.recordset.map((row) => [
+        row.Quarter,
+        toWeightageHundredths(row.TotalWeightage),
+      ]),
     );
-    const isFullyAllocated = activeHundredths >= FULL_ALLOCATION_HUNDREDTHS;
+    const getQuarterAllocation = (label) => {
+      const hundredths = activeHundredthsByQuarter.get(label) || 0;
+      return {
+        activeWeightage: Number(formatWeightageHundredths(hundredths)),
+        isFullyAllocated: hundredths >= FULL_ALLOCATION_HUNDREDTHS,
+      };
+    };
+
+    const targetAllocation = getQuarterAllocation(window.targetQuarter);
+    const openQuarterStatuses = openQuarters.map((quarter) => ({
+      ...toEntryQuarterSummary(quarter),
+      ...getQuarterAllocation(quarter.label),
+    }));
 
     let reason = null;
-    if (!window.isOpen) {
+    if (openQuarterStatuses.length === 0) {
       reason = `Goals for ${window.targetQuarter} can be added from ${formatDisplayDateKey(window.startDate)} to ${formatDisplayDateKey(window.endDate)}.`;
-    } else if (isFullyAllocated) {
-      reason = `${window.targetQuarter} goals already total 100%.`;
+    } else if (openQuarterStatuses.every((quarter) => quarter.isFullyAllocated)) {
+      reason = `${openQuarterStatuses.map((quarter) => quarter.quarter).join(", ")} goals already total 100%.`;
     }
 
     return res.status(200).json({
@@ -4412,8 +4514,9 @@ const getAddGoalStatus = async (req, res) => {
           startDate: window.startDate,
           endDate: window.endDate,
         },
-        activeWeightage: Number(formatWeightageHundredths(activeHundredths)),
-        isFullyAllocated,
+        activeWeightage: targetAllocation.activeWeightage,
+        isFullyAllocated: targetAllocation.isFullyAllocated,
+        openQuarters: openQuarterStatuses,
         canAddGoal: reason === null,
         reason,
       },

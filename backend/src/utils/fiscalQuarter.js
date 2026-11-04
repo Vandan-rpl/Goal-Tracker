@@ -159,6 +159,45 @@ function getNextFiscalQuarter(fromQuarterEndDate) {
   return getFiscalQuarter(nextStart);
 }
 
+// Go-live opening. GOAL_ENTRY_GO_LIVE_OPENING=true in the backend .env opens
+// goal entry for Q1-Q3 of the current fiscal year outside the normal windows,
+// and exempts goals in those quarters from the approval windows. Q4 keeps its
+// normal window. Set it to false (or remove it) to return to the date-based
+// windows only. This is the only place the switch is read.
+const GO_LIVE_OPEN_QUARTER_NUMBERS = [1, 2, 3];
+
+const isGoLiveOpeningEnabled = () =>
+  String(process.env.GOAL_ENTRY_GO_LIVE_OPENING || "").trim().toLowerCase() ===
+  "true";
+
+// Bounds of the go-live quarters, or [] while the switch is off.
+function getGoLiveOpenQuarters(date = new Date()) {
+  if (!isGoLiveOpeningEnabled()) return [];
+  return getFiscalYearQuarters(date).filter((_, index) =>
+    GO_LIVE_OPEN_QUARTER_NUMBERS.includes(index + 1),
+  );
+}
+
+function isGoLiveOpenQuarter(label, date = new Date()) {
+  return getGoLiveOpenQuarters(date).some((quarter) => quarter.label === label);
+}
+
+// Quarters goals can be entered for now, in order: the go-live quarters,
+// plus the normal target quarter (the one after the current quarter) while
+// the normal goal-creation window is open.
+function getOpenGoalEntryQuarters(date = new Date()) {
+  const quarters = [...getGoLiveOpenQuarters(date)];
+  if (getGoalCreationWindow(date).isOpen) {
+    const target = getFiscalQuarterBoundsFromLabel(
+      getNextFiscalQuarter(getFiscalQuarter(date).quarterEndDate).label,
+    );
+    if (!quarters.some((quarter) => quarter.label === target.label)) {
+      quarters.push(target);
+    }
+  }
+  return quarters;
+}
+
 function isWithinCarryForwardWindow(quarterEndDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -189,5 +228,8 @@ module.exports = {
   getGoalCreationWindow,
   getManagerHodApprovalWindow,
   getCfoApprovalWindow,
+  getGoLiveOpenQuarters,
+  isGoLiveOpenQuarter,
+  getOpenGoalEntryQuarters,
   isWithinCarryForwardWindow,
 };

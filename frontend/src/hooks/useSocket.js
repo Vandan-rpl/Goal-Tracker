@@ -8,7 +8,7 @@ import { taskUnseenCountReceived } from "../redux/slices/taskSlice";
 // /api/v1 path — Socket.IO manages its own path (/socket.io) on top of the
 // plain origin.
 const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+  import.meta.env.VITE_SOCKET_URL;
 
 // Kept at module scope (not in the hook's closure) so remounts of whatever
 // component calls useSocket() — including React 18 StrictMode's

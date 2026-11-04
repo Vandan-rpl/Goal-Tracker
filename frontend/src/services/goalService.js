@@ -1,7 +1,7 @@
 import axios from 'axios';
 import api from './api';
 
-const API_URL = 'http://localhost:5000/api/goals';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Get goals based on logged-in user role
 export const getGoals = async (token) => {

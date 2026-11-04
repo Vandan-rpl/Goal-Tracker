@@ -347,7 +347,7 @@ const CFOAllUsersGoals = () => {
                             <button
                               disabled={
                                 actingOn === goal.GoalID ||
-                                !approvalWindow.isOpen
+                                !(approvalWindow.isOpen || goal.ApprovalWindowExempt)
                               }
                               onClick={() =>
                                 handleStatusUpdate(goal.GoalID, "Approved")
@@ -359,7 +359,7 @@ const CFOAllUsersGoals = () => {
                             <button
                               disabled={
                                 actingOn === goal.GoalID ||
-                                !approvalWindow.isOpen
+                                !(approvalWindow.isOpen || goal.ApprovalWindowExempt)
                               }
                               onClick={() =>
                                 handleStatusUpdate(goal.GoalID, "Rejected")

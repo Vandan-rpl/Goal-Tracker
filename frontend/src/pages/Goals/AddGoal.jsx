@@ -76,6 +76,7 @@ const getRowErrors = (row, quarterRange) => {
 const AddGoal = () => {
   const navigate = useNavigate();
   const goalCreationWindow = getGoalCreationWindow();
+  // Bring forward always targets the normal next quarter.
   const currentQuarterRange = getNextFiscalQuarterDateRange();
 
   const [rows, setRows] = useState([]);
@@ -83,6 +84,26 @@ const AddGoal = () => {
   const [maxGoals, setMaxGoals] = useState(MAX_GOALS_PER_QUARTER);
   const [sheetLoading, setSheetLoading] = useState(true);
   const [sheetLoadError, setSheetLoadError] = useState("");
+  // Quarters open for entry, from GET /goals/sheet (null until loaded): the
+  // go-live quarters plus the normal target quarter during its window.
+  const [openQuarters, setOpenQuarters] = useState(null);
+  // Quarter the user picked; "" lets the server choose the first open one.
+  const [selectedQuarter, setSelectedQuarter] = useState("");
+  // Quarter the loaded sheet is for, from the server.
+  const [sheetQuarter, setSheetQuarter] = useState(null);
+  const [dirty, setDirty] = useState(false);
+
+  const entryQuarterRange = sheetQuarter
+    ? {
+        quarter: sheetQuarter.quarter,
+        min: sheetQuarter.startDate,
+        max: sheetQuarter.endDate,
+      }
+    : currentQuarterRange;
+  // Until the server answers, fall back to the normal window.
+  const entryOpen = openQuarters
+    ? openQuarters.length > 0
+    : goalCreationWindow.isOpen;
 
   const [jointAccountabilityUsers, setJointAccountabilityUsers] = useState([]);
   const [jointAccountabilityUsersLoading, setJointAccountabilityUsersLoading] =
@@ -106,10 +127,23 @@ const AddGoal = () => {
 
     const loadSheet = async () => {
       try {
-        const response = await api.get("/goals/sheet");
+        const response = await api.get("/goals/sheet", {
+          params: selectedQuarter ? { quarter: selectedQuarter } : {},
+        });
         if (ignore) return;
         const data = response.data?.data || {};
         const drafts = data.goals || [];
+        setOpenQuarters(data.openQuarters || []);
+        setSheetQuarter(
+          data.quarter
+            ? {
+                quarter: data.quarter,
+                startDate: data.startDate,
+                endDate: data.endDate,
+              }
+            : null,
+        );
+        setDirty(false);
         setGoalNumberStart(Number(data.goalNumberStart) || 1);
         if (Number.isFinite(Number(data.maxGoals))) {
           setMaxGoals(Number(data.maxGoals));
@@ -133,7 +167,29 @@ const AddGoal = () => {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [selectedQuarter]);
+
+  // Each quarter has its own sheet of drafts, so switching reloads it.
+  const changeQuarter = (quarter) => {
+    if (quarter === entryQuarterRange.quarter) return;
+    if (
+      dirty &&
+      !window.confirm(
+        "Switch quarter? Changes not saved as draft on this sheet will be lost.",
+      )
+    ) {
+      return;
+    }
+    setRows([]);
+    setSheetLoading(true);
+    setSheetLoadError("");
+    setServerErrors({});
+    setAttempted(false);
+    setError("");
+    setSuccess("");
+    setBringForwardOpen(false);
+    setSelectedQuarter(quarter);
+  };
 
   useEffect(() => {
     const loadJointAccountabilityUsers = async () => {
@@ -174,7 +230,7 @@ const AddGoal = () => {
   );
   const isFullyAllocated = totalHundredths === FULL_ALLOCATION_HUNDREDTHS;
   const rowErrors = Object.fromEntries(
-    rows.map((row) => [row.key, getRowErrors(row, currentQuarterRange)]),
+    rows.map((row) => [row.key, getRowErrors(row, entryQuarterRange)]),
   );
   const hasRowErrors = rows.some(
     (row) => Object.keys(rowErrors[row.key]).length > 0,
@@ -216,12 +272,15 @@ const AddGoal = () => {
     );
     clearServerError(key, field);
     setSuccess("");
+    setDirty(true);
   };
 
-  const addRow = () =>
+  const addRow = () => {
     setRows((previous) =>
       previous.length >= maxGoals ? previous : [...previous, createGoalRow()],
     );
+    setDirty(true);
+  };
 
   const removeRow = async (row) => {
     if (row.GoalID) {
@@ -314,7 +373,7 @@ const AddGoal = () => {
     setSuccess("");
     setAttempted(true);
 
-    if (!goalCreationWindow.isOpen) {
+    if (!entryOpen) {
       setError("The goal-entry window is closed.");
       return;
     }
@@ -344,6 +403,7 @@ const AddGoal = () => {
     try {
       const response = await api.put("/goals/sheet", {
         GoalStatus: status,
+        Quarter: entryQuarterRange.quarter,
         Goals: rows.map(buildGoalPayload),
       });
 
@@ -363,6 +423,7 @@ const AddGoal = () => {
       );
       setServerErrors({});
       setAttempted(false);
+      setDirty(false);
       setSuccess(response.data?.message || "Goals saved as draft.");
     } catch (err) {
       // Row errors come back as { errors: { rows: [ { Field: msg } | null ] } },
@@ -429,7 +490,7 @@ const AddGoal = () => {
                   Create goals
                 </h1>
                 <p className="text-sm text-slate-500 mt-1">
-                  Enter your {currentQuarterRange.quarter} goals in the
+                  Enter your {entryQuarterRange.quarter} goals in the
                   worksheet below, one row per goal.
                 </p>
               </div>
@@ -486,23 +547,58 @@ const AddGoal = () => {
               </div>
             )}
 
-            <div
-              className={`mb-6 border p-4 text-sm font-medium ${
-                goalCreationWindow.isOpen
-                  ? "border-blue-200 bg-blue-50 text-[#2c3e82]"
-                  : "border-amber-200 bg-amber-50 text-amber-900"
-              }`}
-              role="status"
-            >
-              {goalCreationWindow.isOpen
-                ? "The goal-entry window is open from "
-                : "The goal-entry window is closed. It is open only for the first 7 calendar days of each quarter. This quarter's window ran from "}
-              {goalCreationWindow.startDate.toLocaleDateString()} through{" "}
-              {goalCreationWindow.endDate.toLocaleDateString()}.
-            </div>
+            {entryOpen && !goalCreationWindow.isOpen && openQuarters ? (
+              <div
+                className="mb-6 border border-blue-200 bg-blue-50 p-4 text-sm font-medium text-[#2c3e82]"
+                role="status"
+              >
+                Goal entry is open for{" "}
+                {openQuarters.map((quarter) => quarter.quarter).join(", ")}.
+              </div>
+            ) : (
+              <div
+                className={`mb-6 border p-4 text-sm font-medium ${
+                  goalCreationWindow.isOpen
+                    ? "border-blue-200 bg-blue-50 text-[#2c3e82]"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}
+                role="status"
+              >
+                {goalCreationWindow.isOpen
+                  ? "The goal-entry window is open from "
+                  : "The goal-entry window is closed. It is open only for the first 7 calendar days of each quarter. This quarter's window ran from "}
+                {goalCreationWindow.startDate.toLocaleDateString()} through{" "}
+                {goalCreationWindow.endDate.toLocaleDateString()}.
+              </div>
+            )}
+
+            {openQuarters?.length > 1 && entryOpen && (
+              <div className="mb-6 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                <label
+                  htmlFor="goal-entry-quarter"
+                  className="text-sm font-semibold text-slate-700"
+                >
+                  Adding goals for
+                </label>
+                <select
+                  id="goal-entry-quarter"
+                  value={entryQuarterRange.quarter}
+                  onChange={(e) => changeQuarter(e.target.value)}
+                  disabled={sheetLoading || Boolean(saving)}
+                  className="border border-[#c6cedc] bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#2c3e82] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {openQuarters.map((quarter) => (
+                    <option key={quarter.quarter} value={quarter.quarter}>
+                      {quarter.quarter} ({formatDateForDisplay(quarter.startDate)}{" "}
+                      to {formatDateForDisplay(quarter.endDate)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <form
-              hidden={!goalCreationWindow.isOpen}
+              hidden={!entryOpen}
               noValidate
               onSubmit={(e) => {
                 e.preventDefault();
@@ -556,7 +652,7 @@ const AddGoal = () => {
                       updateRow(row.key, field, updater)
                     }
                     errors={getVisibleErrors(row)}
-                    startDateRange={currentQuarterRange}
+                    startDateRange={entryQuarterRange}
                     jointAccountabilityUsers={jointAccountabilityUsers}
                     jointAccountabilityUsersLoading={
                       jointAccountabilityUsersLoading
@@ -594,16 +690,19 @@ const AddGoal = () => {
               {/* Action Buttons */}
               <div className="flex flex-col gap-2 border-t border-slate-200 pt-6">
                 <div className="flex flex-col-reverse items-center justify-end gap-3 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => setBringForwardOpen((open) => !open)}
-                    disabled={!bringForwardOpen && bringForwardGoals.length === 0}
-                    aria-expanded={bringForwardOpen}
-                    className="w-full cursor-pointer border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 sm:mr-auto sm:w-auto"
-                  >
-                    {bringForwardOpen ? "Hide" : "Bring forward goals"} (
-                    {bringForwardGoals.length})
-                  </button>
+                  {/* Bring forward keeps the normal window only. */}
+                  {goalCreationWindow.isOpen && (
+                    <button
+                      type="button"
+                      onClick={() => setBringForwardOpen((open) => !open)}
+                      disabled={!bringForwardOpen && bringForwardGoals.length === 0}
+                      aria-expanded={bringForwardOpen}
+                      className="w-full cursor-pointer border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 sm:mr-auto sm:w-auto"
+                    >
+                      {bringForwardOpen ? "Hide" : "Bring forward goals"} (
+                      {bringForwardGoals.length})
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => navigate("/goals")}

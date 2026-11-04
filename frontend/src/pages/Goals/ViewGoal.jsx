@@ -100,7 +100,12 @@ const ViewGoal = () => {
     : isManagerHodApprover
       ? getManagerHodApprovalWindow()
       : null;
-  const isApprovalWindowOpen = approvalWindow?.isOpen === true;
+  // Goals in a go-live quarter are not held to the approval window (the
+  // server sets ApprovalWindowExempt and enforces the same rule).
+  const isApprovalWindowExempt =
+    Boolean(approvalWindow) && goal?.ApprovalWindowExempt === true;
+  const isApprovalWindowOpen =
+    approvalWindow?.isOpen === true || isApprovalWindowExempt;
 
   const reviewableStatuses = ["HOD Approved", "Reviewed By HOD", "Completed"];
   let loggedInUserId = null;
@@ -484,7 +489,17 @@ const ViewGoal = () => {
           </div>
         )}
 
-        {approvalWindow && !isGoalOwner && (
+        {isApprovalWindowExempt && !approvalWindow.isOpen && !isGoalOwner && (
+          <div
+            className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900"
+            role="status"
+          >
+            {goal.Quarter} goals can be approved and edited outside the normal
+            approval window.
+          </div>
+        )}
+
+        {approvalWindow && !isGoalOwner && !(isApprovalWindowExempt && !approvalWindow.isOpen) && (
           <div
             className={`rounded-xl border p-4 text-sm font-medium ${
               approvalWindow.isOpen
