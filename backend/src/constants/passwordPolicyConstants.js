@@ -19,7 +19,7 @@ const PASSWORD_HISTORY_COUNT = 3;
 // Personal words shorter than this are ignored.
 const PERSONAL_WORD_MIN_LENGTH = 3;
 
-const BLOCKED_WORDS = Object.freeze(["rubamin", "goaltracker"]);
+const BLOCKED_WORDS = Object.freeze([]);
 
 const BCRYPT_SALT_ROUNDS = 10;
 
