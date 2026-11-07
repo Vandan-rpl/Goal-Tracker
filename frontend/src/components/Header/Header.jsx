@@ -30,6 +30,7 @@ import AssignmentTurnedInOutlinedIcon from "@mui/icons-material/AssignmentTurned
 import { toggleMobile, toggleSidebar } from "../../redux/slices/sidebarSlice";
 
 import {
+  deleteNotification,
   fetchNotifications,
   fetchNotificationCount,
 } from "../../redux/slices/notificationSlice";
@@ -41,6 +42,7 @@ import { TASKS_HOME_PATH, isTasksPath } from "../../utils/tasksMenu";
 
 import ProfileMenu from "../ProfileMenu/ProfileMenu";
 import CircleIcon from "@mui/icons-material/Circle";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 
 const Header = ({ drawerWidth = 260 }) => {
   const dispatch = useDispatch();
@@ -163,6 +165,12 @@ const Header = ({ drawerWidth = 260 }) => {
   const handleViewAll = () => {
     handleNotifClose();
     navigate("/notifications");
+  };
+
+  // Delete from the dropdown without closing it.
+  const handleNotifDelete = (event, notificationId) => {
+    event.stopPropagation();
+    dispatch(deleteNotification(notificationId));
   };
 
   const latestFive = notifications.slice(0, 5);
@@ -411,6 +419,23 @@ const Header = ({ drawerWidth = 260 }) => {
                     {item.Message}
                   </p>
                 </div>
+
+                <Tooltip title="Delete">
+                  <IconButton
+                    size="small"
+                    aria-label="Delete notification"
+                    onClick={(event) => handleNotifDelete(event, item.NotificationId)}
+                    sx={{
+                      p: 0.5,
+                      mt: -0.25,
+                      flexShrink: 0,
+                      color: "#94a3b8",
+                      "&:hover": { color: "#dc2626", backgroundColor: "#fef2f2" },
+                    }}
+                  >
+                    <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
               </MenuItem>
             ))}
 

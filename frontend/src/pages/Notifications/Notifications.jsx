@@ -3,8 +3,10 @@ import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 import { useDispatch, useSelector } from "react-redux";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   fetchNotifications,
   markAsRead,
@@ -15,7 +17,15 @@ import {
 
 const Notifications = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { notifications, loading } = useSelector((state) => state.notification);
+
+  // Back to the previous page; opened directly (no in-app history), go to the dashboard.
+  const handleBack = () => {
+    if (location.key === "default") navigate("/dashboard");
+    else navigate(-1);
+  };
 
   useEffect(() => {
     dispatch(fetchNotifications());
@@ -31,6 +41,14 @@ const Notifications = () => {
   return (
     <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-4 bg-white min-h-screen text-slate-800">
       
+      <button
+        onClick={handleBack}
+        className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer"
+      >
+        <ArrowBackIcon style={{ fontSize: 16 }} />
+        Back
+      </button>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
         <div>
