@@ -20,8 +20,9 @@ const ProtectedRoute = ({ allowedRoles }) => {
   // If roles are specified, check if the logged-in user's role is permitted
   if (allowedRoles && allowedRoles.length > 0) {
     // Case-insensitive role comparison safeguard (e.g., 'Admin' vs 'admin')
+    const userRole = String(user?.Role || user?.role || '').toLowerCase();
     const hasPermission = allowedRoles.some(
-      (role) => role.toLowerCase() === user?.Role?.toLowerCase()
+      (role) => role.toLowerCase() === userRole
     );
 
     if (!hasPermission) {

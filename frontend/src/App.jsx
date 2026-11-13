@@ -48,6 +48,12 @@ import ProjectDetails from './pages/Tasks/ProjectDetails';
 import { TASKS_HOME_PATH } from './utils/tasksMenu';
 import {ToastContainer} from 'react-toastify';
 
+
+// Role sets for guarded routes; these match what Sidebar.jsx shows each role.
+const ADMIN_ROLES = ['Admin'];
+const MANAGEMENT_ROLES = ['Admin', 'HOD', 'Manager', 'BusinessHead'];
+const BUSINESS_HEAD_ROLES = ['BusinessHead'];
+
 function App() {
   return ( 
     <AuthProvider>
@@ -75,20 +81,29 @@ function App() {
               <Route path="/goals/view/:id" element={<ViewGoal />} />
               <Route path="/goals/final-evaluation" element={<FinalEvaluation />} />
               <Route path="/goals/final-evaluation/:userId" element={<FinalEvaluation />} />
-              <Route path="/admin/add-employees" element={<AddEmployees />} />
-              <Route path="/admin/import-employees" element={<ImportEmployees />} />
-              <Route path="/admin/upload-excel" element={<EmployeeExcelUpload />} />
-              <Route path="/admin/employees-list" element={<ListEmployees />} />
-              <Route path="/admin/reports" element={<Reports />} />
+              {/* Admin-only pages: anyone else who types the URL is sent to the dashboard */}
+              <Route element={<ProtectedRoute allowedRoles={ADMIN_ROLES} />}>
+                <Route path="/admin/add-employees" element={<AddEmployees />} />
+                <Route path="/admin/import-employees" element={<ImportEmployees />} />
+                <Route path="/admin/upload-excel" element={<EmployeeExcelUpload />} />
+                <Route path="/admin/employees-list" element={<ListEmployees />} />
+              </Route>
+              <Route element={<ProtectedRoute allowedRoles={MANAGEMENT_ROLES} />}>
+                <Route path="/admin/reports" element={<Reports />} />
+              </Route>
               
               {/* Manager, HOD, and BusinessHead Team Goal Review & Approval Routes[cite: 1] */}
               
               {/* Team Management & Employee Goals Table View Routes */}
-              <Route path="/manager/team-management" element={<TeamManagement />} />
-              <Route path="/manager/review-employee-goal" element={<ReviewEmployeeGoal />} />
-              
+              <Route element={<ProtectedRoute allowedRoles={MANAGEMENT_ROLES} />}>
+                <Route path="/manager/team-management" element={<TeamManagement />} />
+                <Route path="/manager/review-employee-goal" element={<ReviewEmployeeGoal />} />
+              </Route>
+
               {/* CFO Route */}
-              <Route path="/cfo/all-goals" element={<CFOAllUsersGoals />} />
+              <Route element={<ProtectedRoute allowedRoles={BUSINESS_HEAD_ROLES} />}>
+                <Route path="/cfo/all-goals" element={<CFOAllUsersGoals />} />
+              </Route>
 
               <Route path="/setting" element={<Setting />} />
               <Route path="/profile" element={<Profile />} />

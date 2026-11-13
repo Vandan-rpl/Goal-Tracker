@@ -108,7 +108,7 @@ export const GoalWorksheet = ({ ariaLabel, children }) => (
               key={heading}
             >
               {heading}
-              {[0, 1, 3, 4, 5, 6].includes(index) && (
+              {[0, 1, 3, 4, 5, 6, 9, 10, 11].includes(index) && (
                 <span className="text-red-600"> *</span>
               )}
             </th>

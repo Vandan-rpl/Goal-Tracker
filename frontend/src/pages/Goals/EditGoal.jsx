@@ -669,7 +669,7 @@ const EditGoal = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
             <label className="block text-xs font-semibold text-slate-700">
-              Goal Description
+              Goal Description <span className="text-red-500">*</span>
             </label>
             <textarea
               name="GoalDescription"
@@ -722,7 +722,7 @@ const EditGoal = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Meet Performance Target
+                Meet Performance Target <span className="text-red-500">*</span>
               </label>
               <textarea
                 name="MeetPerformance"
