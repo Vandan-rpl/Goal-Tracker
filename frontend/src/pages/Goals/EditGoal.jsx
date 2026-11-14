@@ -6,6 +6,7 @@ import {
   canEditGoal,
   canEditTimelineOnlyGoal,
   isApproverRole,
+  isBusinessHeadRole,
   isTimelineOverdue,
 } from "../../utils/goalEditability";
 import { getFiscalQuarterDateRange } from "../../utils/fiscalQuarter";
@@ -338,11 +339,20 @@ const EditGoal = () => {
       (originalGoal.IsGoalOwner == null &&
         currentUserId != null &&
         Number(originalGoal.UserID) === Number(currentUserId)));
-  const isApprover = isApproverRole(currentRole) && !isGoalOwner;
+  // A Business Head can no longer edit a goal once it is approved.
+  const isApprover =
+    isApproverRole(currentRole) &&
+    !isGoalOwner &&
+    (!isBusinessHeadRole(currentRole) ||
+      canEditGoal(originalGoal, true, currentRole));
   const isRejected = originalStatus === "Rejected";
   const isDraft = originalStatus === "Draft";
   const canSubmitForApproval = isDraft || isRejected;
-  const terminalStatus = ["Completed", "Cancelled"].includes(originalStatus);
+  const terminalStatus = [
+    "Completion Submitted",
+    "Completed",
+    "Cancelled",
+  ].includes(originalStatus);
   const timelineOverdue = isTimelineOverdue(originalGoal?.Timeline);
   const canEditAllFields = isDraft || isRejected || isApprover;
   // Sub-goal titles/weightages are editable only in Draft or Rejected, for
@@ -350,7 +360,7 @@ const EditGoal = () => {
   const canEditSubGoals = isDraft || isRejected;
   const canEditTimelineOnly =
     !canEditAllFields && canEditTimelineOnlyGoal(originalGoal);
-  const canEdit = canEditGoal(originalGoal, isApprover);
+  const canEdit = canEditGoal(originalGoal, isApprover, currentRole);
   const isRestrictedEdit = canEditTimelineOnly;
   // On carry-forward the new Timeline must be after the current one.
   const originalTimelineKey = originalGoal?.Timeline

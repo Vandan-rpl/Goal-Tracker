@@ -1,5 +1,11 @@
 const EDITABLE_STATUSES = new Set(["Draft", "Rejected"]);
-const TERMINAL_STATUSES = new Set(["Completed", "Cancelled"]);
+// No one can edit a goal in these statuses ("Completion Submitted" is
+// awaiting completion approval; the server enforces the same rule).
+const TERMINAL_STATUSES = new Set([
+  "Completion Submitted",
+  "Completed",
+  "Cancelled",
+]);
 const TIMELINE_ONLY_EDIT_STATUSES = new Set([
   "HOD Approved",
   "Manager Approved",
@@ -39,10 +45,32 @@ export const isTimelineOverdue = (timeline) => {
   return timelineDate < todayDate;
 };
 
-export const canEditGoal = (goal, isApprover = false) => {
+// Once a goal reaches these statuses a Business Head can only view it.
+const BUSINESS_HEAD_LOCKED_STATUSES = new Set([
+  "Business Head Approved",
+  "Approved",
+]);
+
+const normalizeRole = (role) =>
+  String(role || "")
+    .toLowerCase()
+    .trim()
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ");
+
+export const isBusinessHeadRole = (role) =>
+  ["businesshead", "business head"].includes(normalizeRole(role));
+
+export const canEditGoal = (goal, isApprover = false, role = "") => {
   if (!goal) return false;
   if (TERMINAL_STATUSES.has(goal.GoalStatus)) return false;
-  if (EDITABLE_STATUSES.has(goal.GoalStatus) || isApprover) return true;
+  if (EDITABLE_STATUSES.has(goal.GoalStatus)) return true;
+  if (isApprover) {
+    return !(
+      isBusinessHeadRole(role) &&
+      BUSINESS_HEAD_LOCKED_STATUSES.has(goal.GoalStatus)
+    );
+  }
   return canEditTimelineOnlyGoal(goal);
 };
 
@@ -60,6 +88,7 @@ export const canEditTimelineOnlyGoal = (goal) =>
 export const isCompletionBlockedByOverdue = (goal) =>
   Boolean(
     goal &&
+      !TERMINAL_STATUSES.has(goal.GoalStatus) &&
       Number(goal.CarryForwardCount || 0) === 0 &&
       isTimelineOverdue(goal.Timeline),
   );
@@ -68,11 +97,7 @@ export const OVERDUE_COMPLETION_MESSAGE =
   "This goal is overdue. Carry it forward to the next quarter and get it approved again before marking it complete.";
 
 export const isApproverRole = (role) => {
-  const normalizedRole = String(role || "")
-    .toLowerCase()
-    .trim()
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ");
+  const normalizedRole = normalizeRole(role);
 
   return [
     "hod",

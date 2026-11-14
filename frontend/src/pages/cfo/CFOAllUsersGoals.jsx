@@ -6,8 +6,11 @@ import {
   getFiscalQuarterOptions,
 } from "../../utils/fiscalQuarter";
 import { canEditGoal } from "../../utils/goalEditability";
+import useAuth from "../../hooks/useAuth";
 
 const statusBadgeClass = (status) => {
+  if (status === "Completed") return "bg-blue-100 text-blue-700";
+  if (status === "Completion Submitted") return "bg-purple-100 text-purple-700";
   if (status?.includes("Approved")) return "bg-green-100 text-green-700";
   if (status?.includes("Rejected")) return "bg-red-100 text-red-700";
   if (status === "Submitted") return "bg-yellow-100 text-yellow-700";
@@ -21,13 +24,15 @@ const normalizedStatus = (status) =>
 
 // This screen only ever returns goals in these statuses (hardcoded
 // server-side in getAllEmployeeGoals), so the filter is scoped to match.
-const PENDING_STATUS_OPTIONS = [
+const STATUS_OPTIONS = [
   "HOD Approved",
   "Manager Approved",
   "Reviewed By HOD",
   "Review By Business Head",
   "Business Head Approved",
   "Approved",
+  "Completion Submitted",
+  "Completed",
 ];
 
 const QUARTER_OPTIONS = getFiscalQuarterOptions();
@@ -63,6 +68,8 @@ const groupGoalsByUser = (goals) => {
 };
 
 const CFOAllUsersGoals = () => {
+  const { user } = useAuth();
+  const role = String(user?.Role || user?.role || "").toUpperCase();
   const [allGoals, setAllGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -193,8 +200,8 @@ const CFOAllUsersGoals = () => {
             onChange={(e) => setStatus(e.target.value)}
             className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">All Pending Statuses</option>
-            {PENDING_STATUS_OPTIONS.map((s) => (
+            <option value="">All Statuses</option>
+            {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -376,7 +383,7 @@ const CFOAllUsersGoals = () => {
                         >
                           View details
                         </Link>
-                        {canEditGoal(goal, true) && (
+                        {canEditGoal(goal, true, role) && (
                           <Link
                             to={`/goals/edit/${goal.GoalID}`}
                             className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"

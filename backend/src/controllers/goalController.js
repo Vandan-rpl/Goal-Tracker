@@ -1035,7 +1035,9 @@ const getAllEmployeeGoals = async (req, res) => {
               'Reviewed By HOD',
               'Review By Business Head',
               'Business Head Approved',
-              'Approved'
+              'Approved',
+              'Completion Submitted',
+              'Completed'
             )
     `;
 
@@ -1921,7 +1923,12 @@ const updateGoal = async (req, res) => {
 
     const terminalStatus = ["Completed", "Cancelled"].includes(currentStatus);
     const isGoalOwner = Number(existingGoal.UserID) === Number(userId);
-    const isApprover = isEnterpriseGoalManager || isTeamGoalManager;
+    // A Business Head can only view a goal once it is approved.
+    const isBusinessHeadLocked =
+      role === "BUSINESSHEAD" &&
+      ["Business Head Approved", "Approved"].includes(currentStatus);
+    const isApprover =
+      (isEnterpriseGoalManager || isTeamGoalManager) && !isBusinessHeadLocked;
     const canEditAllFields =
       !terminalStatus &&
       (["Draft", "Rejected"].includes(currentStatus) ||

@@ -127,6 +127,7 @@ const ViewGoal = () => {
   const canEditCurrentGoal = isGoalEditable(
     goal,
     isAuthorizedApprover && !isGoalOwner && isApprovalWindowOpen,
+    normalizedRole,
   );
   const isJointParticipant = goal?.IsJointParticipant === true && !isGoalOwner;
   const isReviewer =
