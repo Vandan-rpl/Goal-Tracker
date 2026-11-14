@@ -234,7 +234,7 @@ const EditGoal = () => {
     }
 
     const titledSubGoals = subGoals.filter((sub) => sub.SubGoalTitle.trim());
-    const subGoalError = canEditSubGoals && getSubGoalError(titledSubGoals);
+    const subGoalError = canEditSubGoals && getSubGoalError(titledSubGoals, formData.Weightage);
     if (subGoalError) {
       setError(subGoalError);
       setFieldErrors({ SubGoals: subGoalError });
@@ -405,7 +405,10 @@ const EditGoal = () => {
     setSubGoals((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const subGoalWeightage = getSubGoalWeightageSummary(subGoals);
+  const subGoalWeightage = getSubGoalWeightageSummary(
+    subGoals,
+    formData.Weightage,
+  );
 
   return (
   <div className="flex-1 bg-white min-h-screen p-4 sm:p-6 md:p-8 text-slate-800">
@@ -516,7 +519,7 @@ const EditGoal = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Category
+                Category <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -919,8 +922,9 @@ const EditGoal = () => {
             {subGoals.length > 0 && (
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-950">
                 <p className="font-semibold">
-                  Allocated {subGoalWeightage.allocated.toFixed(2)}% · Remaining{" "}
-                  {subGoalWeightage.remaining.toFixed(2)}%
+                  {subGoalWeightage.target === null
+                    ? `Allocated ${subGoalWeightage.allocated.toFixed(2)}% · Set the goal weightage first`
+                    : `Allocated ${subGoalWeightage.allocated.toFixed(2)}% of ${subGoalWeightage.target.toFixed(2)}% · Remaining ${subGoalWeightage.remaining.toFixed(2)}%`}
                 </p>
               </div>
             )}
@@ -962,10 +966,10 @@ const EditGoal = () => {
                       type="number"
                       name="Weightage"
                       placeholder="Weightage % *"
-                      aria-label={`Sub-Goal #${index + 1} weightage (% of this goal)`}
+                      aria-label={`Sub-Goal #${index + 1} weightage (part of this goal's weightage)`}
                       required
                       min="0.01"
-                      max="100"
+                      max={subGoalWeightage.target ?? 100}
                       step="0.01"
                       disabled={!canEditSubGoals}
                       value={sub.Weightage}

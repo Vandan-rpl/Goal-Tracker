@@ -1317,17 +1317,24 @@ const getSubGoalCountError = (titledSubGoals) =>
 const getSubGoalStatus = (status, fallback = "Pending") =>
   SUB_GOAL_STATUSES.includes(status) ? status : fallback;
 
-// Sub-goal weightage is a % of its own goal: when a goal has sub-goals their
-// weightages must total exactly 100, whatever the goal's own weightage is.
-// Stored only; it does not feed goal scoring.
-const getSubGoalWeightageError = (titledSubGoals) => {
+// Sub-goals split their goal's weightage: when a goal has sub-goals their
+// weightages must total exactly the goal's own weightage (e.g. a 25% goal's
+// sub-goals must add up to 25%). Stored only; it does not feed goal scoring.
+// An invalid goal weightage is reported by getGoalWeightageError, so the
+// total is only checked against a valid one.
+const getSubGoalWeightageError = (titledSubGoals, goalWeightage) => {
   if (titledSubGoals.length === 0) return null;
+
+  const goalHundredths = getGoalWeightageError(goalWeightage)
+    ? null
+    : Math.round(Number(goalWeightage) * 100);
+  const maxWeightage = goalHundredths === null ? 100 : goalHundredths / 100;
 
   let totalHundredths = 0;
   for (const subGoal of titledSubGoals) {
     const weightage = Number(subGoal?.Weightage);
-    if (!Number.isFinite(weightage) || weightage <= 0 || weightage > 100) {
-      return "Each sub-goal needs a weightage greater than 0% and up to 100%.";
+    if (!Number.isFinite(weightage) || weightage <= 0 || weightage > maxWeightage) {
+      return `Each sub-goal needs a weightage greater than 0% and up to ${maxWeightage.toFixed(2)}%.`;
     }
     const hundredths = weightage * 100;
     if (Math.abs(hundredths - Math.round(hundredths)) > 1e-6) {
@@ -1336,14 +1343,13 @@ const getSubGoalWeightageError = (titledSubGoals) => {
     totalHundredths += Math.round(hundredths);
   }
 
-  return totalHundredths === 10000
-    ? null
-    : `Sub-goal weightages must add up to exactly 100% (currently ${(totalHundredths / 100).toFixed(2)}%).`;
+  if (goalHundredths === null || totalHundredths === goalHundredths) return null;
+  return `Sub-goal weightages must add up to exactly the goal weightage of ${(goalHundredths / 100).toFixed(2)}% (currently ${(totalHundredths / 100).toFixed(2)}%).`;
 };
 
-const getSubGoalValidationError = (titledSubGoals) =>
+const getSubGoalValidationError = (titledSubGoals, goalWeightage) =>
   getSubGoalCountError(titledSubGoals) ||
-  getSubGoalWeightageError(titledSubGoals);
+  getSubGoalWeightageError(titledSubGoals, goalWeightage);
 
 // Inserts a goal's sub-goals as SubGoalNo 1..n. Status is never taken from
 // the client: a resent sub-goal keeps its stored status (looked up by
@@ -1662,7 +1668,7 @@ const createGoal = async (req, res) => {
   }
 
   const validSubGoals = getTitledSubGoals(SubGoals);
-  const subGoalError = getSubGoalValidationError(validSubGoals);
+  const subGoalError = getSubGoalValidationError(validSubGoals, Weightage);
   if (subGoalError) {
     return res.status(400).json({
       success: false,
@@ -1967,7 +1973,9 @@ const updateGoal = async (req, res) => {
       Array.isArray(SubGoals);
     const validSubGoals = getTitledSubGoals(SubGoals);
     if (canEditSubGoals) {
-      const subGoalError = getSubGoalValidationError(validSubGoals);
+      // Sub-goals are only editable alongside a full edit, which saves the
+      // request's Weightage as the goal's weightage.
+      const subGoalError = getSubGoalValidationError(validSubGoals, Weightage);
       if (subGoalError) {
         await transaction.rollback();
         return res.status(400).json({
@@ -2414,7 +2422,10 @@ const getGoalSheetRowErrors = (row, bounds) => {
     getGoalDateErrors(row.startDateKey, row.timelineKey, bounds) || {},
   );
 
-  const subGoalError = getSubGoalValidationError(row.validSubGoals);
+  const subGoalError = getSubGoalValidationError(
+    row.validSubGoals,
+    goal?.Weightage,
+  );
   if (subGoalError) errors.SubGoals = subGoalError;
 
   return Object.keys(errors).length > 0 ? errors : null;

@@ -67,7 +67,7 @@ const getRowErrors = (row, quarterRange) => {
     errors.Timeline = "End Date must be on or after Start Date.";
   }
 
-  const subGoalError = getSubGoalError(getTitledSubGoals(row));
+  const subGoalError = getSubGoalError(getTitledSubGoals(row), row.Weightage);
   if (subGoalError) errors.SubGoals = subGoalError;
 
   return errors;

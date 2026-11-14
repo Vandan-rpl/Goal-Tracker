@@ -108,7 +108,7 @@ export const GoalWorksheet = ({ ariaLabel, children }) => (
               key={heading}
             >
               {heading}
-              {[0, 1, 3, 4, 5, 6, 9, 10, 11].includes(index) && (
+              {[0, 1, 2, 3, 4, 5, 6, 9, 10, 11].includes(index) && (
                 <span className="text-red-600"> *</span>
               )}
             </th>
@@ -157,7 +157,7 @@ const GoalSheetRow = ({
   removeDisabled = false,
 }) => {
   const isEditable = (field) => editableFields.includes(field);
-  const subGoalWeightage = getSubGoalWeightageSummary(row.SubGoals);
+  const subGoalWeightage = getSubGoalWeightageSummary(row.SubGoals, row.Weightage);
 
   const renderCellMessage = (field, hint) => {
     const message = errors[field];
@@ -340,6 +340,7 @@ const GoalSheetRow = ({
         <input
           className={worksheetControlClass}
           aria-label={`Goal ${goalNumber} category`}
+          aria-required="true"
           type="text"
           placeholder="Category"
           {...fieldProps("GoalCategory")}
@@ -423,10 +424,10 @@ const GoalSheetRow = ({
                 <div className="relative w-21 shrink-0 border-l border-[#e4e9f0]">
                   <input
                     className={`${worksheetControlClass} pr-6 text-right`}
-                    aria-label={`Goal ${goalNumber} sub-goal ${subIndex + 1} weightage (% of this goal)`}
+                    aria-label={`Goal ${goalNumber} sub-goal ${subIndex + 1} weightage (part of this goal's weightage)`}
                     type="number"
                     min="0.01"
-                    max="100"
+                    max={subGoalWeightage.target ?? 100}
                     step="10"
                     name="Weightage"
                     placeholder="0"
@@ -465,9 +466,11 @@ const GoalSheetRow = ({
                 className={`text-[10px] ${row.SubGoals.length > 0 && !subGoalWeightage.isComplete ? "font-semibold text-[#b3403f]" : "text-slate-500"}`}
                 aria-live="polite"
               >
-                {row.SubGoals.length > 0
-                  ? `Allocated ${subGoalWeightage.allocated.toFixed(2)}% · Remaining ${subGoalWeightage.remaining.toFixed(2)}%`
-                  : "Optional"}
+                {row.SubGoals.length === 0
+                  ? "Optional"
+                  : subGoalWeightage.target === null
+                    ? `Allocated ${subGoalWeightage.allocated.toFixed(2)}% · Set goal weightage`
+                    : `Allocated ${subGoalWeightage.allocated.toFixed(2)}% of ${subGoalWeightage.target.toFixed(2)}% · Remaining ${subGoalWeightage.remaining.toFixed(2)}%`}
               </span>
             </div>
           </>
@@ -488,7 +491,7 @@ const GoalSheetRow = ({
                 <div className="relative w-17 shrink-0 border-l border-[#e4e9f0]">
                   <input
                     className={`${worksheetControlClass} pr-6 text-right`}
-                    aria-label={`Goal ${goalNumber} sub-goal ${subIndex + 1} weightage (% of this goal)`}
+                    aria-label={`Goal ${goalNumber} sub-goal ${subIndex + 1} weightage (part of this goal's weightage)`}
                     type="text"
                     value={subGoal.Weightage}
                     readOnly
