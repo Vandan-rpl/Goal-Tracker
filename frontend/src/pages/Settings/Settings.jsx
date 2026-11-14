@@ -21,18 +21,14 @@ const personLabel = (person) =>
   [fullName(person), person.DepartmentName, person.IsActive ? null : "inactive"].filter(Boolean).join(" · ");
 
 /**
- * Shows the currently assigned person. "Change" opens a name search and a list of
- * eligible people (the assigned person stays in the list even if no longer eligible).
+ * Shows the currently assigned person. "Change" opens a list of eligible people
+ * (the assigned person stays in the list even if no longer eligible).
  */
 const PersonPicker = ({ label, emptyLabel, people, value, assignedId, editing, onEdit, onCancel, onChange, disabled }) => {
-  const [search, setSearch] = useState("");
   const current = people.find((person) => toId(person.UserID) === assignedId);
-  const term = search.trim().toLowerCase();
   const options = people.filter((person) => {
     const id = toId(person.UserID);
-    if (id === value) return true;
-    if (!person.IsEligible && id !== assignedId) return false;
-    return !term || fullName(person).toLowerCase().includes(term);
+    return id === value || id === assignedId || person.IsEligible;
   });
 
   return (
@@ -67,15 +63,6 @@ const PersonPicker = ({ label, emptyLabel, people, value, assignedId, editing, o
 
       {editing && (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Type a name to search"
-            aria-label={`Search ${label}`}
-            disabled={disabled}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-          />
           <select
             value={value}
             onChange={(event) => onChange(event.target.value)}
@@ -92,10 +79,7 @@ const PersonPicker = ({ label, emptyLabel, people, value, assignedId, editing, o
           </select>
           <button
             type="button"
-            onClick={() => {
-              setSearch("");
-              onCancel();
-            }}
+            onClick={onCancel}
             disabled={disabled}
             className="text-sm text-slate-500 hover:text-slate-700"
           >

@@ -170,7 +170,7 @@ const BringForwardGoal = () => {
             <span>GOAL WORKBOOK</span>
             <span className="h-5 w-px bg-white/40" aria-hidden="true" />
             <span className="text-[13px] font-normal tracking-normal">
-              Bring forward
+              Brought forward
             </span>
           </div>
 
@@ -178,10 +178,10 @@ const BringForwardGoal = () => {
             <div className="mb-8 flex flex-col justify-between gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center">
               <div>
                 <span className="mb-2 inline-flex items-center gap-1.5 border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-[#2c3e82]">
-                  BRING FORWARD
+                  BROUGHT FORWARD
                 </span>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                  Bring forward goal
+                  Brought forward goal
                 </h1>
                 <p className="text-sm text-slate-500 mt-1">
                   Choose a new End Date within {targetQuarterRange.quarter}.
@@ -299,7 +299,7 @@ const BringForwardGoal = () => {
               aria-hidden="true"
             >
               <span className="flex items-center border-t-[3px] border-[#2c3e82] bg-white px-4.5 text-xs font-bold text-[#2c3e82]">
-                Bring Forward
+                Brought Forward
               </span>
             </div>
           </div>

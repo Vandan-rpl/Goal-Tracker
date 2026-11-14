@@ -130,7 +130,7 @@ const BringForwardSheet = ({ goals, targetRange, onBroughtForward }) => {
 
     const selectedRows = rows.filter((row) => row.Timeline.trim());
     if (selectedRows.length === 0) {
-      setError("Enter a new End Date for each goal you want to bring forward.");
+      setError("Enter a new End Date for each goal you want to brought forward.");
       return;
     }
     if (selectedRows.some((row) => getTimelineError(row, targetRange))) {
@@ -188,7 +188,7 @@ const BringForwardSheet = ({ goals, targetRange, onBroughtForward }) => {
           id="bring-forward-heading"
           className="text-lg font-bold text-slate-900"
         >
-          Bring forward goals
+          Brought forward goals
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           Approved goals ending this quarter or earlier. Enter a new End Date

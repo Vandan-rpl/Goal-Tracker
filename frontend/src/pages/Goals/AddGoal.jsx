@@ -699,7 +699,7 @@ const AddGoal = () => {
                       aria-expanded={bringForwardOpen}
                       className="w-full cursor-pointer border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 sm:mr-auto sm:w-auto"
                     >
-                      {bringForwardOpen ? "Hide" : "Bring forward goals"} (
+                      {bringForwardOpen ? "Hide" : "Brought forward goals"} (
                       {bringForwardGoals.length})
                     </button>
                   )}

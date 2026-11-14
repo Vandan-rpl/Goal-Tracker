@@ -10,7 +10,7 @@ export const TASK_REMARKS_MAX = 2000;
 // Self-added / Assigned filter (backend `source`).
 export const TASK_SOURCES = [
   { value: "self", label: "Self-added" },
-  { value: "assigned", label: "Assigned (Business Head / Manager)" },
+  { value: "assigned", label: "Assigned (Business Head)" },
 ];
 
 // Who assigned a task: the Business Head, or a Manager in their project.
