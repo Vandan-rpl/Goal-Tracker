@@ -30,7 +30,6 @@ const {
     checkTaskName,
     checkPriority,
     checkDueDate,
-    checkResponsiblePerson,
     checkAssignInput,
     insertAssignedTask,
     snapshot,
@@ -60,7 +59,7 @@ const {
  *
  * "All members": one copy per current active member, all with the same
  * AssignmentGroupID. Members added later do not get earlier copies. The
- * group's Task Name / Priority / Due Date / Responsible Person are changed
+ * group's Task Name / Priority / Due Date are changed
  * (and the group deleted) here, for every copy at once, by whoever
  * assigned it.
  * ============================================================
@@ -375,8 +374,9 @@ const groupMailResult = (results) => {
  *   body.assignTo = a member's UserID - one task for that member
  *   body.assignTo = "all"             - one copy per current active member,
  *                                       linked by a new AssignmentGroupID
- * body.responsiblePersonId must be an active member. Each assignee is
- * emailed after commit.
+ * Responsible Person: the assignee for one member; none for All members
+ * (body.responsiblePersonId is ignored). Each assignee is emailed after
+ * commit.
  */
 const assignProjectTask = async (projectIdParam, body = {}, user) => {
     const projectId = parseId(projectIdParam, "project id");
@@ -398,7 +398,8 @@ const assignProjectTask = async (projectIdParam, body = {}, user) => {
         }
     }
 
-    const responsiblePersonId = checkResponsiblePerson(body.responsiblePersonId, errors);
+    // One member: they are the Responsible Person. All members: none for now.
+    const responsiblePersonId = assignToAll ? null : assigneeId;
     const input = checkAssignInput(body, errors);
 
     if (errors.length > 0) throw validationError(errors);
@@ -409,10 +410,6 @@ const assignProjectTask = async (projectIdParam, body = {}, user) => {
 
         const members = await projectModel.listMembers(transaction, projectId);
         const activeMembers = members.filter((m) => m.UserIsActive && m.UserID !== assignerId);
-
-        if (!members.some((m) => m.UserID === responsiblePersonId && m.UserIsActive)) {
-            throw validationError(["Responsible Person must be an active member of the project."]);
-        }
 
         let assignees;
         if (assignToAll) {
@@ -473,7 +470,7 @@ const getOwnGroup = async (transaction, projectId, groupId, user) => {
 
 /**
  * Change an "All members" task for every copy at once (whoever assigned
- * it): taskName, priority, dueDate, responsiblePersonId. Status and remarks
+ * it): taskName, priority, dueDate. Status and remarks
  * stay per member.
  */
 const updateGroup = async (projectIdParam, groupIdParam, body = {}, user) => {
@@ -490,7 +487,6 @@ const updateGroup = async (projectIdParam, groupIdParam, body = {}, user) => {
             TaskName: first.TaskName,
             Priority: first.Priority,
             DueDate: toDateKey(first.DueDate),
-            ResponsiblePersonID: first.ResponsiblePersonID ?? null,
         };
 
         const next = { ...current };
@@ -499,19 +495,10 @@ const updateGroup = async (projectIdParam, groupIdParam, body = {}, user) => {
         if (has(body, "dueDate")) {
             next.DueDate = checkDueDate(body.dueDate, errors, { notPast: text(body.dueDate) !== current.DueDate });
         }
-        if (has(body, "responsiblePersonId")) {
-            next.ResponsiblePersonID = checkResponsiblePerson(body.responsiblePersonId, errors);
-        }
-
         if (errors.length > 0) throw validationError(errors);
 
         const changed = Object.keys(next).filter((column) => next[column] !== current[column]);
         if (changed.length === 0) return;
-
-        if (changed.includes("ResponsiblePersonID") &&
-            !(await projectModel.isActiveMember(transaction, projectId, next.ResponsiblePersonID))) {
-            throw validationError(["Responsible Person must be a member of the project."]);
-        }
 
         const values = Object.fromEntries(changed.map((column) => [column, next[column]]));
         const oldValue = JSON.stringify(Object.fromEntries(changed.map((column) => [column, current[column]])));

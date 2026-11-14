@@ -147,15 +147,15 @@ export const createProjectTask = async (projectId, task) => {
 
 // Business Head. assignTo = a member's UserID or "all". Returns
 // { assignmentGroupId, assignedCount, mailSent, mailWarning }.
-export const assignProjectTask = async (projectId, { assignTo, responsiblePersonId, taskName, priority, dueDate, cfoRemarks }) => {
+export const assignProjectTask = async (projectId, { assignTo, taskName, priority, dueDate, cfoRemarks }) => {
     const response = await api.post(`/tasks/projects/${projectId}/assign`, {
-        assignTo, responsiblePersonId, taskName, priority, dueDate, cfoRemarks,
+        assignTo, taskName, priority, dueDate, cfoRemarks,
     });
     return response.data.data;
 };
 
 // Business Head: an "All members" task, every copy at once. Send only the
-// changed fields (taskName, priority, dueDate, responsiblePersonId).
+// changed fields (taskName, priority, dueDate).
 export const updateProjectGroup = async (projectId, groupId, changes) => {
     const response = await api.put(`/tasks/projects/${projectId}/groups/${groupId}`, changes);
     return response.data.data;

@@ -128,8 +128,9 @@ const taskPermissions = (task, user) => {
         canDelete: canChangeTask,
         // "Manager / CFO Remarks" on project tasks.
         canEditCFORemarks: businessHead || isProjectOwner,
-        // The assigner, or the member on a task they added.
-        canEditResponsiblePerson: canChangeTask && isProjectTask && !isGroupCopy,
+        // Only the member on a project task they added; an assigned task's
+        // Responsible Person is its assignee (none on All-members tasks).
+        canEditResponsiblePerson: isOwner && isSelfAdded && isProjectTask,
     };
 };
 

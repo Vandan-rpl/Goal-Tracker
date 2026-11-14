@@ -50,7 +50,7 @@ const draftFromTask = (task) => ({
 });
 
 const BASE_COLUMNS = ["Sr.No.", "Task Name", "Priority", "Due Date", "Status"];
-const PROJECT_COLUMNS = ["Responsible Person", "Assigned To"];
+const projectColumns = (showResponsible) => ["Assigned To", ...(showResponsible ? ["Responsible Person"] : [])];
 // The remarks column is "Manager / CFO Remarks" on the project page (the
 // assigning Manager or the Business Head writes there).
 const endColumns = (isProject) => [isProject ? PROJECT_REMARKS_LABEL : "CFO's Remarks", "User's Remarks", ""];
@@ -127,8 +127,9 @@ const toSheetItems = (tasks, collapseGroups) => {
  *   assign mode - Assigned To = one member or All members (one copy per
  *                 member); each "All members" task shows as one row with
  *                 per-member progress, expandable to every member's copy.
- *                 Its Task Name / Priority / Due Date / Responsible Person
- *                 are changed (or it is deleted) for every copy at once.
+ *                 Its Task Name / Priority / Due Date are changed (or it is
+ *                 deleted) for every copy at once. Responsible Person is
+ *                 the assignee for one member, none for All members.
  *   own mode    - the member's own project tasks, added like My Tasks; the
  *                 member picks the Responsible Person from the members.
  * Outside a project, project tasks carry a "Project: name" tag.
@@ -154,11 +155,18 @@ export default function TaskSheet({
   onSaved,
 }) {
   const isAssignMode = mode === "assign";
-  const columns = [...BASE_COLUMNS, ...(project ? PROJECT_COLUMNS : []), ...endColumns(Boolean(project))];
   const remarksLabel = project ? PROJECT_REMARKS_LABEL : "CFO's Remarks";
   const collapseGroups = Boolean(project) && isAssignMode;
 
   const [drafts, setDrafts] = useState({}); // rowKey -> draft (edited rows only)
+
+  // While a new row is being assigned to All members there is no Responsible
+  // Person, so the whole column is hidden.
+  const assigningAll =
+    Boolean(project) && isAssignMode &&
+    Object.entries(drafts).some(([rowKey, d]) => rowKey.startsWith("new-") && d.assignTo === ASSIGN_ALL);
+  const showResponsible = Boolean(project) && !assigningAll;
+  const columns = [...BASE_COLUMNS, ...(project ? projectColumns(showResponsible) : []), ...endColumns(Boolean(project))];
   const [extraRows, setExtraRows] = useState({}); // employeeId -> [rowKey] added with "+ Add row"
   const [baseRowSeed, setBaseRowSeed] = useState({}); // employeeId -> n, to renew used blank rows
   const [rowErrors, setRowErrors] = useState({});
@@ -221,8 +229,9 @@ export default function TaskSheet({
         status: !isAssignMode,
         cfoRemarks: isAssignMode,
         userRemarks: !isAssignMode,
-        // Both the Business Head and a member adding their own task pick it.
-        responsible: Boolean(project),
+        // A member adding their own task picks it. When assigning it follows
+        // Assigned To (one member = that member, All members = none).
+        responsible: Boolean(project) && !isAssignMode,
         assignTo: Boolean(project) && isAssignMode,
       };
     }
@@ -246,7 +255,7 @@ export default function TaskSheet({
     }
     if (checkProject) {
       if (isAssignMode && !draft.assignTo) return "Assigned To is required: pick a member or All members.";
-      if (!draft.responsiblePersonId) return "Responsible Person is required.";
+      if (!isAssignMode && !draft.responsiblePersonId) return "Responsible Person is required.";
     }
     if (draft.cfoRemarks.trim().length > TASK_REMARKS_MAX) return `${remarksLabel} cannot exceed ${TASK_REMARKS_MAX} characters.`;
     if (draft.userRemarks.trim().length > TASK_REMARKS_MAX) return `User's Remarks cannot exceed ${TASK_REMARKS_MAX} characters.`;
@@ -257,7 +266,6 @@ export default function TaskSheet({
     if (project) {
       const result = await assignProjectTask(project.ProjectID, {
         assignTo: draft.assignTo === ASSIGN_ALL ? ASSIGN_ALL : Number(draft.assignTo),
-        responsiblePersonId: Number(draft.responsiblePersonId),
         taskName: draft.taskName.trim(),
         priority: draft.priority,
         dueDate: draft.dueDate,
@@ -394,9 +402,6 @@ export default function TaskSheet({
     if (trimmed(draft.taskName) !== trimmed(base.taskName)) changes.taskName = draft.taskName.trim();
     if (draft.priority !== base.priority) changes.priority = draft.priority;
     if (draft.dueDate !== base.dueDate) changes.dueDate = draft.dueDate;
-    if (draft.responsiblePersonId !== base.responsiblePersonId) {
-      changes.responsiblePersonId = Number(draft.responsiblePersonId);
-    }
 
     const message = validate(draft, { checkDetails: true, dueMustBeFuture: Boolean(changes.dueDate) });
     if (message) {
@@ -475,6 +480,12 @@ export default function TaskSheet({
             .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       );
+    }
+    // Blank assign row: the picked member is the Responsible Person; nothing
+    // for All members (or before Assigned To is picked).
+    if (!task && isAssignMode) {
+      const assignee = activeMembers.find((m) => String(m.UserID) === draft.assignTo);
+      return <div className={readOnlyClass}>{assignee?.FullName || ""}</div>;
     }
     return <div className={readOnlyClass}>{task?.ResponsiblePersonName || <span className="text-slate-400">—</span>}</div>;
   };
@@ -633,11 +644,13 @@ export default function TaskSheet({
           {project && (
             <>
               <td className={`${cellClass} min-w-[170px]`}>
-                {renderResponsibleCell({ key, task, draft, editable: editable.responsible, saving })}
-              </td>
-              <td className={`${cellClass} min-w-[170px]`}>
                 {renderAssignedToCell({ key, task, draft, editable: editable.assignTo, saving })}
               </td>
+              {showResponsible && (
+                <td className={`${cellClass} min-w-[170px]`}>
+                  {renderResponsibleCell({ key, task, draft, editable: editable.responsible, saving })}
+                </td>
+              )}
             </>
           )}
 
@@ -808,10 +821,6 @@ export default function TaskSheet({
           </td>
 
           <td className={`${cellClass} min-w-[170px]`}>
-            {renderResponsibleCell({ key, task: first, draft, editable: canManage, saving })}
-          </td>
-
-          <td className={`${cellClass} min-w-[170px]`}>
             <button
               type="button"
               onClick={() => toggleGroup(group.groupId)}
@@ -822,6 +831,13 @@ export default function TaskSheet({
               All members ({total})
             </button>
           </td>
+
+          {/* No Responsible Person on All-members tasks for now. */}
+          {showResponsible && (
+            <td className={`${cellClass} min-w-[170px]`}>
+              <div className={`${readOnlyClass} text-slate-400`}>—</div>
+            </td>
+          )}
 
           <td className={`${cellClass} min-w-[220px]`}>
             <div className={`${readOnlyClass} text-slate-400`}>Per member — expand to view or add</div>

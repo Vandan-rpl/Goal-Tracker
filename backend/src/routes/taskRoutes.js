@@ -140,7 +140,7 @@ router.post("/projects/:projectId/tasks", verifyToken, projectController.createP
 /**
  * Assign project task (Business Head)
  * POST /api/v1/tasks/projects/:projectId/assign
- *   body: { assignTo: userId | "all", responsiblePersonId, taskName, priority, dueDate, cfoRemarks }
+ *   body: { assignTo: userId | "all", taskName, priority, dueDate, cfoRemarks }
  */
 router.post("/projects/:projectId/assign", verifyToken, projectController.assignProjectTask);
 
