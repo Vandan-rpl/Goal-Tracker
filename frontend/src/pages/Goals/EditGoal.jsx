@@ -9,7 +9,7 @@ import {
   isBusinessHeadRole,
   isTimelineOverdue,
 } from "../../utils/goalEditability";
-import { getFiscalQuarterDateRange } from "../../utils/fiscalQuarter";
+import { formatQuarterLabel, getFiscalQuarterDateRange } from "../../utils/fiscalQuarter";
 import {
   MAX_SUB_GOALS,
   getSubGoalError,
@@ -210,7 +210,7 @@ const EditGoal = () => {
         formData.StartDate < quarterRange.min ||
         formData.StartDate > quarterRange.max
       ) {
-        const message = `Start Date must be within ${quarterRange.quarter} (${quarterRange.min} to ${quarterRange.max}).`;
+        const message = `Start Date must be within ${formatQuarterLabel(quarterRange.quarter)} (${quarterRange.min} to ${quarterRange.max}).`;
         setError(message);
         setFieldErrors({ StartDate: message });
         return;
@@ -614,7 +614,7 @@ const EditGoal = () => {
               ) : (
                 !isRestrictedEdit && (
                   <p className="text-slate-400 text-xs mt-1">
-                    Within {quarterRange.quarter}
+                    Within {formatQuarterLabel(quarterRange.quarter)}
                   </p>
                 )
               )}

@@ -4,6 +4,7 @@ import api from "../../services/api";
 import {
   getGoalCreationWindow,
   getNextFiscalQuarterDateRange,
+  formatQuarterLabel,
 } from "../../utils/fiscalQuarter";
 import {
   createGoalRow,
@@ -23,7 +24,7 @@ const toDateKey = (value) => (value ? String(value).slice(0, 10) : "");
 const getTimelineError = (row, targetRange) => {
   const endDate = parseDateInput(row.Timeline);
   return !endDate || endDate < targetRange.min || endDate > targetRange.max
-    ? `Enter an End Date as DD/MM/YYYY within ${targetRange.quarter} (${formatDateForDisplay(targetRange.min)} to ${formatDateForDisplay(targetRange.max)}).`
+    ? `Enter an End Date as DD/MM/YYYY within ${formatQuarterLabel(targetRange.quarter)} (${formatDateForDisplay(targetRange.min)} to ${formatDateForDisplay(targetRange.max)}).`
     : "";
 };
 
@@ -184,7 +185,7 @@ const BringForwardGoal = () => {
                   Brought forward goal
                 </h1>
                 <p className="text-sm text-slate-500 mt-1">
-                  Choose a new End Date within {targetQuarterRange.quarter}.
+                  Choose a new End Date within {formatQuarterLabel(targetQuarterRange.quarter)}.
                   The goal goes back for approval; everything else stays as
                   it is.
                 </p>
@@ -268,7 +269,7 @@ const BringForwardGoal = () => {
                       endDateRange={{
                         min: targetQuarterRange.min,
                         max: targetQuarterRange.max,
-                        hint: `Within ${targetQuarterRange.quarter} · currently ${formatDateForDisplay(currentEndDate)}`,
+                        hint: `Within ${formatQuarterLabel(targetQuarterRange.quarter)} · currently ${formatDateForDisplay(currentEndDate)}`,
                       }}
                     />
                   </GoalWorksheet>

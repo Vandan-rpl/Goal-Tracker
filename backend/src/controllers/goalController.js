@@ -2569,6 +2569,10 @@ const getGoalSheet = async (req, res) => {
         endDate: bounds.endKey,
         goalNumberStart: getSheetGoalNumberStart(otherGoals),
         maxGoals: getSheetGoalSlots(otherGoals),
+        // Weightage already used by this quarter's goals outside the sheet
+        // (Submitted / Approved / ...; not Draft, Rejected or Cancelled).
+        allocatedWeightage:
+          getActiveWeightageHundredths(otherGoals) / 100,
         openQuarters: openQuarters.map(toEntryQuarterSummary),
         goals,
       },
@@ -2696,6 +2700,19 @@ const saveGoalSheet = async (req, res) => {
       (goal) => !seenGoalIds.has(Number(goal.GoalID)),
     );
 
+    // Quarter already at 100% from goals outside the sheet: no new goals,
+    // not even as drafts.
+    const otherActiveHundredths = getActiveWeightageHundredths(otherQuarterGoals);
+    if (otherActiveHundredths >= FULL_ALLOCATION_HUNDREDTHS) {
+      await transaction.rollback();
+      const message = `Your ${bounds.label} goals already total ${formatWeightageHundredths(otherActiveHundredths)}%. No more goals can be added for this quarter.`;
+      return res.status(400).json({
+        success: false,
+        message,
+        errors: { Weightage: message },
+      });
+    }
+
     if (rows.length > getSheetGoalSlots(otherQuarterGoals)) {
       await transaction.rollback();
       const message = `A maximum of ${MAX_GOALS_PER_QUARTER} goals can be added per quarter. You can add ${getSheetGoalSlots(otherQuarterGoals)} more for ${bounds.label}.`;
@@ -2737,7 +2754,6 @@ const saveGoalSheet = async (req, res) => {
         );
       }
 
-      const otherActiveHundredths = getActiveWeightageHundredths(otherQuarterGoals);
       const sheetHundredths = rows.reduce(
         (total, { goal }) => total + toWeightageHundredths(goal.Weightage),
         0,

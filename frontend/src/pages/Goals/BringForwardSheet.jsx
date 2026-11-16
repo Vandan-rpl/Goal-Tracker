@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatQuarterLabel } from "../../utils/fiscalQuarter";
 import api from "../../services/api";
 import {
   createGoalRow,
@@ -18,7 +19,7 @@ const toDateKey = (value) => (value ? String(value).slice(0, 10) : "");
 const getTimelineError = (row, targetRange) => {
   const endDate = parseDateInput(row.Timeline);
   return !endDate || endDate < targetRange.min || endDate > targetRange.max
-    ? `Enter an End Date as DD/MM/YYYY within ${targetRange.quarter} (${formatDateForDisplay(targetRange.min)} to ${formatDateForDisplay(targetRange.max)}).`
+    ? `Enter an End Date as DD/MM/YYYY within ${formatQuarterLabel(targetRange.quarter)} (${formatDateForDisplay(targetRange.min)} to ${formatDateForDisplay(targetRange.max)}).`
     : "";
 };
 
@@ -192,7 +193,7 @@ const BringForwardSheet = ({ goals, targetRange, onBroughtForward }) => {
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           Approved goals ending this quarter or earlier. Enter a new End Date
-          within {targetRange.quarter} for each goal to bring forward; it goes
+          within {formatQuarterLabel(targetRange.quarter)} for each goal to bring forward; it goes
           back for approval and everything else stays as it is. Leave the End
           Date blank to skip a goal.
         </p>
@@ -250,7 +251,7 @@ const BringForwardSheet = ({ goals, targetRange, onBroughtForward }) => {
                 endDateRange={{
                   min: targetRange.min,
                   max: targetRange.max,
-                  hint: `Within ${targetRange.quarter} · currently ${formatDateForDisplay(currentEndDates[row.key])}`,
+                  hint: `Within ${formatQuarterLabel(targetRange.quarter)} · currently ${formatDateForDisplay(currentEndDates[row.key])}`,
                 }}
               />
             ))}

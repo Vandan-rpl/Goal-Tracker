@@ -4,6 +4,7 @@ import api from "../../services/api";
 import {
   getNextFiscalQuarterDateRange,
   getGoalCreationWindow,
+  formatQuarterLabel,
 } from "../../utils/fiscalQuarter";
 import { getSubGoalError } from "../../utils/subGoals";
 import {
@@ -59,7 +60,7 @@ const getRowErrors = (row, quarterRange) => {
     startDate < quarterRange.min ||
     startDate > quarterRange.max
   ) {
-    errors.StartDate = `Enter a Start Date as DD/MM/YYYY within ${quarterRange.quarter} (${formatDateForDisplay(quarterRange.min)} to ${formatDateForDisplay(quarterRange.max)}).`;
+    errors.StartDate = `Enter a Start Date as DD/MM/YYYY within ${formatQuarterLabel(quarterRange.quarter)} (${formatDateForDisplay(quarterRange.min)} to ${formatDateForDisplay(quarterRange.max)}).`;
   }
   if (!endDate) {
     errors.Timeline = "Enter a valid End Date as DD/MM/YYYY.";
@@ -82,6 +83,8 @@ const AddGoal = () => {
   const [rows, setRows] = useState([]);
   const [goalNumberStart, setGoalNumberStart] = useState(1);
   const [maxGoals, setMaxGoals] = useState(MAX_GOALS_PER_QUARTER);
+  // Weightage already used by this quarter's non-draft goals (hundredths).
+  const [allocatedHundredths, setAllocatedHundredths] = useState(0);
   const [sheetLoading, setSheetLoading] = useState(true);
   const [sheetLoadError, setSheetLoadError] = useState("");
   // Quarters open for entry, from GET /goals/sheet (null until loaded): the
@@ -148,6 +151,7 @@ const AddGoal = () => {
         if (Number.isFinite(Number(data.maxGoals))) {
           setMaxGoals(Number(data.maxGoals));
         }
+        setAllocatedHundredths(getWeightageHundredths(data.allocatedWeightage));
         setRows(
           drafts.length > 0 ? drafts.map(createGoalRow) : [createGoalRow()],
         );
@@ -226,9 +230,15 @@ const AddGoal = () => {
 
   const totalHundredths = rows.reduce(
     (total, row) => total + getWeightageHundredths(row.Weightage),
-    0,
+    allocatedHundredths,
   );
   const isFullyAllocated = totalHundredths === FULL_ALLOCATION_HUNDREDTHS;
+  // Goals already submitted for this quarter use the whole 100%, and there
+  // are no saved drafts left on the sheet: nothing more can be added.
+  const quarterFull =
+    !sheetLoading &&
+    allocatedHundredths >= FULL_ALLOCATION_HUNDREDTHS &&
+    !rows.some((row) => row.GoalID);
   const rowErrors = Object.fromEntries(
     rows.map((row) => [row.key, getRowErrors(row, entryQuarterRange)]),
   );
@@ -236,7 +246,10 @@ const AddGoal = () => {
     (row) => Object.keys(rowErrors[row.key]).length > 0,
   );
   const revealAllErrors = attempted || isFullyAllocated;
-  const canAddRow = rows.length < maxGoals && !sheetLoading;
+  const canAddRow =
+    rows.length < maxGoals &&
+    !sheetLoading &&
+    allocatedHundredths < FULL_ALLOCATION_HUNDREDTHS;
   const sheetUnavailable = sheetLoading || Boolean(sheetLoadError);
   const canSubmit =
     !saving && !sheetUnavailable && isFullyAllocated && !hasRowErrors;
@@ -490,7 +503,7 @@ const AddGoal = () => {
                   Create goals
                 </h1>
                 <p className="text-sm text-slate-500 mt-1">
-                  Enter your {entryQuarterRange.quarter} goals in the
+                  Enter your {formatQuarterLabel(entryQuarterRange.quarter)} goals in the
                   worksheet below, one row per goal.
                 </p>
               </div>
@@ -553,7 +566,7 @@ const AddGoal = () => {
                 role="status"
               >
                 Goal entry is open for{" "}
-                {openQuarters.map((quarter) => quarter.quarter).join(", ")}.
+                {openQuarters.map((quarter) => formatQuarterLabel(quarter.quarter)).join(", ")}.
               </div>
             ) : (
               <div
@@ -589,7 +602,7 @@ const AddGoal = () => {
                 >
                   {openQuarters.map((quarter) => (
                     <option key={quarter.quarter} value={quarter.quarter}>
-                      {quarter.quarter} ({formatDateForDisplay(quarter.startDate)}{" "}
+                      {formatQuarterLabel(quarter.quarter)} ({formatDateForDisplay(quarter.startDate)}{" "}
                       to {formatDateForDisplay(quarter.endDate)})
                     </option>
                   ))}
@@ -597,8 +610,20 @@ const AddGoal = () => {
               </div>
             )}
 
+            {entryOpen && quarterFull && (
+              <div
+                className="mb-6 border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-800"
+                role="status"
+              >
+                Your {formatQuarterLabel(entryQuarterRange.quarter)} goals are
+                already submitted and total{" "}
+                {formatHundredths(allocatedHundredths)}%. No more goals can be
+                added for this quarter.
+              </div>
+            )}
+
             <form
-              hidden={!entryOpen}
+              hidden={!entryOpen || quarterFull}
               noValidate
               onSubmit={(e) => {
                 e.preventDefault();
@@ -679,6 +704,12 @@ const AddGoal = () => {
                       )}
                       % · {rows.length}/{maxGoals} goals
                     </strong>
+                    {allocatedHundredths > 0 && (
+                      <span className="mt-1 block text-[11px] text-slate-600">
+                        Includes {formatHundredths(allocatedHundredths)}% from
+                        goals already submitted for this quarter.
+                      </span>
+                    )}
                     <span className="mt-1 block text-[11px] text-slate-600">
                       Drafts can be saved at any total. Goals are submitted
                       together once they total exactly 100.00%.

@@ -1,4 +1,5 @@
 import { CalendarDays, Plus, X } from "lucide-react";
+import { formatQuarterLabel } from "../../utils/fiscalQuarter";
 import {
   MAX_SUB_GOALS,
   getSubGoalWeightageSummary,
@@ -390,7 +391,7 @@ const GoalSheetRow = ({
           "Start Date",
           startDateRange.min,
           startDateRange.max,
-          `Within ${startDateRange.quarter}`,
+          `Within ${formatQuarterLabel(startDateRange.quarter)}`,
         )}
       </td>
       <td>

@@ -110,6 +110,21 @@ export const getNextFiscalQuarterDateRange = (dateValue = new Date()) => {
   return getFiscalQuarterDateRange(nextStart);
 };
 
+const MONTH_SHORT_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Stored quarter labels use the fiscal year END year ("Q1-2027" = Apr-Jun
+// 2026). For display, show the calendar months instead: "Q1 (Apr–Jun 2026)".
+// Use this only for text shown to users; keep the raw label for values/API.
+export const formatQuarterLabel = (label) => {
+  const match = /^Q([1-4])-(\d{4})$/.exec(String(label || "").trim());
+  if (!match) return label || "";
+  const quarter = Number(match[1]);
+  const fyEndYear = Number(match[2]);
+  const startMonth = (quarter * 3) % 12;
+  const year = quarter === 4 ? fyEndYear : fyEndYear - 1;
+  return `Q${quarter} (${MONTH_SHORT_NAMES[startMonth]}–${MONTH_SHORT_NAMES[startMonth + 2]} ${year})`;
+};
+
 export const getFiscalQuarterOptions = () => {
   return FISCAL_YEAR_ENDS.flatMap((endYear) => {
     const fiscalYear = getFiscalYearLabel(endYear);
