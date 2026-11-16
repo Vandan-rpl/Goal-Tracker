@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const goalModel = require("../models/goalModel");
 const { notifyUser } = require("../services/notifyService");
+const { sendGoalMail } = require("../services/goalMailService");
+const { GoalMailEvent } = require("../constants/goalConstants");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const {
   calculateQuarterAllocationAndAchievement,
@@ -271,7 +273,6 @@ const notifyGoalHierarchy = async (
   const employeeName =
     `${employee.FirstName || ""} ${employee.LastName || ""}`.trim() ||
     "Employee";
-  const approvalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${newGoalID}`;
 
   const directApproverIds = [];
 
@@ -314,11 +315,6 @@ const notifyGoalHierarchy = async (
 
     if (!superior || !superior.Email) continue;
 
-    const superiorName =
-      `${superior.FirstName || ""} ${superior.LastName || ""}`.trim() ||
-      "Manager";
-    const recipientEmail = superior.Email.trim();
-
     await notifyUser(pool, {
       userId: superiorId,
       title: "Goal Submitted / Updated",
@@ -327,17 +323,14 @@ const notifyGoalHierarchy = async (
       referenceId: Number(newGoalID),
       referenceType: "Goal",
       createdBy: userId,
-      emailTo: recipientEmail,
-      emailSubject: `Goal Submitted for Approval - ${employeeName}`,
-      emailHtml: `
-                <h3>Hello ${superiorName},</h3>
-                <p><strong>${employeeName}</strong> has submitted/updated a performance goal titled: <strong>"${GoalTitle}"</strong> for your review.</p>
-                <p>Please click the link below to review this goal:</p>
-                <a href="${approvalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Click Here to Review Goal</a>
-            `,
     });
 
-    notifiedEmails.push(recipientEmail);
+    // Awaited so the response can say how many approvers were emailed.
+    const mail = await sendGoalMail(GoalMailEvent.SUBMITTED, {
+      goalId: Number(newGoalID),
+      recipientId: superiorId,
+    });
+    if (mail.sent) notifiedEmails.push(superior.Email.trim());
   }
 
   return notifiedEmails;
@@ -3382,8 +3375,6 @@ const changeGoalStatus = async (req, res) => {
         const employee = await getUserContact(pool, goalOwnerId);
         if (employee) {
           const isApproved = goalStatus.includes("Approved");
-          const employeeName = `${employee.FirstName} ${employee.LastName}`;
-          const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${id}`;
 
           await notifyUser(pool, {
             userId: employee.UserID,
@@ -3395,17 +3386,12 @@ const changeGoalStatus = async (req, res) => {
             referenceId: Number(id),
             referenceType: "Goal",
             createdBy: userId,
-            emailTo: employee.Email || undefined,
-            emailSubject: isApproved
-              ? `Your Goal Was Approved - ${employeeName}`
-              : `Your Goal Was Rejected - ${employeeName}`,
-            emailHtml: `
-                            <h3>Hello ${employee.FirstName || "there"},</h3>
-                            <p>Your goal titled <strong>"${goalTitle}"</strong> has been <strong>${isApproved ? "approved" : "rejected"}</strong>.</p>
-                            <p>New status: <strong>${goalStatus}</strong></p>
-                            <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                        `,
           });
+
+          sendGoalMail(
+            isApproved ? GoalMailEvent.APPROVED : GoalMailEvent.REJECTED,
+            { goalId: Number(id), recipientId: employee.UserID },
+          );
         }
       } catch (notifyErr) {
         console.error(
@@ -3598,7 +3584,7 @@ const submitGoalReview = async (req, res) => {
       const pool = await poolPromise;
       const employee = await getUserContact(pool, existingGoal.UserID);
       const isBusinessHeadReview = isCfoReviewer; // Business Head / CFO stage
-      const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${goalId}`;
+      const reviewMail = { goalId: Number(goalId), rating, comment };
 
       if (employee) {
         const employeeName = `${employee.FirstName} ${employee.LastName}`;
@@ -3613,15 +3599,10 @@ const submitGoalReview = async (req, res) => {
             referenceId: Number(goalId),
             referenceType: "Goal",
             createdBy: userId,
-            emailTo: employee.Email || undefined,
-            emailSubject: `Your Goal Was Reviewed - ${employeeName}`,
-            emailHtml: `
-                            <h3>Hello ${employee.FirstName || "there"},</h3>
-                            <p>Your goal titled <strong>"${existingGoal.GoalTitle}"</strong> has been reviewed.</p>
-                            <p>Rating: <strong>${rating}/5</strong></p>
-                            <p>Comment: ${comment || "No comment provided"}</p>
-                            <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                        `,
+          });
+          sendGoalMail(GoalMailEvent.REVIEWED, {
+            ...reviewMail,
+            recipientId: employee.UserID,
           });
         } else {
           // Business Head / CFO review stage: notify the employee AND the HOD
@@ -3634,15 +3615,10 @@ const submitGoalReview = async (req, res) => {
             referenceId: Number(goalId),
             referenceType: "Goal",
             createdBy: userId,
-            emailTo: employee.Email || undefined,
-            emailSubject: `Your Goal Was Reviewed by Business Head/CFO - ${employeeName}`,
-            emailHtml: `
-                            <h3>Hello ${employee.FirstName || "there"},</h3>
-                            <p>Your goal titled <strong>"${existingGoal.GoalTitle}"</strong> has been reviewed by the Business Head/CFO.</p>
-                            <p>Rating: <strong>${rating}/5</strong></p>
-                            <p>Comment: ${comment || "No comment provided"}</p>
-                            <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                        `,
+          });
+          sendGoalMail(GoalMailEvent.CFO_REVIEWED, {
+            ...reviewMail,
+            recipientId: employee.UserID,
           });
 
           if (employee.HODID) {
@@ -3656,15 +3632,10 @@ const submitGoalReview = async (req, res) => {
                 referenceId: Number(goalId),
                 referenceType: "Goal",
                 createdBy: userId,
-                emailTo: hod.Email || undefined,
-                emailSubject: `Goal You Approved Was Reviewed by Business Head/CFO - ${employeeName}`,
-                emailHtml: `
-                                    <h3>Hello ${hod.FirstName || "there"},</h3>
-                                    <p>The goal titled <strong>"${existingGoal.GoalTitle}"</strong> belonging to <strong>${employeeName}</strong>, which you previously approved, has now been reviewed by the Business Head/CFO.</p>
-                                    <p>Rating: <strong>${rating}/5</strong></p>
-                                    <p>Comment: ${comment || "No comment provided"}</p>
-                                    <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                                `,
+              });
+              sendGoalMail(GoalMailEvent.CFO_REVIEWED_APPROVER, {
+                ...reviewMail,
+                recipientId: hod.UserID,
               });
             }
           }
@@ -4014,13 +3985,14 @@ const notifyCompletionEvent = async ({
   message,
   type,
   createdBy,
+  mailEvent,
+  mailContext = {},
 }) => {
   try {
     const pool = await poolPromise;
     const recipient = await getUserContact(pool, recipientId);
     if (!recipient) return;
 
-    const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${goalId}`;
     await notifyUser(pool, {
       userId: recipient.UserID,
       title,
@@ -4029,13 +4001,11 @@ const notifyCompletionEvent = async ({
       referenceId: Number(goalId),
       referenceType: "Goal",
       createdBy,
-      emailTo: recipient.Email || undefined,
-      emailSubject: title,
-      emailHtml: `
-        <h3>Hello ${recipient.FirstName || "there"},</h3>
-        <p>${message}</p>
-        <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-      `,
+    });
+    sendGoalMail(mailEvent, {
+      ...mailContext,
+      goalId: Number(goalId),
+      recipientId: recipient.UserID,
     });
   } catch (notifyErr) {
     console.error(
@@ -4069,6 +4039,7 @@ const notifyCompletionRequested = ({ approverId, goal, userId }) =>
     message: `Completion has been requested for the goal "${goal.GoalTitle}" and is awaiting your approval.`,
     type: "GOAL_COMPLETION_REQUESTED",
     createdBy: userId,
+    mailEvent: GoalMailEvent.COMPLETION_REQUESTED,
   });
 
 // POST /goals/:id/completion/request
@@ -4315,6 +4286,7 @@ const approveGoalCompletion = async (req, res) => {
       message: `Completion of your goal "${goal.GoalTitle}" has been approved.`,
       type: "GOAL_COMPLETION_APPROVED",
       createdBy: userId,
+      mailEvent: GoalMailEvent.COMPLETION_APPROVED,
     });
 
     return res.status(200).json({
@@ -4402,6 +4374,8 @@ const rejectGoalCompletion = async (req, res) => {
       message: `Completion of your goal "${goal.GoalTitle}" was not approved. Remark: ${remark}`,
       type: "GOAL_COMPLETION_REJECTED",
       createdBy: userId,
+      mailEvent: GoalMailEvent.COMPLETION_REJECTED,
+      mailContext: { remark },
     });
 
     return res.status(200).json({

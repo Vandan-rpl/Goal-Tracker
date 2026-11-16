@@ -1,5 +1,7 @@
 const { poolPromise, sql } = require("../config/db");
 const { notifyUser } = require("../services/notifyService");
+const { sendGoalMail } = require("../services/goalMailService");
+const { GoalMailEvent } = require("../constants/goalConstants");
 
 // Helper: fetch a goal together with its owner's contact/hierarchy info.
 // Uses dbo.Goals / GoalID / UserID — the schema actually used everywhere
@@ -148,7 +150,6 @@ const submitQuarterlyUpdate = async (req, res) => {
 
         if (hod) {
           const employeeName = `${goal.OwnerFirstName} ${goal.OwnerLastName}`;
-          const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${goalId}`;
 
           await notifyUser(pool, {
             userId: hod.UserID,
@@ -158,14 +159,12 @@ const submitQuarterlyUpdate = async (req, res) => {
             referenceId: Number(goalId),
             referenceType: "Goal",
             createdBy: userId,
-            emailTo: hod.Email || undefined,
-            emailSubject: `Quarterly Update Submitted - ${employeeName}`,
-            emailHtml: `
-                            <h3>Hello ${hod.FirstName || "there"},</h3>
-                            <p><strong>${employeeName}</strong> submitted a quarterly progress update for goal <strong>"${goal.GoalTitle}"</strong>.</p>
-                            <p>Quarter: <strong>${quarter}</strong> | Progress: <strong>${progressPercentage}%</strong></p>
-                            <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                        `,
+          });
+          sendGoalMail(GoalMailEvent.QUARTERLY_UPDATE_SUBMITTED, {
+            goalId: Number(goalId),
+            recipientId: hod.UserID,
+            quarter,
+            progressPercentage,
           });
         }
       }
@@ -249,9 +248,6 @@ const submitHODRating = async (req, res) => {
 
     // Notify the employee that the HOD submitted a rating.
     try {
-      const employeeName = `${goal.OwnerFirstName} ${goal.OwnerLastName}`;
-      const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${goalId}`;
-
       await notifyUser(pool, {
         userId: goal.OwnerID,
         title: "HOD Rating Submitted",
@@ -260,15 +256,12 @@ const submitHODRating = async (req, res) => {
         referenceId: Number(goalId),
         referenceType: "Goal",
         createdBy: hodId,
-        emailTo: goal.OwnerEmail || undefined,
-        emailSubject: `HOD Rating Submitted - ${employeeName}`,
-        emailHtml: `
-                    <h3>Hello ${goal.OwnerFirstName || "there"},</h3>
-                    <p>Your goal titled <strong>"${goal.GoalTitle}"</strong> has received an HOD rating.</p>
-                    <p>Rating: <strong>${rating}/5</strong></p>
-                    <p>Feedback: ${feedback || "No feedback provided"}</p>
-                    <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                `,
+      });
+      sendGoalMail(GoalMailEvent.HOD_RATING_SUBMITTED, {
+        goalId: Number(goalId),
+        recipientId: goal.OwnerID,
+        rating,
+        feedback,
       });
     } catch (notifyErr) {
       console.error(

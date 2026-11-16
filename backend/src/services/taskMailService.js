@@ -69,7 +69,8 @@ const TASK_MAIL_EVENTS = Object.freeze({
             ["Task Name", task.TaskName],
             ["Priority", task.Priority],
             ["Due Date", formatDate(task.DueDate)],
-            ["Responsible Person", task.ResponsiblePersonName],
+            // Individual (non-project) task mails leave out the Responsible Person
+            ["Responsible Person", task.ProjectName ? task.ResponsiblePersonName : null],
             [remarksLabel(task), task.CFORemarks],
         ],
     },
@@ -123,7 +124,7 @@ const buildHtml = (definition, task, testRecipient) => {
                 <table style="border-collapse: collapse; margin: 12px 0;">${rowHtml}
                 </table>
                 <a href="${escapeHtml(myTasksLink())}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Open My Tasks</a>
-                <p style="margin-top: 20px;">Regards,<br/>IT Team<br/>Rubamin Pvt. Ltd.</p>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         `;
 };
@@ -190,6 +191,7 @@ const sendTaskMail = async (event, taskId) => {
 
 module.exports = {
     TASK_MAIL_EVENTS,
+    buildHtml,
     logTaskMailMode,
     sendTaskMail,
 };

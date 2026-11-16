@@ -132,7 +132,44 @@ const updateSubGoalStatus = async (goalId, subGoalId, status) => {
     return result.recordset[0].AffectedRows > 0;
 };
 
+/**
+ * Goal fields used by goal emails (services/goalMailService.js), with the
+ * owner's name. Null when the goal does not exist.
+ */
+const getGoalMailData = async (db, goalId) => {
+    const result = await db.request()
+        .input("GoalID", sql.BigInt, goalId)
+        .query(`
+            SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Quarter, g.GoalStatus,
+                   g.UserID AS OwnerID,
+                   LTRIM(RTRIM(CONCAT(u.FirstName, ' ', u.LastName))) AS OwnerName
+            FROM dbo.Goals g
+            LEFT JOIN dbo.Users u ON u.UserID = g.UserID
+            WHERE g.GoalID = @GoalID
+        `);
+    return result.recordset[0] || null;
+};
+
+/**
+ * Recipient of a goal email: name, email and active flag. Null when the
+ * user does not exist.
+ */
+const getUserMailData = async (db, userId) => {
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            SELECT UserID, FirstName,
+                   LTRIM(RTRIM(CONCAT(FirstName, ' ', LastName))) AS FullName,
+                   Email, IsActive
+            FROM dbo.Users
+            WHERE UserID = @UserID
+        `);
+    return result.recordset[0] || null;
+};
+
 module.exports = {
+    getGoalMailData,
+    getUserMailData,
     getGoalsByUserId,
     getTeamGoalsByManagerId,
     getManagersGoalsByBusinessHeadId,

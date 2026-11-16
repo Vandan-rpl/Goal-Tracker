@@ -1,5 +1,7 @@
 const { poolPromise, sql } = require("../config/db");
 const { notifyUser } = require("../services/notifyService");
+const { sendGoalMail } = require("../services/goalMailService");
+const { GoalMailEvent } = require("../constants/goalConstants");
 
 const getTeamMembers = async (req, res) => {
   try {
@@ -179,8 +181,6 @@ const updateStatus = async (req, res) => {
 
         if (employee) {
           const isApproved = goalStatus.includes("Approved");
-          const employeeName = `${employee.FirstName} ${employee.LastName}`;
-          const goalLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/goals/view/${goalId}`;
 
           await notifyUser(pool, {
             userId: employee.UserID,
@@ -192,17 +192,12 @@ const updateStatus = async (req, res) => {
             referenceId: Number(goalId),
             referenceType: "Goal",
             createdBy: performedBy,
-            emailTo: employee.Email || undefined,
-            emailSubject: isApproved
-              ? `Your Goal Was Approved - ${employeeName}`
-              : `Your Goal Was Rejected - ${employeeName}`,
-            emailHtml: `
-                            <h3>Hello ${employee.FirstName || "there"},</h3>
-                            <p>Your goal titled <strong>"${goalTitle}"</strong> has been <strong>${isApproved ? "approved" : "rejected"}</strong>.</p>
-                            <p>New status: <strong>${goalStatus}</strong></p>
-                            <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                        `,
           });
+
+          sendGoalMail(
+            isApproved ? GoalMailEvent.APPROVED : GoalMailEvent.REJECTED,
+            { goalId: Number(goalId), recipientId: employee.UserID },
+          );
         }
       } catch (notifyErr) {
         console.error(

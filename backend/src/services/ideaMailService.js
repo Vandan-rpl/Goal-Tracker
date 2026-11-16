@@ -205,6 +205,7 @@ const buildHtml = (definition, idea, context, recipient, testRecipient) => {
                 </table>
                 ${note}
                 <a href="${escapeHtml(ideaLink(idea.IdeaID))}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Idea Details</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         `;
 };
@@ -287,5 +288,7 @@ const sendIdeaMail = async (event, context = {}) => {
 
 module.exports = {
     IDEA_MAIL_EVENTS,
+    buildSubject,
+    buildHtml,
     sendIdeaMail,
 };

@@ -1,5 +1,7 @@
 const { poolPromise, sql } = require('../config/db');
 const { notifyUser } = require('../services/notifyService');
+const { sendGoalMail } = require('../services/goalMailService');
+const { GoalMailEvent } = require('../constants/goalConstants');
 const {
     getFiscalQuarter,
     getFiscalQuarterBounds,
@@ -601,8 +603,6 @@ const finalizeFinalEvaluation = async (req, res) => {
         }
 
         try {
-            const goalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/goals/final-evaluation/${targetUserId}`;
-
             await notifyUser(pool, {
                 userId: targetUserId,
                 title: 'Final Evaluation Available',
@@ -611,15 +611,13 @@ const finalizeFinalEvaluation = async (req, res) => {
                 referenceId: targetUserId,
                 referenceType: 'Evaluation',
                 createdBy: requesterId,
-                emailTo: evaluation.User.Email || undefined,
-                emailSubject: 'Your Final Evaluation is Available',
-                emailHtml: `
-                    <h3>Hello ${evaluation.User.FirstName || 'there'},</h3>
-                    <p>Your final evaluation for <strong>FY${evaluation.YearlyPerformance.FiscalYear}</strong> has been generated.</p>
-                    <p>Weighted Score: <strong>${evaluation.WeightedScore ?? 'N/A'}</strong></p>
-                    <p>Status: <strong>${evaluation.GoalCompletionStatus}</strong></p>
-                    <a href="${goalLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Evaluation</a>
-                `
+            });
+            sendGoalMail(GoalMailEvent.FINAL_EVALUATION_GENERATED, {
+                recipientId: targetUserId,
+                userId: targetUserId,
+                fiscalYear: evaluation.YearlyPerformance.FiscalYear,
+                weightedScore: evaluation.WeightedScore,
+                status: evaluation.GoalCompletionStatus,
             });
         } catch (notifyErr) {
             console.error(`[NOTIF FAILED] finalizeFinalEvaluation notify step. targetUserId=${targetUserId}:`, notifyErr);
