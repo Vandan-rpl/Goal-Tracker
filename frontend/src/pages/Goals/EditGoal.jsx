@@ -73,12 +73,34 @@ const EditGoal = () => {
     loadJointAccountabilityUsers();
   }, []);
 
+  const isOwnGoal = (goal) => {
+    if (goal.IsGoalOwner != null) return goal.IsGoalOwner === true;
+    try {
+      const token = localStorage.getItem("token");
+      return Boolean(token) && Number(jwtDecode(token).userId) === Number(goal.UserID);
+    } catch {
+      return false;
+    }
+  };
+
   const fetchGoal = async () => {
     try {
       setLoading(true);
       const res = await api.get(`/goals/${id}`);
       if (res.data.success) {
         const goal = res.data.data;
+        // The owner's Draft goals are edited and submitted on the Add Goal
+        // sheet, next to the quarter's other drafts, so the 100% total is
+        // visible and new goals can be added alongside.
+        if ((goal.GoalStatus || "Draft") === "Draft" && isOwnGoal(goal)) {
+          navigate(
+            goal.Quarter
+              ? `/goals/add?quarter=${encodeURIComponent(goal.Quarter)}`
+              : "/goals/add",
+            { replace: true },
+          );
+          return;
+        }
         setOriginalGoal({
           CarryForwardCount: goal.CarryForwardCount,
           IsGoalOwner: goal.IsGoalOwner,

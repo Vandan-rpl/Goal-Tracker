@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../services/api";
 import {
   getNextFiscalQuarterDateRange,
@@ -91,7 +91,11 @@ const AddGoal = () => {
   // go-live quarters plus the normal target quarter during its window.
   const [openQuarters, setOpenQuarters] = useState(null);
   // Quarter the user picked; "" lets the server choose the first open one.
-  const [selectedQuarter, setSelectedQuarter] = useState("");
+  // ?quarter= (e.g. from editing a Draft goal) opens that quarter's sheet.
+  const [searchParams] = useSearchParams();
+  const [selectedQuarter, setSelectedQuarter] = useState(
+    () => searchParams.get("quarter") || "",
+  );
   // Quarter the loaded sheet is for, from the server.
   const [sheetQuarter, setSheetQuarter] = useState(null);
   const [dirty, setDirty] = useState(false);
@@ -159,7 +163,8 @@ const AddGoal = () => {
         console.error("Failed to load draft goals", err);
         if (!ignore) {
           setSheetLoadError(
-            "Unable to load your draft goals. Refresh and try again.",
+            err.response?.data?.message ||
+              "Unable to load your draft goals. Refresh and try again.",
           );
         }
       } finally {
