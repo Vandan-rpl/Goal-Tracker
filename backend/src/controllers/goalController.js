@@ -26,6 +26,12 @@ const {
   isWithinCarryForwardWindow,
 } = require("../utils/fiscalQuarter");
 const { canAccessEvaluation } = require("./evaluationController");
+const {
+  isAllocatedGoal,
+  ownAchievedWeightage,
+  isBroughtForwardPending,
+  isBroughtForwardAchieved,
+} = require("../constants/goalQuarterRules");
 
 // These statuses are set only by the completion request/approve endpoints.
 const COMPLETION_STATUSES = ["Completion Submitted", "Completed"];
@@ -705,9 +711,11 @@ const getGoals = async (req, res) => {
 };
 
 // Per-quarter summary of the employee's goals for the current fiscal year.
-// A goal belongs to its start quarter (Goals.Quarter), so achievement from
-// a goal carried forward and completed later still counts there. "Earlier"
-// is decided by QuarterEndDate, never by comparing quarter labels.
+// A goal belongs to its start quarter (Goals.Quarter) and is allocated there
+// once approved. Only goals the owner extended (carry-forward) are brought
+// forward; an extended goal completed later counts as brought forward
+// achieved in its completion quarter, not as Achieved in its own quarter.
+// "Earlier" is decided by QuarterEndDate, never by comparing quarter labels.
 const getMyQuarterSummary = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
 
@@ -742,35 +750,28 @@ const getMyQuarterSummary = async (req, res) => {
              ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
              ISNULL(broughtForwardPending.Pending, 0) AS BroughtForwardPending
       FROM FiscalQuarters q
+      -- Rules: constants/goalQuarterRules.js
       OUTER APPLY (
         SELECT SUM(g.Weightage) AS Allocated,
-               SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved,
+               SUM(${ownAchievedWeightage("g")}) AS Achieved,
                SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS CompletedCount,
                COUNT(*) AS CountedGoalCount
         FROM dbo.Goals g
         WHERE g.UserID = @UserID
           AND g.Quarter = q.Label
-          AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+          AND ${isAllocatedGoal("g")}
       ) own
       OUTER APPLY (
         SELECT SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved
         FROM dbo.Goals g
         WHERE g.UserID = @UserID
-          AND g.QuarterEndDate < q.StartDate
-          AND g.CompletedDate >= q.StartDate
-          AND g.CompletedDate < DATEADD(DAY, 1, q.EndDate)
+          AND ${isBroughtForwardAchieved("g", "q.StartDate", "q.EndDate")}
       ) broughtForward
-      -- Goals moved INTO this quarter: End Date (Timeline) falls in it, the
-      -- start quarter is earlier (same QuarterEndDate test as broughtForward),
-      -- and the goal is still open.
       OUTER APPLY (
         SELECT SUM(g.Weightage) AS Pending
         FROM dbo.Goals g
         WHERE g.UserID = @UserID
-          AND g.QuarterEndDate < q.StartDate
-          AND g.Timeline >= q.StartDate
-          AND g.Timeline < DATEADD(DAY, 1, q.EndDate)
-          AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
+          AND ${isBroughtForwardPending("g", "q.StartDate", "q.EndDate")}
       ) broughtForwardPending
       ORDER BY q.EndDate
     `);
@@ -814,15 +815,15 @@ const getMyQuarterSummary = async (req, res) => {
 // totals returned here always equal that row's figures.
 //   ownGoals:      Allocated / Achieved / Completed
 //   broughtForward: Brought forward (pending) / Brought forward achieved
-// achievementRule=evaluation matches the Final Evaluation summary instead:
-// an own goal completed after its quarter ended adds nothing to Achieved
-// (it is counted only as brought forward achieved where it was completed).
+// Rules live in constants/goalQuarterRules.js: an extended goal completed
+// after its quarter ended adds nothing to Achieved (it is counted only as
+// brought forward achieved where it was completed). The achievementRule
+// query parameter is accepted but no longer changes anything.
 const getQuarterGoalDetails = async (req, res) => {
   const requesterId = req.user?.UserID || req.user?.userId;
   const targetUserId =
     req.query.userId == null ? Number(requesterId) : Number(req.query.userId);
   const quarterBounds = getFiscalQuarterBoundsFromLabel(req.query.quarter);
-  const useEvaluationRule = req.query.achievementRule === "evaluation";
 
   if (!quarterBounds) {
     return res
@@ -854,17 +855,13 @@ const getQuarterGoalDetails = async (req, res) => {
                g.CompletedDate, g.CompletionRemark, g.Quarter,
                g.QuarterEndDate, ISNULL(g.CarryForwardCount, 0) AS CarryForwardCount,
                progress.CompletedSubGoalCount, progress.TotalSubGoalCount,
+               ${ownAchievedWeightage("g")} AS OwnAchievedWeightage,
                CASE WHEN g.Quarter = @Quarter
-                     AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+                     AND ${isAllocatedGoal("g")}
                     THEN 1 ELSE 0 END AS IsOwnGoal,
-               CASE WHEN g.QuarterEndDate < @QStart
-                     AND g.Timeline >= @QStart
-                     AND g.Timeline < DATEADD(DAY, 1, @QEnd)
-                     AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
+               CASE WHEN ${isBroughtForwardPending("g", "@QStart", "@QEnd")}
                     THEN 1 ELSE 0 END AS IsBroughtForwardPending,
-               CASE WHEN g.QuarterEndDate < @QStart
-                     AND g.CompletedDate >= @QStart
-                     AND g.CompletedDate < DATEADD(DAY, 1, @QEnd)
+               CASE WHEN ${isBroughtForwardAchieved("g", "@QStart", "@QEnd")}
                     THEN 1 ELSE 0 END AS IsBroughtForwardAchieved
         FROM dbo.Goals g
         OUTER APPLY (
@@ -875,15 +872,9 @@ const getQuarterGoalDetails = async (req, res) => {
         ) progress
         WHERE g.UserID = @UserID
           AND (
-            (g.Quarter = @Quarter
-              AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled'))
-            OR (g.QuarterEndDate < @QStart
-              AND g.Timeline >= @QStart
-              AND g.Timeline < DATEADD(DAY, 1, @QEnd)
-              AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled'))
-            OR (g.QuarterEndDate < @QStart
-              AND g.CompletedDate >= @QStart
-              AND g.CompletedDate < DATEADD(DAY, 1, @QEnd))
+            (g.Quarter = @Quarter AND ${isAllocatedGoal("g")})
+            OR ${isBroughtForwardPending("g", "@QStart", "@QEnd")}
+            OR ${isBroughtForwardAchieved("g", "@QStart", "@QEnd")}
           )
         ORDER BY g.GoalNumber, g.GoalID
       `);
@@ -938,12 +929,7 @@ const getQuarterGoalDetails = async (req, res) => {
         ownGoals: {
           goals: ownRows.map(toGoal),
           allocated: sumBy(ownRows, (row) => row.Weightage),
-          achieved: sumBy(ownRows, (row) =>
-            useEvaluationRule &&
-            toDateKey(row.CompletedDate) > toDateKey(row.QuarterEndDate)
-              ? 0
-              : row.AchievedWeightage,
-          ),
+          achieved: sumBy(ownRows, (row) => row.OwnAchievedWeightage),
           completedCount: ownRows.filter((row) => row.GoalStatus === "Completed").length,
         },
         broughtForward: {

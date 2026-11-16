@@ -10,6 +10,12 @@ const {
 const {
     calculateQuarterAllocationAndAchievement
 } = require('../utils/quarterPerformance');
+const {
+    isAllocatedGoal,
+    ownAchievedWeightage,
+    isBroughtForwardPending,
+    isBroughtForwardAchieved
+} = require('../constants/goalQuarterRules');
 
 const getFiscalYearEndYear = (date = new Date()) => {
     const fiscalQuarter = getFiscalQuarter(date).label;
@@ -253,20 +259,18 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                ISNULL(broughtForwardPending.Pending, 0) AS BroughtForwardPending,
                ISNULL(carried.CarriedForwardCount, 0) AS CarriedForwardCount
         FROM FiscalQuarters q
+        -- Rules: constants/goalQuarterRules.js (same as the employee dashboard).
         OUTER APPLY (
-            -- A goal completed after its start quarter ended is shown only as
-            -- brought forward achieved in the quarter it was completed in.
+            -- An extended goal completed after its start quarter ended is shown
+            -- only as brought forward achieved in the quarter it was completed in.
             SELECT SUM(g.Weightage) AS Allocated,
-                   SUM(CASE
-                           WHEN g.CompletedDate >= DATEADD(DAY, 1, g.QuarterEndDate) THEN 0
-                           ELSE COALESCE(g.AchievedWeightage, 0)
-                       END) AS Achieved,
+                   SUM(${ownAchievedWeightage('g')}) AS Achieved,
                    SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS CompletedCount,
                    COUNT(*) AS CountedGoalCount
             FROM dbo.Goals g
             WHERE g.UserID = @UserID
               AND g.Quarter = q.Label
-              AND g.GoalStatus NOT IN ('Draft', 'Rejected', 'Cancelled')
+              AND ${isAllocatedGoal('g')}
         ) own
         OUTER APPLY (
             SELECT SUM(COALESCE(g.AchievedWeightage, 0)) AS Achieved,
@@ -279,20 +283,15 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                        END) AS InYearAchieved
             FROM dbo.Goals g
             WHERE g.UserID = @UserID
-              AND g.QuarterEndDate < q.StartDate
-              AND g.CompletedDate >= q.StartDate
-              AND g.CompletedDate < DATEADD(DAY, 1, q.EndDate)
+              AND ${isBroughtForwardAchieved('g', 'q.StartDate', 'q.EndDate')}
         ) broughtForward
-        -- Same as the employee dashboard: goals from an earlier quarter whose
-        -- End Date is in this quarter and that are still open.
+        -- Extended goals from an earlier quarter whose End Date is in this
+        -- quarter and that are still open.
         OUTER APPLY (
             SELECT SUM(g.Weightage) AS Pending
             FROM dbo.Goals g
             WHERE g.UserID = @UserID
-              AND g.QuarterEndDate < q.StartDate
-              AND g.Timeline >= q.StartDate
-              AND g.Timeline < DATEADD(DAY, 1, q.EndDate)
-              AND g.GoalStatus NOT IN ('Completed', 'Draft', 'Rejected', 'Cancelled')
+              AND ${isBroughtForwardPending('g', 'q.StartDate', 'q.EndDate')}
         ) broughtForwardPending
         OUTER APPLY (
             SELECT COUNT(DISTINCT g.GoalID) AS CarriedForwardCount

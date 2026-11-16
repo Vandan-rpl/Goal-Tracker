@@ -246,8 +246,8 @@ const getActiveDirectReports = async (pool, userId, role) => {
 // Goal counts for the summary cards, over the given employees.
 //   InProgress: approved, not completed, goals of `inProgressQuarter`.
 //   Completed: completed within the fiscal year.
-//   BroughtForwardAchieved: goals completed within the fiscal year after their
-//     own quarter ended — the goals behind the Final Evaluation "Brought
+//   BroughtForwardAchieved: extended (carried-forward) goals completed within
+//     the fiscal year after their own quarter ended — the goals behind the Final Evaluation "Brought
 //     forward achieved" column, summed over Q1-Q4.
 const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
     const request = pool.request()
@@ -266,7 +266,8 @@ const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
                       AND g.CompletedDate >= @FiscalYearStart
                       AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
                      THEN 1 ELSE 0 END) AS CompletedGoals,
-            SUM(CASE WHEN g.CompletedDate >= DATEADD(DAY, 1, g.QuarterEndDate)
+            SUM(CASE WHEN ISNULL(g.CarryForwardCount, 0) > 0
+                      AND g.CompletedDate >= DATEADD(DAY, 1, g.QuarterEndDate)
                       AND g.CompletedDate >= @FiscalYearStart
                       AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
                      THEN 1 ELSE 0 END) AS BroughtForwardAchievedGoals
