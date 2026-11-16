@@ -37,11 +37,11 @@ const {
  *   Manager who created the project: view every task in it and add
  *     "Manager / CFO Remarks" (CFORemarks) on them; on tasks they assigned,
  *     the same rights as the Business Head on tasks it assigned.
- *   Responsible Person (a project member): picked by whoever creates the
- *     task, and changed only by them (the assigner, or the member on a task
- *     they added).
+ *   Responsible Person (a project member): set automatically and not
+ *     changed - the member on a task they added, the assignee on a task
+ *     assigned to one member, none on "All members" tasks.
  *   "All members" copies (AssignmentGroupID set): Task Name / Priority /
- *     Due Date / Responsible Person are changed for the whole group at once
+ *     Due Date are changed for the whole group at once
  *     (projectService.updateGroup), not per copy; each member still has their
  *     own Status, User's Remarks and CFO's Remarks.
  * Anything else is 403. Every change writes TaskActivityLog rows in the
@@ -128,9 +128,9 @@ const taskPermissions = (task, user) => {
         canDelete: canChangeTask,
         // "Manager / CFO Remarks" on project tasks.
         canEditCFORemarks: businessHead || isProjectOwner,
-        // Only the member on a project task they added; an assigned task's
-        // Responsible Person is its assignee (none on All-members tasks).
-        canEditResponsiblePerson: isOwner && isSelfAdded && isProjectTask,
+        // Nobody: it is the member who added the task, or the assignee of an
+        // assigned one (none on All-members tasks).
+        canEditResponsiblePerson: false,
     };
 };
 
@@ -483,9 +483,9 @@ const reloadTask = async (taskId, user) => {
 /**
  * Add Task (self-added; the logged-in user is the owner). `projectId` set =
  * a task in that project (projectService.createProjectTask); the user must
- * be an active member and picks the Responsible Person (body
- * responsiblePersonId, an active member - themselves included). projectId
- * never comes from the request body.
+ * be an active member and is the Responsible Person (body
+ * responsiblePersonId is ignored). projectId never comes from the request
+ * body.
  */
 const createTask = async (body = {}, user, { projectId = null } = {}) => {
     const userId = Number(user.userId);
@@ -498,16 +498,14 @@ const createTask = async (body = {}, user, { projectId = null } = {}) => {
         status: has(body, "status") && text(body.status) ? checkStatus(body.status, errors) : TaskStatus.PENDING,
         userRemarks: checkRemarks(body.userRemarks, "User's Remarks", errors),
     };
-    const responsiblePersonId = projectId ? checkResponsiblePerson(body.responsiblePersonId, errors) : null;
+    // Project task: the member adding it is its Responsible Person.
+    const responsiblePersonId = projectId ? userId : null;
 
     if (errors.length > 0) throw validationError(errors);
 
     const taskId = await withTransaction(async (transaction) => {
         if (projectId && !(await projectModel.isActiveMember(transaction, projectId, userId))) {
             throw forbidden("Only members of this project can add tasks to it.");
-        }
-        if (projectId && !(await projectModel.isActiveMember(transaction, projectId, responsiblePersonId))) {
-            throw validationError(["Responsible Person must be a member of the project."]);
         }
 
         const newTaskId = await taskModel.insertTask(transaction, {

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { toast } from "react-toastify";
 import ConfirmDialog from "../ConfirmDialog/ConfirmDialog";
+import { useAuth } from "../../context/AuthContext";
 import {
   assignProjectTask,
   assignTask,
@@ -155,6 +156,7 @@ export default function TaskSheet({
   onSaved,
 }) {
   const isAssignMode = mode === "assign";
+  const { user } = useAuth();
   const remarksLabel = project ? PROJECT_REMARKS_LABEL : "CFO's Remarks";
   const collapseGroups = Boolean(project) && isAssignMode;
 
@@ -229,9 +231,9 @@ export default function TaskSheet({
         status: !isAssignMode,
         cfoRemarks: isAssignMode,
         userRemarks: !isAssignMode,
-        // A member adding their own task picks it. When assigning it follows
-        // Assigned To (one member = that member, All members = none).
-        responsible: Boolean(project) && !isAssignMode,
+        // Never picked: the member adding their own task, or when assigning
+        // the Assigned To member (All members = none).
+        responsible: false,
         assignTo: Boolean(project) && isAssignMode,
       };
     }
@@ -255,7 +257,6 @@ export default function TaskSheet({
     }
     if (checkProject) {
       if (isAssignMode && !draft.assignTo) return "Assigned To is required: pick a member or All members.";
-      if (!isAssignMode && !draft.responsiblePersonId) return "Responsible Person is required.";
     }
     if (draft.cfoRemarks.trim().length > TASK_REMARKS_MAX) return `${remarksLabel} cannot exceed ${TASK_REMARKS_MAX} characters.`;
     if (draft.userRemarks.trim().length > TASK_REMARKS_MAX) return `User's Remarks cannot exceed ${TASK_REMARKS_MAX} characters.`;
@@ -312,9 +313,7 @@ export default function TaskSheet({
           status: draft.status,
           userRemarks: draft.userRemarks.trim(),
         };
-        if (project) {
-          await createProjectTask(project.ProjectID, { ...task, responsiblePersonId: Number(draft.responsiblePersonId) });
-        }
+        if (project) await createProjectTask(project.ProjectID, task);
         else await createTask(task);
         toast.success("Task added.");
       }
@@ -487,6 +486,8 @@ export default function TaskSheet({
       const assignee = activeMembers.find((m) => String(m.UserID) === draft.assignTo);
       return <div className={readOnlyClass}>{assignee?.FullName || ""}</div>;
     }
+    // Blank row of the member's own task: they are the Responsible Person.
+    if (!task) return <div className={readOnlyClass}>{user?.FullName || ""}</div>;
     return <div className={readOnlyClass}>{task?.ResponsiblePersonName || <span className="text-slate-400">—</span>}</div>;
   };
 
