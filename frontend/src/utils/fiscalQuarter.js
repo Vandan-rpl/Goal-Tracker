@@ -64,8 +64,22 @@ export const getManagerHodApprovalWindow = (date = new Date()) => {
   return getQuarterDayWindow(10, 31, date);
 };
 
-export const getCfoApprovalWindow = (date = new Date()) =>
-  getQuarterDayWindow(16, 31, date);
+export const getCfoApprovalWindow = (date = new Date()) => {
+  const reopeningStart = new Date(2026, 10, 16);
+  const reopeningEnd = new Date(2026, 10, 30);
+  const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  today.setHours(0, 0, 0, 0);
+
+  if (today >= reopeningStart && today <= reopeningEnd) {
+    return {
+      startDate: reopeningStart,
+      endDate: reopeningEnd,
+      isOpen: true,
+    };
+  }
+
+  return getQuarterDayWindow(16, 31, date);
+}
 
 export const getFiscalQuarterValue = (dateValue) => {
   if (!dateValue) return "";

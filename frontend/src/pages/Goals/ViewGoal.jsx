@@ -18,7 +18,10 @@ import {
   isGoalActiveForOwner,
   isGoalAwaitingStart,
 } from "../../utils/goalStatus";
-import { isGoalReviewWindowOpen } from "../../utils/goalReviewWindow";
+import {
+  isGoalReviewWindowOpen,
+  REVIEWABLE_GOAL_STATUSES,
+} from "../../utils/goalReviewWindow";
 import {
   getCfoApprovalWindow,
   getManagerHodApprovalWindow,
@@ -107,7 +110,7 @@ const ViewGoal = () => {
   const isApprovalWindowOpen =
     approvalWindow?.isOpen === true || isApprovalWindowExempt;
 
-  const reviewableStatuses = ["HOD Approved", "Reviewed By HOD", "Completed"];
+  const reviewableStatuses = REVIEWABLE_GOAL_STATUSES;
   let loggedInUserId = null;
   try {
     const token = localStorage.getItem("token");
