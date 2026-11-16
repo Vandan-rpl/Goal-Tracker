@@ -1720,6 +1720,27 @@ const createGoal = async (req, res) => {
         errors: { [allocationError.field]: allocationError.message },
       });
     }
+    // Submitting straight away: the quarter's active goals must then total
+    // exactly 100% (same rule as the goal sheet and the edit endpoint).
+    if (GoalStatus === "Submitted") {
+      const quarterGoals = await lockUserQuarterGoals(
+        transaction,
+        userId,
+        goalQuarter,
+      );
+      const otherActiveHundredths = getActiveWeightageHundredths(quarterGoals);
+      const totalHundredths =
+        otherActiveHundredths + toWeightageHundredths(Weightage);
+      if (totalHundredths !== FULL_ALLOCATION_HUNDREDTHS) {
+        const message = `Submitting this goal would make your active ${goalQuarter} goals total ${formatWeightageHundredths(totalHundredths)}%, but they must total exactly 100.00%. Your other active goals total ${formatWeightageHundredths(otherActiveHundredths)}%, so this goal's weightage must be ${formatWeightageHundredths(FULL_ALLOCATION_HUNDREDTHS - otherActiveHundredths)}%.`;
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message,
+          errors: { Weightage: message },
+        });
+      }
+    }
     const newGoalID = await insertGoalRow(transaction, {
       UserID: userId,
       GoalNumber: nextGoalNumberResult.recordset[0].NextGoalNumber,
@@ -2123,9 +2144,13 @@ const updateGoal = async (req, res) => {
       }
     }
 
-    // A resubmitted Rejected goal rejoins the quarter's active allocation,
-    // which must then total exactly 100%.
-    if (currentStatus === "Rejected" && newStatus === "Submitted") {
+    // A Draft or Rejected goal being submitted joins the quarter's active
+    // allocation, which must then total exactly 100% (same rule as the goal
+    // sheet submit).
+    if (
+      ["Draft", "Rejected"].includes(currentStatus) &&
+      newStatus === "Submitted"
+    ) {
       const quarterGoals = await lockUserQuarterGoals(
         transaction,
         existingGoal.UserID,
@@ -2137,7 +2162,7 @@ const updateGoal = async (req, res) => {
       const totalHundredths =
         otherActiveHundredths + toWeightageHundredths(finalWeightage);
       if (totalHundredths !== FULL_ALLOCATION_HUNDREDTHS) {
-        const message = `Resubmitting this goal would make your active ${newQuarter} goals total ${formatWeightageHundredths(totalHundredths)}%, but they must total exactly 100.00%. Your other active goals total ${formatWeightageHundredths(otherActiveHundredths)}%, so this goal's weightage must be ${formatWeightageHundredths(FULL_ALLOCATION_HUNDREDTHS - otherActiveHundredths)}%.`;
+        const message = `${currentStatus === "Rejected" ? "Resubmitting" : "Submitting"} this goal would make your active ${newQuarter} goals total ${formatWeightageHundredths(totalHundredths)}%, but they must total exactly 100.00%. Your other active goals total ${formatWeightageHundredths(otherActiveHundredths)}%, so this goal's weightage must be ${formatWeightageHundredths(FULL_ALLOCATION_HUNDREDTHS - otherActiveHundredths)}%.`;
         await transaction.rollback();
         return res.status(400).json({
           success: false,
