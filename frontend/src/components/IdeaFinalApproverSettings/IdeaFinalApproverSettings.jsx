@@ -86,7 +86,8 @@ export default function IdeaFinalApproverSettings() {
   };
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden lg:col-span-2">
+    // No overflow-hidden here: it would clip the user dropdown below the search box.
+    <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs lg:col-span-2">
       <div className="p-6 border-b border-slate-100 flex items-center gap-3">
         <div className="p-2.5 rounded-xl bg-[#1976d2]/10 text-[#1976d2]">
           <Lightbulb className="w-5 h-5" />
