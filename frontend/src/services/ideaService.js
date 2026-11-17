@@ -21,6 +21,23 @@ export const getIdeaFinalApprovers = async () => {
     return response.data.data;
 };
 
+// Admin settings: { approvers, candidates }. Add / remove return the same
+// shape, refreshed.
+export const getIdeaFinalApproverSettings = async () => {
+    const response = await api.get('/ideas/final-approvers/settings');
+    return response.data.data;
+};
+
+export const addIdeaFinalApprover = async (userId) => {
+    const response = await api.post('/ideas/final-approvers', { userId });
+    return response.data.data;
+};
+
+export const removeIdeaFinalApprover = async (userId) => {
+    const response = await api.delete(`/ideas/final-approvers/${userId}`);
+    return response.data.data;
+};
+
 export const getMyIdeas = async () => {
     const response = await api.get('/ideas/my');
     return response.data.data;

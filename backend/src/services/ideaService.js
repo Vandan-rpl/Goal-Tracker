@@ -188,6 +188,48 @@ const getFinalApproverOptions = async () => {
 };
 
 /**
+ * Admin settings: current final approvers and the active users who can be
+ * added
+ */
+const getFinalApproverSettings = async () => {
+    const pool = await poolPromise;
+    const [approvers, candidates] = await Promise.all([
+        ideaModel.getFinalApproversForAdmin(pool),
+        ideaModel.getFinalApproverCandidates(pool),
+    ]);
+    return { approvers, candidates };
+};
+
+/**
+ * Admin settings: make an active user a final approver
+ */
+const addFinalApprover = async (body = {}) => {
+    const userId = parseId(body.userId, "user");
+    const pool = await poolPromise;
+
+    if (!(await ideaModel.addFinalApprover(pool, userId))) {
+        throw new AppError("Selected user was not found or is inactive.", StatusCodes.BAD_REQUEST);
+    }
+
+    return await getFinalApproverSettings();
+};
+
+/**
+ * Admin settings: remove a final approver. Ideas already sent to them stay
+ * with them (Ideas.FinalApproverID is unchanged).
+ */
+const removeFinalApprover = async (userIdParam) => {
+    const userId = parseId(userIdParam, "user");
+    const pool = await poolPromise;
+
+    if (!(await ideaModel.removeFinalApprover(pool, userId))) {
+        throw new AppError("This user is not a final approver.", StatusCodes.NOT_FOUND);
+    }
+
+    return await getFinalApproverSettings();
+};
+
+/**
  * Get One Idea With Activity Log
  */
 const getIdeaById = async (ideaIdParam, user) => {
@@ -1063,6 +1105,9 @@ module.exports = {
     getPurposes,
     getLeadOptions,
     getFinalApproverOptions,
+    getFinalApproverSettings,
+    addFinalApprover,
+    removeFinalApprover,
     getIdeaById,
     createDraft,
     updateDraft,

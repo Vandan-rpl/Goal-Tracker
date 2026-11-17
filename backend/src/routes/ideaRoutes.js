@@ -2,7 +2,8 @@ const express = require("express");
 const router = express.Router();
 
 const ideaController = require("../controllers/ideaController");
-const { verifyToken } = require("../middleware/authMiddleware");
+const { verifyToken, verifyRole } = require("../middleware/authMiddleware");
+const Roles = require("../constants/roles");
 
 /**
  * ============================================================
@@ -43,6 +44,40 @@ router.get(
     "/final-approvers",
     verifyToken,
     ideaController.getFinalApproverOptions
+);
+
+/**
+ * Final Approver Settings (Admin only): current final approvers plus the
+ * active users who can be added
+ * GET /api/v1/ideas/final-approvers/settings
+ */
+router.get(
+    "/final-approvers/settings",
+    verifyToken,
+    verifyRole([Roles.ADMIN]),
+    ideaController.getFinalApproverSettings
+);
+
+/**
+ * Add Final Approver (Admin only)   body: { userId }
+ * POST /api/v1/ideas/final-approvers
+ */
+router.post(
+    "/final-approvers",
+    verifyToken,
+    verifyRole([Roles.ADMIN]),
+    ideaController.addFinalApprover
+);
+
+/**
+ * Remove Final Approver (Admin only)
+ * DELETE /api/v1/ideas/final-approvers/:userId
+ */
+router.delete(
+    "/final-approvers/:userId",
+    verifyToken,
+    verifyRole([Roles.ADMIN]),
+    ideaController.removeFinalApprover
 );
 
 /**

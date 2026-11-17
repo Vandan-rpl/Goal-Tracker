@@ -76,6 +76,66 @@ exports.getFinalApproverOptions = async (req, res) => {
 };
 
 /**
+ * Get Final Approver Settings (Admin)
+ * GET /api/v1/ideas/final-approvers/settings
+ */
+exports.getFinalApproverSettings = async (req, res) => {
+
+    try {
+
+        const settings = await ideaService.getFinalApproverSettings();
+
+        return successResponse(res, 200, "Final approver settings fetched successfully.", settings);
+
+    } catch (error) {
+
+        return handleError(res, error, "Get Idea Final Approver Settings", "Failed to fetch final approver settings.");
+
+    }
+
+};
+
+/**
+ * Add Final Approver (Admin)
+ * POST /api/v1/ideas/final-approvers   body: { userId }
+ */
+exports.addFinalApprover = async (req, res) => {
+
+    try {
+
+        const settings = await ideaService.addFinalApprover(req.body);
+
+        return successResponse(res, 200, "Final approver added successfully.", settings);
+
+    } catch (error) {
+
+        return handleError(res, error, "Add Idea Final Approver", "Failed to add final approver.");
+
+    }
+
+};
+
+/**
+ * Remove Final Approver (Admin)
+ * DELETE /api/v1/ideas/final-approvers/:userId
+ */
+exports.removeFinalApprover = async (req, res) => {
+
+    try {
+
+        const settings = await ideaService.removeFinalApprover(req.params.userId);
+
+        return successResponse(res, 200, "Final approver removed successfully.", settings);
+
+    } catch (error) {
+
+        return handleError(res, error, "Remove Idea Final Approver", "Failed to remove final approver.");
+
+    }
+
+};
+
+/**
  * Get My Ideas
  * GET /api/v1/ideas/my?status=
  */

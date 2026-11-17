@@ -12,8 +12,8 @@ const {
 /**
  * ============================================================
  * Idea Model
- * SQL for dbo.Ideas and dbo.IdeaActivityLog (dbo.IdeaFinalApprovers is
- * only read).
+ * SQL for dbo.Ideas, dbo.IdeaActivityLog and dbo.IdeaFinalApprovers (the
+ * last is only changed from Admin settings).
  *
  * Every function takes `db`: either a resolved pool or an open
  * sql.Transaction (both expose .request()).
@@ -194,6 +194,117 @@ const getActiveFinalApprover = async (db, userId) => {
         `);
 
     return result.recordset[0] || null;
+};
+
+/**
+ * Admin settings: every user with IsActive = 1 in dbo.IdeaFinalApprovers,
+ * including users who have since been deactivated (flagged by
+ * UserIsActive) so the Admin can see and remove them.
+ */
+const getFinalApproversForAdmin = async (db) => {
+
+    const result = await db.request().query(`
+        SELECT
+            u.UserID,
+            u.EmployeeCode,
+            ${fullName("u")} AS FullName,
+            u.Designation,
+            d.DepartmentName,
+            u.IsActive AS UserIsActive,
+            fa.DisplayOrder,
+            COALESCE(fa.ModifiedDate, fa.CreatedDate) AS AddedDate
+        FROM dbo.IdeaFinalApprovers fa
+        INNER JOIN dbo.Users u
+            ON u.UserID = fa.UserID
+        LEFT JOIN dbo.Departments d
+            ON d.DepartmentID = u.DepartmentID
+        WHERE fa.IsActive = 1
+        ORDER BY
+            CASE WHEN fa.DisplayOrder IS NULL THEN 1 ELSE 0 END,
+            fa.DisplayOrder,
+            u.FirstName,
+            u.LastName;
+    `);
+
+    return result.recordset;
+};
+
+/**
+ * Admin settings: active users who are not currently final approvers
+ */
+const getFinalApproverCandidates = async (db) => {
+
+    const result = await db.request().query(`
+        SELECT
+            u.UserID,
+            u.EmployeeCode,
+            ${fullName("u")} AS FullName,
+            u.Designation,
+            d.DepartmentName
+        FROM dbo.Users u
+        LEFT JOIN dbo.Departments d
+            ON d.DepartmentID = u.DepartmentID
+        WHERE u.IsActive = 1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.IdeaFinalApprovers fa
+              WHERE fa.UserID = u.UserID
+                AND fa.IsActive = 1
+          )
+        ORDER BY u.FirstName, u.LastName;
+    `);
+
+    return result.recordset;
+};
+
+/**
+ * Make a user a final approver: reactivate their existing row (UserID is
+ * unique in dbo.IdeaFinalApprovers) or insert a new one. Returns false
+ * (and changes nothing) when the user doesn't exist or is inactive.
+ */
+const addFinalApprover = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1)
+            BEGIN
+                SELECT CAST(0 AS BIT) AS Added;
+                RETURN;
+            END
+
+            UPDATE dbo.IdeaFinalApprovers
+            SET IsActive = 1,
+                ModifiedDate = SYSDATETIME()
+            WHERE UserID = @UserID;
+
+            IF @@ROWCOUNT = 0
+                INSERT INTO dbo.IdeaFinalApprovers (UserID, IsActive)
+                VALUES (@UserID, 1);
+
+            SELECT CAST(1 AS BIT) AS Added;
+        `);
+
+    return Boolean(result.recordset?.[0]?.Added);
+};
+
+/**
+ * Stop a user being a final approver (soft: IsActive = 0). Returns false
+ * when they weren't an active final approver.
+ */
+const removeFinalApprover = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            UPDATE dbo.IdeaFinalApprovers
+            SET IsActive = 0,
+                ModifiedDate = SYSDATETIME()
+            WHERE UserID = @UserID
+              AND IsActive = 1;
+        `);
+
+    return result.rowsAffected[0] > 0;
 };
 
 /**
@@ -1148,6 +1259,10 @@ module.exports = {
     getLeadUser,
     getFinalApproverOptions,
     getActiveFinalApprover,
+    getFinalApproversForAdmin,
+    getFinalApproverCandidates,
+    addFinalApprover,
+    removeFinalApprover,
     getIdeaRow,
     insertDraftIdea,
     updateDraftIdea,

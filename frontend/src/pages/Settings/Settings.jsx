@@ -11,6 +11,8 @@ import {
   Sliders,
 } from "lucide-react";
 import api from "../../services/api";
+import useAuth from "../../hooks/useAuth";
+import IdeaFinalApproverSettings from "../../components/IdeaFinalApproverSettings/IdeaFinalApproverSettings";
 
 // IDs from the API are numbers; <select> values are strings. Compare everything as strings.
 const toId = (value) => (value === null || value === undefined ? "" : String(value));
@@ -93,6 +95,8 @@ const PersonPicker = ({ label, emptyLabel, people, value, assignedId, editing, o
 
 const Settings = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = String(user?.Role || user?.role || "").toLowerCase() === "admin";
 
   const [emailNotification, setEmailNotification] = useState(true);
   const [browserNotification, setBrowserNotification] = useState(true);
@@ -285,6 +289,9 @@ const Settings = () => {
               </button>
             </div>
           </div>
+
+          {/* Admin only: Innovation Idea final approvers */}
+          {isAdmin && <IdeaFinalApproverSettings />}
 
           {/* Preferences Section */}
           {/* <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
