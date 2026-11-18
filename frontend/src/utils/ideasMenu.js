@@ -17,7 +17,13 @@ export const IDEAS_ACCESS = {
   VIEW_ALL: "viewAll",
   // Either of the two above.
   HAS_REPORTEES_OR_VIEW_ALL: "hasReporteesOrViewAll",
+  // HOD / Reporting Manager section: manager roles (same as the Goal
+  // Tracker's section), anyone with reportees, or an idea final approver.
+  REVIEWER: "reviewer",
 };
+
+// Roles that see the Goal Tracker's "For HOD/Reporting Manager" section.
+const REVIEWER_ROLES = ["HOD", "MANAGER", "BUSINESSHEAD", "ADMIN"];
 
 // `activePaths`: extra path prefixes that highlight the item (e.g. editing
 // a draft is the Share an Idea form).
@@ -41,7 +47,7 @@ export const IDEAS_MENU = [
     key: "assigned",
     label: "Ideas Review & Approval",
     path: "/ideas/assigned",
-    access: IDEAS_ACCESS.EVERYONE,
+    access: IDEAS_ACCESS.REVIEWER,
     section: "For HOD/Reporting Manager",
     icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
   },
@@ -81,7 +87,14 @@ export const IDEAS_MENU = [
 export const canViewAllIdeas = (role = "") =>
   VIEW_ALL_ROLES.includes(String(role).toUpperCase());
 
-export const canAccessIdeasItem = (item, { role, hasReportees }) => {
+export const canAccessIdeasItem = (item, { role, hasReportees, isFinalApprover }) => {
+  if (item.access === IDEAS_ACCESS.REVIEWER) {
+    return (
+      REVIEWER_ROLES.includes(String(role).toUpperCase()) ||
+      Boolean(hasReportees) ||
+      Boolean(isFinalApprover)
+    );
+  }
   if (item.access === IDEAS_ACCESS.VIEW_ALL) return canViewAllIdeas(role);
   if (item.access === IDEAS_ACCESS.HAS_REPORTEES) return Boolean(hasReportees);
   if (item.access === IDEAS_ACCESS.HAS_REPORTEES_OR_VIEW_ALL) {

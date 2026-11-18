@@ -118,7 +118,9 @@ function App() {
               <Route path="/ideas/edit/:ideaId" element={<ShareIdea />} />
               <Route path="/ideas/my-ideas" element={<MyIdeas />} />
               <Route path="/ideas/view/:ideaId" element={<IdeaDetails />} />
-              <Route path="/ideas/assigned" element={<AssignedIdeas />} />
+              <Route element={<IdeasRoute menuKey="assigned" />}>
+                <Route path="/ideas/assigned" element={<AssignedIdeas />} />
+              </Route>
               <Route element={<IdeasRoute menuKey="track" />}>
                 <Route path="/ideas/track" element={<TrackIdea />} />
               </Route>
