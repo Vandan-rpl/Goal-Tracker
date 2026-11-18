@@ -6,9 +6,9 @@ import TaskWorkbookFrame, { taskFilterLabelClass } from "../../components/TaskWo
 import { getAllTasks, getAssignableEmployees, getTaskApiError } from "../../services/taskService";
 
 // Business Head: one employee's task sheet. Pick the employee; their tasks
-// are listed with blank rows below, and Submit on a row assigns the task or
-// saves CFO's Remarks (see TaskSheet). All employees at once: All Tasks >
-// Employees.
+// are listed with blank rows below, and Submit on a row assigns the task
+// (see TaskSheet). CFO's Remarks column is hidden here for now. All
+// employees at once: All Tasks > Employees.
 const AssignTask = () => {
   // ?employeeId= picks the employee.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -111,6 +111,9 @@ const AssignTask = () => {
           key={employeeId}
           groups={[{ employee: selectedEmployee, tasks, canAdd: true }]}
           blankRows={3}
+          // CFO's Remarks column hidden for now ("Assigned by CFO" is the default
+          // remark the employee sees). Remove this line to show it again.
+          showCfoRemarks={false}
           onSaved={reloadTasks}
         />
       ) : null}

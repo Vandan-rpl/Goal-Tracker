@@ -52,11 +52,15 @@ const draftFromTask = (task) => ({
   assignTo: "",
 });
 
-const BASE_COLUMNS = ["Sr.No.", "Task Name", "Priority", "Due Date", "Status"];
+const BASE_COLUMNS = ["Sr.No.", "Task Name", "Priority", "Created Date", "Due Date", "Status"];
 const projectColumns = (showResponsible) => ["Assigned To", ...(showResponsible ? ["Responsible Person"] : [])];
 // The remarks column is "Manager / CFO Remarks" on the project page (the
 // assigning Manager or the Business Head writes there).
-const endColumns = (isProject) => [isProject ? PROJECT_REMARKS_LABEL : "CFO's Remarks", "User's Remarks", ""];
+const endColumns = (isProject, showRemarks = true) => [
+  ...(showRemarks ? [isProject ? PROJECT_REMARKS_LABEL : "CFO's Remarks"] : []),
+  "User's Remarks",
+  "",
+];
 
 // Same look as the Add Goal worksheet (components/GoalWorksheet): pale blue
 // headings, grey-blue grid lines, navy focus border on the cell being edited.
@@ -147,11 +151,13 @@ const toSheetItems = (tasks, collapseGroups) => {
  *   showGroupHeaders  a name row above each employee's tasks
  *   newTaskIds      Set of TaskIDs to highlight as New
  *   onSaved(employeeId)  reload that employee's tasks after a change
+ *   showCfoRemarks  false hides the CFO's Remarks column (Assign Task, for now)
  */
 export default function TaskSheet({
   groups,
   mode = "assign",
   project = null,
+  showCfoRemarks = true,
   blankRows = 1,
   showGroupHeaders = true,
   newTaskIds = null,
@@ -170,7 +176,7 @@ export default function TaskSheet({
     Boolean(project) && isAssignMode &&
     Object.entries(drafts).some(([rowKey, d]) => rowKey.startsWith("new-") && d.assignTo === ASSIGN_ALL);
   const showResponsible = Boolean(project) && !assigningAll;
-  const columns = [...BASE_COLUMNS, ...(project ? projectColumns(showResponsible) : []), ...endColumns(Boolean(project))];
+  const columns = [...BASE_COLUMNS, ...(project ? projectColumns(showResponsible) : []), ...endColumns(Boolean(project), showCfoRemarks)];
   const [extraRows, setExtraRows] = useState({}); // employeeId -> [rowKey] added with "+ Add row"
   const [baseRowSeed, setBaseRowSeed] = useState({}); // employeeId -> n, to renew used blank rows
   const [rowErrors, setRowErrors] = useState({});
@@ -535,6 +541,10 @@ export default function TaskSheet({
     const dueMin =
       (isNewRow && isAssignMode) || (task?.IsAssignedByBusinessHead && draft.dueDate !== task.DueDate) ? today : undefined;
     const projectTag = !project && task?.ProjectName;
+    // My Tasks shows "Assigned by ..." in the CFO's Remarks cell, other sheets above the task name.
+    const showAssignerTag = Boolean(task?.IsAssignedByBusinessHead) && !nested;
+    const assignerInRemarks = showAssignerTag && !isAssignMode && !project;
+    const assignerInName = showAssignerTag && !assignerInRemarks;
 
     const rowBackground = isNew ? "bg-blue-50" : nested ? "bg-[#fafbfd]" : "bg-white";
 
@@ -546,7 +556,7 @@ export default function TaskSheet({
           </td>
 
           <td className={`${cellClass} min-w-[240px]`}>
-            {task && (isNew || task.IsAssignedByBusinessHead || projectTag) && (
+            {task && (isNew || assignerInName || projectTag) && (
               <div className="flex flex-wrap gap-1 px-2 pt-1.5">
                 {isNew && (
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-[#2c3e82] text-white">New</span>
@@ -556,7 +566,7 @@ export default function TaskSheet({
                     Project: {task.ProjectName}
                   </span>
                 )}
-                {task.IsAssignedByBusinessHead && !nested && (
+                {assignerInName && (
                   <span className={`${tagClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
                     Assigned by {getAssignerLabel(task)}
                   </span>
@@ -600,6 +610,12 @@ export default function TaskSheet({
             ) : (
               <div className={`${readOnlyClass} text-center`}>{task.Priority}</div>
             )}
+          </td>
+
+          <td className={`${cellClass} w-32 min-w-[110px]`}>
+            <div className={`${readOnlyClass} text-center ${isNewRow ? "text-slate-400" : ""}`}>
+              {isNewRow ? "Today" : formatDisplayDate(task.CreatedDate)}
+            </div>
           </td>
 
           <td className={`${cellClass} w-40 min-w-[150px]`}>
@@ -656,7 +672,15 @@ export default function TaskSheet({
             </>
           )}
 
+          {showCfoRemarks && (
           <td className={`${cellClass} min-w-[220px]`}>
+            {assignerInRemarks && (
+              <div className="flex flex-wrap gap-1 px-2 pt-1.5">
+                <span className={`${tagClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
+                  Assigned by {getAssignerLabel(task)}
+                </span>
+              </div>
+            )}
             {editable.cfoRemarks ? (
               <textarea
                 rows={1}
@@ -671,6 +695,7 @@ export default function TaskSheet({
               <div className={`${readOnlyClass} whitespace-pre-wrap break-words`}>{task?.CFORemarks || ""}</div>
             )}
           </td>
+          )}
 
           <td className={`${cellClass} min-w-[220px]`}>
             {editable.userRemarks ? (
@@ -782,6 +807,10 @@ export default function TaskSheet({
             ) : (
               <div className={`${readOnlyClass} text-center`}>{first.Priority}</div>
             )}
+          </td>
+
+          <td className={`${cellClass} w-32 min-w-[110px]`}>
+            <div className={`${readOnlyClass} text-center`}>{formatDisplayDate(first.CreatedDate)}</div>
           </td>
 
           <td className={`${cellClass} w-40 min-w-[150px]`}>
