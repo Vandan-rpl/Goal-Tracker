@@ -15,6 +15,7 @@ import {
   getSubGoalError,
   getSubGoalWeightageSummary,
 } from "../../utils/subGoals";
+import DateInput from "../../components/DateInput/DateInput";
 
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 100;
@@ -26,18 +27,13 @@ const EditGoal = () => {
   const [formData, setFormData] = useState({
     GoalNumber: 1,
     GoalTitle: "",
-    GoalDescription: "",
-    Measurability: "",
     JointAccountability: "",
     Weightage: "",
     Priority: "Medium",
     StartDate: "",
     Timeline: "",
-    MeetPerformance: "",
-    ExceedPerformance: "",
     ValidationSource: "",
     CrossFunctionalGoal: false,
-    GoalCategory: "",
     GoalStatus: "Draft",
   });
 
@@ -114,18 +110,13 @@ const EditGoal = () => {
         setFormData({
           GoalNumber: goal.GoalNumber || 1,
           GoalTitle: goal.GoalTitle || "",
-          GoalDescription: goal.GoalDescription || "",
-          Measurability: goal.Measurability || "",
           JointAccountability: goal.JointAccountability || "",
           Weightage: goal.Weightage || "",
           Priority: goal.Priority || "Medium",
           StartDate: goal.StartDate ? goal.StartDate.split("T")[0] : "",
           Timeline: goal.Timeline ? goal.Timeline.split("T")[0] : "",
-          MeetPerformance: goal.MeetPerformance || "",
-          ExceedPerformance: goal.ExceedPerformance || "",
           ValidationSource: goal.ValidationSource || "",
           CrossFunctionalGoal: Boolean(goal.CrossFunctionalGoal),
-          GoalCategory: goal.GoalCategory || "",
           GoalStatus: goal.GoalStatus || "Draft",
         });
         const existingJointAccountabilities = goal.JointAccountabilities || [];
@@ -136,7 +127,6 @@ const EditGoal = () => {
           existingJointAccountabilities.map((item) => ({
             UserID: String(item.UserID),
             ContributionNote: item.ContributionNote || "",
-            Weightage: item.Weightage ?? "",
             FirstName: item.FirstName,
             LastName: item.LastName,
           })),
@@ -198,7 +188,7 @@ const EditGoal = () => {
   const addJointAccountability = () => {
     setJointAccountabilities((previous) => [
       ...previous,
-      { UserID: "", ContributionNote: "", Weightage: "" },
+      { UserID: "", ContributionNote: "" },
     ]);
   };
 
@@ -527,7 +517,7 @@ const EditGoal = () => {
 
             <div className="sm:col-span-3">
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Goal Title <span className="text-red-500">*</span>
+                Goal Description <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -549,27 +539,6 @@ const EditGoal = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Category <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="GoalCategory"
-                disabled={isRestrictedEdit}
-                value={formData.GoalCategory}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
-                  fieldErrors.GoalCategory ? "border-red-500" : "border-slate-300"
-                }`}
-              />
-              {fieldErrors.GoalCategory && (
-                <p className="text-red-600 text-xs mt-1 font-medium">
-                  {fieldErrors.GoalCategory}
-                </p>
-              )}
-            </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Priority <span className="text-red-500">*</span>
@@ -616,8 +585,7 @@ const EditGoal = () => {
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Start Date <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
+              <DateInput
                 name="StartDate"
                 required={!isRestrictedEdit}
                 disabled={isRestrictedEdit}
@@ -646,8 +614,7 @@ const EditGoal = () => {
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 End Date <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
+              <DateInput
                 name="Timeline"
                 required
                 min={
@@ -700,101 +667,7 @@ const EditGoal = () => {
           </div>
         </div>
 
-        {/* Section 2: Descriptions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
-            <label className="block text-xs font-semibold text-slate-700">
-              Goal Description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              name="GoalDescription"
-              rows="4"
-              disabled={isRestrictedEdit}
-              value={formData.GoalDescription}
-              onChange={handleChange}
-              placeholder="Describe the objective..."
-              className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
-                fieldErrors.GoalDescription ? "border-red-500" : "border-slate-300"
-              }`}
-            />
-            {fieldErrors.GoalDescription && (
-              <p className="text-red-600 text-xs font-medium">
-                {fieldErrors.GoalDescription}
-              </p>
-            )}
-          </div>
-
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
-            <label className="block text-xs font-semibold text-slate-700">
-              Measurability <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              name="Measurability"
-              rows="4"
-              required
-              disabled={isRestrictedEdit}
-              value={formData.Measurability}
-              onChange={handleChange}
-              placeholder="How will progress be measured?"
-              className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
-                fieldErrors.Measurability ? "border-red-500" : "border-slate-300"
-              }`}
-            />
-            {fieldErrors.Measurability && (
-              <p className="text-red-600 text-xs font-medium">
-                {fieldErrors.Measurability}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Section 3: Performance Targets */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
-            Performance Targets
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Meet Performance Target <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                name="MeetPerformance"
-                rows="3"
-                disabled={isRestrictedEdit}
-                value={formData.MeetPerformance}
-                onChange={handleChange}
-                placeholder="Expected standard outcome..."
-                className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
-                  fieldErrors.MeetPerformance ? "border-red-500" : "border-slate-300"
-                }`}
-              />
-              {fieldErrors.MeetPerformance && (
-                <p className="text-red-600 text-xs mt-1 font-medium">
-                  {fieldErrors.MeetPerformance}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Exceed Performance Target
-              </label>
-              <textarea
-                name="ExceedPerformance"
-                rows="3"
-                disabled={isRestrictedEdit}
-                value={formData.ExceedPerformance}
-                onChange={handleChange}
-                placeholder="Stretch goals or exceptional outcomes..."
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 4: Validation & Accountability */}
+        {/* Section 2: Validation & Accountability */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
             Validation & Accountability
@@ -855,7 +728,7 @@ const EditGoal = () => {
                   </div>
                 ) : (
                   jointAccountabilities.map((item, index) => (
-                    <div key={`${item.UserID || "new"}-${index}`} className="grid grid-cols-1 sm:grid-cols-[1.2fr_1.5fr_0.8fr_auto] gap-2 items-center bg-slate-50 p-2 border border-slate-200 rounded-lg">
+                    <div key={`${item.UserID || "new"}-${index}`} className="grid grid-cols-1 sm:grid-cols-[1.2fr_1.5fr_auto] gap-2 items-center bg-slate-50 p-2 border border-slate-200 rounded-lg">
                       <select
                         name="UserID"
                         value={item.UserID}
@@ -894,19 +767,6 @@ const EditGoal = () => {
                         className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs disabled:bg-slate-100 focus:border-slate-800 focus:outline-none"
                       />
 
-                      <input
-                        type="number"
-                        name="Weightage"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        placeholder="Weight %"
-                        value={item.Weightage}
-                        disabled={isRestrictedEdit}
-                        onChange={(event) => handleJointAccountabilityChange(index, event)}
-                        className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs disabled:bg-slate-100 focus:border-slate-800 focus:outline-none"
-                      />
-
                       <button
                         type="button"
                         onClick={() => removeJointAccountability(index)}
@@ -924,7 +784,7 @@ const EditGoal = () => {
           </div>
         </div>
 
-        {/* Section 5: Sub-Goals */}
+        {/* Section 3: Sub-Goals */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-2">
             <div className="flex items-center gap-3">

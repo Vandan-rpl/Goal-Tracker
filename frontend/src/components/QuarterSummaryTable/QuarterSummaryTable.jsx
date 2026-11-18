@@ -2,6 +2,7 @@ import { Fragment, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import QuarterGoalDetails from "../QuarterGoalDetails/QuarterGoalDetails";
+import { formatFiscalQuarterLabel } from "../../utils/fiscalQuarter";
 
 // Quarter summary table shared by the employee dashboard and Final Evaluation.
 // Future quarters show only Allocated and Brought forward (pending).
@@ -109,7 +110,7 @@ export default function QuarterSummaryTable({
                 >
                   <th className="py-3 pl-2 pr-4 font-medium text-gray-700 whitespace-nowrap">
                     <ToggleIcon className="mr-1 inline h-4 w-4 text-gray-400" aria-hidden="true" />
-                    {quarter.quarter}
+                    {formatFiscalQuarterLabel(quarter.quarter)}
                     {isCurrent && (
                       <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
                         Current

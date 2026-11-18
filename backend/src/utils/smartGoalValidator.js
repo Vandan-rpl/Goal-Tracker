@@ -13,32 +13,14 @@ const { getFiscalQuarter } = require('./fiscalQuarter');
  * Field names below are exactly the dbo.Goals columns used in
  * goalController.js's createGoal() — cross-checked against goalModel.js
  * too. No renaming/guessing:
- *   GoalTitle, GoalDescription, Measurability, MeetPerformance,
- *   ExceedPerformance, Weightage, GoalCategory, Timeline, CreatedDate
+ *   GoalTitle, Weightage, Timeline, CreatedDate
  *
  * ------------------------------------------------------------
- * Specific — GoalTitle AND GoalDescription both non-empty, and
- *   GoalDescription at least MIN_DESCRIPTION_LENGTH characters (not just
- *   a placeholder word).
- *
- * Measurable — Measurability must be filled, AND at least one of
- *   MeetPerformance / ExceedPerformance must describe a concrete metric.
+ * Specific — GoalTitle must be non-empty.
  *
  * Achievable — Weightage must be between 5% and 30%, AND the SUM of
  *   Weightage across the employee's other active goals in the same fiscal
  *   quarter (plus this one) must not exceed 100%.
- *
- * Relevant — GoalCategory must be non-empty.
- *   IMPORTANT: there is no enum/allowed-list of GoalCategory values
- *   ANYWHERE in this codebase. I checked constants/ (constants.js,
- *   employeeConstants.js, permissions.js, roles.js, statusCodes.js,
- *   messages.js) — nothing resembling a goal-category list exists.
- *   GoalCategory is a free-text NVarChar column in dbo.Goals, and
- *   AddGoal.jsx's own field for it is a plain <input type="text">, not a
- *   dropdown. So this criterion only checks "is something set" — it does
- *   NOT validate against a fixed list, because there isn't one to
- *   validate against. Tell me the allowed categories and I'll add real
- *   enum validation here and turn the frontend field into a <select>.
  *
  * Time-bound — Timeline must be a valid date, strictly after CreatedDate
  *   (or "now" if CreatedDate isn't available yet, e.g. a brand new goal),
@@ -46,7 +28,6 @@ const { getFiscalQuarter } = require('./fiscalQuarter');
  * ------------------------------------------------------------
  */
 
-const MIN_DESCRIPTION_LENGTH = 20;
 const MAX_YEARS_OUT = 2;
 
 /**
@@ -92,12 +73,7 @@ const getExistingWeightageTotal = async (pool, userId, excludeGoalId, timeline) 
 /**
  * @param {object} goalData
  * @param {string} goalData.GoalTitle
- * @param {string} goalData.GoalDescription
- * @param {string} goalData.Measurability
- * @param {string} [goalData.MeetPerformance]
- * @param {string} [goalData.ExceedPerformance]
  * @param {number|string} goalData.Weightage
- * @param {string} goalData.GoalCategory
  * @param {string|Date} goalData.Timeline
  * @param {string|Date} [goalData.CreatedDate] - omit for a brand-new goal
  *   (defaults the Time-bound baseline to "now")
@@ -119,43 +95,16 @@ const validateSmartGoal = async (goalData = {}, options = {}) => {
 
     const {
         GoalTitle,
-        GoalDescription,
-        Measurability,
-        MeetPerformance,
-        ExceedPerformance,
         Weightage,
-        GoalCategory,
         Timeline,
         CreatedDate
     } = goalData;
 
     // ---------------- Specific ----------------
     const title = (GoalTitle || '').toString().trim();
-    const description = (GoalDescription || '').toString().trim();
 
     if (!title) {
-        errors.GoalTitle = 'Goal must be Specific: a Goal Title is required.';
-    }
-
-    if (!description) {
-        errors.GoalDescription = 'Goal must be Specific: a Goal Description is required.';
-    } else if (description.length < MIN_DESCRIPTION_LENGTH) {
-        errors.GoalDescription = `Goal must be Specific: description must be at least ${MIN_DESCRIPTION_LENGTH} characters long (not just a placeholder word).`;
-    }
-
-    // ---------------- Measurable ----------------
-    const measurability = (Measurability || '').toString().trim();
-    const meet = (MeetPerformance || '').toString().trim();
-    const exceed = (ExceedPerformance || '').toString().trim();
-
-    if (!measurability) {
-        errors.Measurability = 'Goal must be Measurable: fill in the Measurability field describing how success will be measured.';
-    }
-
-    if (!meet && !exceed) {
-        // Attach to MeetPerformance so the frontend has a single field to
-        // anchor this message to; it's really an either/or requirement.
-        errors.MeetPerformance = 'Goal must be Measurable: describe a concrete metric in either Meet Performance or Exceed Performance.';
+        errors.GoalTitle = 'Goal must be Specific: a Goal Description is required.';
     }
 
     // ---------------- Achievable ----------------
@@ -193,14 +142,6 @@ const validateSmartGoal = async (goalData = {}, options = {}) => {
     //     }
     // }
 
-    // ---------------- Relevant ----------------
-    // See the big comment at the top of this file: no enum list exists
-    // anywhere to validate against, so this is a non-empty check only.
-    const category = (GoalCategory || '').toString().trim();
-    if (!category) {
-        errors.GoalCategory = 'Goal must be Relevant: a Goal Category must be set.';
-    }
-
     // ---------------- Time-bound ----------------
     if (!Timeline) {
         errors.Timeline = 'Goal must be Time-bound: a Timeline (deadline) date is required.';
@@ -237,6 +178,5 @@ const validateSmartGoal = async (goalData = {}, options = {}) => {
 module.exports = {
     validateSmartGoal,
     getExistingWeightageTotal,
-    MIN_DESCRIPTION_LENGTH,
     MAX_YEARS_OUT
 };

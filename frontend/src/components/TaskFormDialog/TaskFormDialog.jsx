@@ -9,6 +9,7 @@ import {
   formatTaskDateTime,
   getAssignerLabel,
 } from "../../utils/taskStatus";
+import DateInput from "../DateInput/DateInput";
 
 const worksheetInputClass =
   "block min-h-32 w-full resize-none border-0 bg-transparent px-2.5 py-2 text-xs text-[#202522] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#2c3e82] disabled:bg-slate-50 disabled:text-slate-500";
@@ -254,9 +255,8 @@ export default function TaskFormDialog({ task = null, onClose, onSaved }) {
                   </td>
                   <td className={fieldErrors.dueDate ? "bg-red-50" : "bg-white"}>
                     <label className="sr-only" htmlFor="task-due">Due Date</label>
-                    <input
+                    <DateInput
                       id="task-due"
-                      type="date"
                       value={form.dueDate}
                       onChange={(e) => updateField("dueDate", e.target.value)}
                       disabled={!canEditDetails || saving}

@@ -9,6 +9,7 @@ import TablePagination from "../../components/TablePagination/TablePagination";
 import SearchableSelect from "../../components/SearchableSelect/SearchableSelect";
 import { getIdeaApiError, getTrackIdeaInitiators, trackIdeas } from "../../services/ideaService";
 import { formatIdeaDate, getTodayKey } from "../../utils/ideaStatus";
+import DateInput from "../../components/DateInput/DateInput";
 
 const PAGE_SIZE = 20;
 const COLUMNS = ["Idea Number", "Title", "Initiated By", "Submitted Date", "Status", "Pending With"];
@@ -172,9 +173,8 @@ const TrackIdea = () => {
             <label htmlFor="track-idea-date" className={labelClass}>
               Idea Date
             </label>
-            <input
+            <DateInput
               id="track-idea-date"
-              type="date"
               value={submittedDate}
               onChange={(e) => setSubmittedDate(e.target.value)}
               max={getTodayKey()}

@@ -11,6 +11,7 @@ import IdeaDaysLeft from "../IdeaDaysLeft/IdeaDaysLeft";
 import TablePagination from "../TablePagination/TablePagination";
 import { getIdeaApiError } from "../../services/ideaService";
 import { IDEA_STATUSES, formatIdeaDate } from "../../utils/ideaStatus";
+import DateInput from "../DateInput/DateInput";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -321,9 +322,8 @@ export default function IdeaListView({ title, description, fetchIdeas, fetchFilt
               <label htmlFor="idea-list-from" className={labelClass}>
                 Submitted From
               </label>
-              <input
+              <DateInput
                 id="idea-list-from"
-                type="date"
                 value={getParam("submittedFrom")}
                 max={getParam("submittedTo") || undefined}
                 onChange={(e) => updateParams({ submittedFrom: e.target.value })}
@@ -335,9 +335,8 @@ export default function IdeaListView({ title, description, fetchIdeas, fetchFilt
               <label htmlFor="idea-list-to" className={labelClass}>
                 Submitted To
               </label>
-              <input
+              <DateInput
                 id="idea-list-to"
-                type="date"
                 value={getParam("submittedTo")}
                 min={getParam("submittedFrom") || undefined}
                 onChange={(e) => updateParams({ submittedTo: e.target.value })}

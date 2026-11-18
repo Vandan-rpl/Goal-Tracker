@@ -20,6 +20,7 @@ import {
   formatTaskDateTime,
   getAssignerLabel,
 } from "../../utils/taskStatus";
+import DateInput from "../DateInput/DateInput";
 
 const PAGE_SIZE = 20;
 
@@ -545,9 +546,8 @@ export default function TaskListView({
         <>
           <div>
             <label htmlFor="task-filter-due-from" className={filterLabelClass}>Due Date From</label>
-            <input
+            <DateInput
               id="task-filter-due-from"
-              type="date"
               value={filters.dueFrom}
               max={filters.dueTo || undefined}
               onChange={(e) => changeFilter("dueFrom", e.target.value)}
@@ -556,9 +556,8 @@ export default function TaskListView({
           </div>
           <div>
             <label htmlFor="task-filter-due-to" className={filterLabelClass}>Due Date To</label>
-            <input
+            <DateInput
               id="task-filter-due-to"
-              type="date"
               value={filters.dueTo}
               min={filters.dueFrom || undefined}
               onChange={(e) => changeFilter("dueTo", e.target.value)}

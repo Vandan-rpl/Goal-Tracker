@@ -148,3 +148,13 @@ export const getFiscalQuarterOptions = () => {
     }));
   });
 };
+
+// Display form of a stored quarter label: "Q1-2027" -> "Q1 F.Y. 2026-27".
+// Stored labels use the fiscal year END year (Apr 2026 - Mar 2027 = 2027).
+// Use this only for text shown to users; keep the raw label for values/API.
+export const formatFiscalQuarterLabel = (label) => {
+  const match = /^Q([1-4])-(\d{4})$/.exec(String(label || "").trim());
+  if (!match) return label || "";
+  const fyEndYear = Number(match[2]);
+  return `Q${match[1]} F.Y. ${fyEndYear - 1}-${String(fyEndYear).slice(-2)}`;
+};

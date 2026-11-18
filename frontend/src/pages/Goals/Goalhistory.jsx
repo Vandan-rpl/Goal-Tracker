@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { getGoalHistory } from "../../services/goalService";
+import { formatDisplayDateTime } from "../../utils/dateTime";
 
 // Goal content fields shown in history. GoalStatus is intentionally left out:
 // approvals, rejections and resubmissions are workflow events, not edits.
 const FIELD_LABELS = {
   GoalNumber: "Goal Number",
-  GoalTitle: "Goal Title",
+  GoalTitle: "Goal Description",
   GoalDescription: "Description",
   Measurability: "Measurability",
   JointAccountability: "Joint Accountability",
@@ -203,10 +204,7 @@ export default function GoalHistory({ goalId }) {
                       {entry.performedBy || "Unknown user"}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {new Date(entry.performedDate).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
+                      {formatDisplayDateTime(entry.performedDate)}
                     </p>
                   </div>
 

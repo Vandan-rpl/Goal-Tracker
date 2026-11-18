@@ -15,7 +15,6 @@ import BringForwardGoal from './pages/Goals/BringForwardGoal';
 import EditGoal from './pages/Goals/EditGoal';
 import ViewGoal from './pages/Goals/ViewGoal';
 import FinalEvaluation from './pages/Goals/FinalEvaluation';
-import GoalReview from './pages/Goals/GoalReview';
 import AddEmployees from './pages/Admin/AddEmployees';
 import Setting from './pages/Settings/Settings';
 import Profile from './pages/Profile/Profile';
@@ -67,7 +66,6 @@ function App() {
           <Route path="/force-reset-password" element={<ForceResetPassword />} />
 
           {/* Public Goal Review Route (Accessible from Email Links with token)[cite: 1] */}
-          <Route path="/goals/review" element={<GoalReview />} />
           
           {/* Protected Layout Routes Wrapped with ProtectedRoute Guard */}
           <Route element={<ProtectedRoute />}>

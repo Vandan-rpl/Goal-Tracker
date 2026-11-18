@@ -22,6 +22,7 @@ import {
   formatIdeaDate,
   getTodayKey,
 } from "../../utils/ideaStatus";
+import DateInput from "../DateInput/DateInput";
 
 const DAYS_MIN = 1;
 const DAYS_MAX = 365;
@@ -462,9 +463,8 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
             <label htmlFor="lead-action-date" className="block text-xs font-semibold text-slate-700 mb-1">
               {action.date.label} <span className="text-red-500">*</span>
             </label>
-            <input
+            <DateInput
               id="lead-action-date"
-              type="date"
               min={minDateKey}
               autoFocus
               disabled={busy}

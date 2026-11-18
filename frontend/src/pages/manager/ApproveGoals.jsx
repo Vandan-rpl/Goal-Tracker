@@ -7,6 +7,7 @@ import {
   getCfoApprovalWindow,
   getManagerHodApprovalWindow,
 } from '../../utils/fiscalQuarter';
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const ApproveGoals = () => {
   const { user } = useAuth();
@@ -105,8 +106,8 @@ const ApproveGoals = () => {
           {approvalWindow.isOpen
             ? `${isCfo ? 'CFO' : 'Manager/HOD'} approvals are open through `
             : `${isCfo ? 'CFO approvals are open only on quarter days 16-30.' : 'Manager/HOD approvals are open only on quarter days 8-25.'} This quarter's window is `}
-          {approvalWindow.startDate.toLocaleDateString()} through{' '}
-          {approvalWindow.endDate.toLocaleDateString()}.
+          {formatDisplayDate(approvalWindow.startDate)} through{' '}
+          {formatDisplayDate(approvalWindow.endDate)}.
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -178,7 +179,7 @@ const ApproveGoals = () => {
                     <div className="grid grid-cols-3 gap-2 text-xs text-gray-500 bg-white p-3 rounded-lg border border-gray-100">
                       <div>Priority: <span className="font-semibold text-gray-800">{goal.Priority}</span></div>
                       <div>Weightage: <span className="font-semibold text-gray-800">{goal.Weightage}%</span></div>
-                      <div>Timeline: <span className="font-semibold text-gray-800">{goal.Timeline ? new Date(goal.Timeline).toLocaleDateString() : 'N/A'}</span></div>
+                      <div>Timeline: <span className="font-semibold text-gray-800">{goal.Timeline ? formatDisplayDate(goal.Timeline) : 'N/A'}</span></div>
                     </div>
 
                     {/* Approval / Rejection Action Buttons */}

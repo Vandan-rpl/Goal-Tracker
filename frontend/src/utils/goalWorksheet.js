@@ -19,17 +19,12 @@ export const worksheetLineAddClass =
 // editableFields to show the rest read-only.
 export const GOAL_SHEET_FIELDS = [
   "GoalTitle",
-  "GoalCategory",
   "Priority",
   "Weightage",
   "StartDate",
   "Timeline",
   "SubGoals",
   "JointAccountabilities",
-  "GoalDescription",
-  "Measurability",
-  "MeetPerformance",
-  "ExceedPerformance",
 ];
 
 // 'DD/MM/YYYY' -> 'YYYY-MM-DD', or "" when it is not a real date.
@@ -81,7 +76,6 @@ export const createJointAccountability = (accountability = {}) => ({
   key: createLineKey(),
   UserID: toInputValue(accountability.UserID),
   ContributionNote: toInputValue(accountability.ContributionNote),
-  Weightage: toInputValue(accountability.Weightage),
   EmployeeName: [accountability.FirstName, accountability.LastName]
     .filter(Boolean)
     .join(" "),
@@ -93,15 +87,10 @@ export const createGoalRow = (goal = {}) => ({
   key: createRowKey(),
   GoalID: goal.GoalID ?? null,
   GoalTitle: toInputValue(goal.GoalTitle),
-  GoalCategory: toInputValue(goal.GoalCategory),
   Priority: goal.Priority || "Medium",
   Weightage: toInputValue(goal.Weightage),
   StartDate: formatDateForDisplay(goal.StartDate || ""),
   Timeline: formatDateForDisplay(goal.Timeline || ""),
-  GoalDescription: toInputValue(goal.GoalDescription),
-  Measurability: toInputValue(goal.Measurability),
-  MeetPerformance: toInputValue(goal.MeetPerformance),
-  ExceedPerformance: toInputValue(goal.ExceedPerformance),
   ValidationSource: toInputValue(goal.ValidationSource),
   CrossFunctionalGoal: Boolean(goal.CrossFunctionalGoal),
   SubGoals: (goal.SubGoals || []).map(createSubGoal),

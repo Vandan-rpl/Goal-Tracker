@@ -18,6 +18,7 @@ import GoalSheetRow, {
   GoalWorksheet,
 } from "../../components/GoalWorksheet/GoalWorksheet";
 import BringForwardSheet from "./BringForwardSheet";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
@@ -38,7 +39,7 @@ const getRowErrors = (row, quarterRange) => {
   const errors = {};
 
   if (!row.GoalTitle.trim()) {
-    errors.GoalTitle = "Goal Title is required.";
+    errors.GoalTitle = "Goal Description is required.";
   }
 
   const weightage = Number(row.Weightage);
@@ -127,6 +128,9 @@ const AddGoal = () => {
   const [saving, setSaving] = useState(null);
   const [removingKey, setRemovingKey] = useState(null);
   const [bringForwardGoals, setBringForwardGoals] = useState([]);
+  // { quarter, min, max } from the server when the list is for the sheet's
+  // quarter; null means the normal next quarter (currentQuarterRange).
+  const [bringForwardTarget, setBringForwardTarget] = useState(null);
   const [bringForwardOpen, setBringForwardOpen] = useState(false);
 
   useEffect(() => {
@@ -197,6 +201,8 @@ const AddGoal = () => {
     setError("");
     setSuccess("");
     setBringForwardOpen(false);
+    setBringForwardGoals([]);
+    setBringForwardTarget(null);
     setSelectedQuarter(quarter);
   };
 
@@ -215,13 +221,34 @@ const AddGoal = () => {
     loadJointAccountabilityUsers();
   }, []);
 
+  // The bring-forward list follows the loaded sheet's quarter: goals ending
+  // before it starts, moved into it. When that quarter is not open for entry
+  // the server is asked without one and uses the normal next quarter.
+  const sheetQuarterLabel = sheetQuarter?.quarter || "";
+  const sheetQuarterOpen = Boolean(
+    openQuarters?.some((quarter) => quarter.quarter === sheetQuarterLabel),
+  );
   useEffect(() => {
+    if (sheetLoading) return undefined;
     let ignore = false;
 
     const loadBringForwardGoals = async () => {
       try {
-        const response = await api.get("/goals/bring-forward");
-        if (!ignore) setBringForwardGoals(response.data?.data?.goals || []);
+        const response = await api.get("/goals/bring-forward", {
+          params: sheetQuarterOpen ? { quarter: sheetQuarterLabel } : {},
+        });
+        if (ignore) return;
+        const data = response.data?.data || {};
+        setBringForwardGoals(data.goals || []);
+        setBringForwardTarget(
+          data.targetQuarter
+            ? {
+                quarter: data.targetQuarter.quarter,
+                min: data.targetQuarter.startDate,
+                max: data.targetQuarter.endDate,
+              }
+            : null,
+        );
       } catch (err) {
         console.error("Failed to load goals to bring forward", err);
       }
@@ -231,7 +258,10 @@ const AddGoal = () => {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [sheetLoading, sheetQuarterLabel, sheetQuarterOpen]);
+  const bringForwardRange = bringForwardTarget || currentQuarterRange;
+  const bringForwardAvailable =
+    goalCreationWindow.isOpen || Boolean(bringForwardTarget);
 
   const totalHundredths = rows.reduce(
     (total, row) => total + getWeightageHundredths(row.Weightage),
@@ -358,15 +388,10 @@ const AddGoal = () => {
     return {
       GoalID: row.GoalID,
       GoalTitle: row.GoalTitle.trim(),
-      GoalCategory: row.GoalCategory,
       Priority: row.Priority,
       Weightage: Number(row.Weightage),
       StartDate: parseDateInput(row.StartDate),
       Timeline: parseDateInput(row.Timeline),
-      GoalDescription: row.GoalDescription,
-      Measurability: row.Measurability,
-      MeetPerformance: row.MeetPerformance,
-      ExceedPerformance: row.ExceedPerformance,
       ValidationSource: row.ValidationSource,
       CrossFunctionalGoal: row.CrossFunctionalGoal,
       JointAccountability: jointAccountabilityNames || null,
@@ -379,8 +404,6 @@ const AddGoal = () => {
         (accountability) => ({
           UserID: Number(accountability.UserID),
           ContributionNote: accountability.ContributionNote,
-          Weightage:
-            accountability.Weightage === "" ? null : accountability.Weightage,
         }),
       ),
     };
@@ -585,8 +608,8 @@ const AddGoal = () => {
                 {goalCreationWindow.isOpen
                   ? "The goal-entry window is open from "
                   : "The goal-entry window is closed. It is open only for the first 7 calendar days of each quarter. This quarter's window ran from "}
-                {goalCreationWindow.startDate.toLocaleDateString()} through{" "}
-                {goalCreationWindow.endDate.toLocaleDateString()}.
+                {formatDisplayDate(goalCreationWindow.startDate)} through{" "}
+                {formatDisplayDate(goalCreationWindow.endDate)}.
               </div>
             )}
 
@@ -726,8 +749,8 @@ const AddGoal = () => {
               {/* Action Buttons */}
               <div className="flex flex-col gap-2 border-t border-slate-200 pt-6">
                 <div className="flex flex-col-reverse items-center justify-end gap-3 sm:flex-row">
-                  {/* Bring forward keeps the normal window only. */}
-                  {goalCreationWindow.isOpen && (
+                  {/* Bring forward: the normal window, or an open quarter's sheet. */}
+                  {bringForwardAvailable && (
                     <button
                       type="button"
                       onClick={() => setBringForwardOpen((open) => !open)}
@@ -770,10 +793,12 @@ const AddGoal = () => {
               </div>
             </form>
 
-            {goalCreationWindow.isOpen && bringForwardOpen && (
+            {bringForwardAvailable && bringForwardOpen && (
               <BringForwardSheet
+                key={bringForwardRange.quarter}
                 goals={bringForwardGoals}
-                targetRange={currentQuarterRange}
+                targetRange={bringForwardRange}
+                targetQuarter={bringForwardTarget?.quarter}
                 onBroughtForward={(goalIds) =>
                   setBringForwardGoals((previous) =>
                     previous.filter((goal) => !goalIds.includes(goal.GoalID)),

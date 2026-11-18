@@ -24,6 +24,8 @@ import {
   getTodayKey,
 } from "../../utils/taskStatus";
 import { worksheetControlClass, worksheetLineAddClass } from "../../utils/goalWorksheet";
+import DateInput from "../DateInput/DateInput";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 // Assigned To value for "All members" (backend PROJECT_ASSIGN_ALL).
 const ASSIGN_ALL = "all";
@@ -79,7 +81,7 @@ const apiErrorText = (err, fallback) => {
 
 const trimmed = (value) => String(value ?? "").trim();
 
-const formatDueDate = (value) => (value ? value.split("-").reverse().join("-") : "");
+const formatDueDate = (value) => formatDisplayDate(value);
 
 /**
  * In project assign mode, "All members" copies (same AssignmentGroupID)
@@ -602,8 +604,7 @@ export default function TaskSheet({
 
           <td className={`${cellClass} w-40`}>
             {editable.details ? (
-              <input
-                type="date"
+              <DateInput
                 value={draft.dueDate}
                 min={dueMin}
                 onChange={(e) => updateCell(key, task, "dueDate", e.target.value)}
@@ -785,8 +786,7 @@ export default function TaskSheet({
 
           <td className={`${cellClass} w-40`}>
             {canManage ? (
-              <input
-                type="date"
+              <DateInput
                 value={draft.dueDate}
                 min={draft.dueDate !== first.DueDate ? today : undefined}
                 onChange={(e) => updateCell(key, first, "dueDate", e.target.value)}

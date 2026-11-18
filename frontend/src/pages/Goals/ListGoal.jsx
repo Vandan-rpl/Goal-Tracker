@@ -8,6 +8,7 @@ import api from "../../services/api";
 import { getFiscalQuarterOptions } from "../../utils/fiscalQuarter";
 import { canEditGoal } from "../../utils/goalEditability";
 import { getGoalStatusLabel } from "../../utils/goalStatus";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const STATUS_OPTIONS = [
   "Draft",
@@ -204,7 +205,7 @@ const ListGoal = () => {
               <thead className="bg-gray-50/75">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Goal No / Title
+                    Goal No / Description
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Category
@@ -248,7 +249,7 @@ const ListGoal = () => {
                         <div className="text-xs text-gray-400">
                           Timeline:{" "}
                           {goal.Timeline
-                            ? new Date(goal.Timeline).toLocaleDateString()
+                            ? formatDisplayDate(goal.Timeline)
                             : "N/A"}
                         </div>
                       </td>

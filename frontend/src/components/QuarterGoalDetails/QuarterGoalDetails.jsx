@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { getQuarterGoalDetails } from "../../services/dashboardService";
 import { getGoalStatusLabel } from "../../utils/goalStatus";
 import { formatDateForDisplay } from "../../utils/goalWorksheet";
+import { formatFiscalQuarterLabel } from "../../utils/fiscalQuarter";
 
 // The goals behind one row of the quarter summary. Reusable: pass employeeId
 // to show a team member's goals (Final Evaluation); omit it for the logged-in
@@ -11,7 +12,7 @@ import { formatDateForDisplay } from "../../utils/goalWorksheet";
 // Evaluation summary. Section totals come from the server with the same filters as the
 // summary, so the footers always match the summary row.
 
-const COLUMNS = ["Goal No.", "Title", "Weightage", "End Date", "Status", "Sub-goals", "Note"];
+const COLUMNS = ["Goal No.", "Goal Description", "Weightage", "End Date", "Status", "Sub-goals", "Note"];
 
 function formatPercent(value) {
   return `${Number(Number(value || 0).toFixed(2))}%`;
@@ -120,7 +121,7 @@ export default function QuarterGoalDetails({ employeeId, quarter, achievementRul
   if (loading) {
     return (
       <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading {quarter} goals...
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading {formatFiscalQuarterLabel(quarter)} goals...
       </div>
     );
   }

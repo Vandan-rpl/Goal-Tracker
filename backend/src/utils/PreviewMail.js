@@ -10,6 +10,15 @@ const { TASK_MAIL_EVENTS, buildHtml: buildTaskHtml } = require("../services/task
 const { IDEA_MAIL_EVENTS, buildSubject: buildIdeaSubject, buildHtml: buildIdeaHtml } = require("../services/ideaMailService");
 const { GOAL_MAIL_EVENTS, buildSubject: buildGoalSubject, buildHtml: buildGoalHtml } = require("../services/goalMailService");
 
+// Auth mails (TESTING ONLY): authMailService has no separate HTML builder; it
+// builds and sends in one go. So swap notifyService.sendEmail for a function
+// that only captures { to, subject, html }, BEFORE requiring authMailService
+// (it destructures sendEmail at require time). Nothing is sent.
+const notifyService = require("../services/notifyService");
+let capturedAuthMail = null;
+notifyService.sendEmail = async (mail) => { capturedAuthMail = mail; };
+const authMailService = require("../services/authMailService");
+
 // ─── 2. SAMPLE DATA ─────────────────────────────────────────────────────────
 // Field names must match what your DB returns, or rows will show up blank.
 
@@ -78,6 +87,37 @@ const sampleRecipient = { name: "Priya Mehta", firstName: "Priya", email: "priya
 // Set to { name: "Rahul Shah", email: "rahul@example.com", label: "submitter" } to preview TEST MODE banners
 const testRecipient = null;
 
+// Auth mails: same banner rule. They read AUTH_MAIL_REDIRECT_TO from .env,
+// so override it here to match testRecipient.
+process.env.AUTH_MAIL_REDIRECT_TO = testRecipient ? testRecipient.email : "";
+
+const sampleAuthUser = { UserID: 7, Username: "rahul.shah", FirstName: "Rahul", LastName: "Shah", Email: "rahul@example.com" };
+
+// Each entry calls a real authMailService send function (captured, not sent).
+const AUTH_MAILS = {
+    PASSWORD_RESET_OTP: () =>
+        authMailService.sendPasswordResetOtpMail({ user: sampleAuthUser, otp: "482913", validMinutes: 10 }),
+    PASSWORD_CHANGED: () =>
+        // DB-style value: server wall-clock time in the UTC fields (see formatServerDateTime)
+        authMailService.sendPasswordChangedMail({ user: sampleAuthUser, changedAt: new Date(Date.UTC(2026, 10, 17, 15, 42)) }),
+    WELCOME: () =>
+        authMailService.sendWelcomeMail({ user: sampleAuthUser, temporaryPassword: "Tmp@8kQ2&x" }), // "&" checks escaping
+};
+
+const buildAuthPreviews = async () => {
+    const previews = [];
+    for (const [event, send] of Object.entries(AUTH_MAILS)) {
+        capturedAuthMail = null;
+        await send();
+        previews.push({
+            label: `Auth / ${event} / default`,
+            subject: capturedAuthMail.subject,
+            html: capturedAuthMail.html,
+        });
+    }
+    return previews;
+};
+
 // ─── 3. BUILD PREVIEWS ──────────────────────────────────────────────────────
 // render(def, data) must return { subject, html }; each module's builders take different args.
 const fromEvents = (moduleName, events, samples, render) =>
@@ -107,19 +147,27 @@ const previews = [
 ];
 
 // ─── 4. WRITE OUTPUT ────────────────────────────────────────────────────────
-let output = `<html><head><meta charset="utf-8"><title>Mail preview</title></head><body style="background:#f3f3f3;">`;
+(async () => {
+    previews.push(...(await buildAuthPreviews()));
 
-for (const p of previews) {
-    output += `
+    let output = `<html><head><meta charset="utf-8"><title>Mail preview</title></head><body style="background:#f3f3f3;">`;
+
+    for (const p of previews) {
+        output += `
     <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
         <p style="font:12px monospace;color:#888;margin:0 0 8px;">${p.label}</p>
         <p style="margin:0 0 16px;"><strong>Subject:</strong> ${p.subject}</p>
         ${p.html}
     </section>`;
-}
+    }
 
-output += "</body></html>";
+    output += "</body></html>";
 
-const outFile = path.join(__dirname, "mail-preview.html");
-fs.writeFileSync(outFile, output);
-console.log(`${previews.length} mails written to ${outFile}`);
+    const outFile = path.join(__dirname, "mail-preview.html");
+    fs.writeFileSync(outFile, output);
+    console.log(`${previews.length} mails written to ${outFile}`);
+    process.exit(0); // required services may open DB/SMTP handles that keep node alive
+})().catch((err) => {
+    console.error(err);
+    process.exit(1);
+});

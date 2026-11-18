@@ -8,6 +8,7 @@ import TaskWorkbookFrame, {
 import { getMyTasks, getTaskApiError, markTasksSeen } from "../../services/taskService";
 import { taskUnseenCountReceived } from "../../redux/slices/taskSlice";
 import { TASK_PRIORITIES, TASK_SOURCES, TASK_STATUSES } from "../../utils/taskStatus";
+import DateInput from "../../components/DateInput/DateInput";
 
 const EMPTY_FILTERS = { status: "", priority: "", dueFrom: "", dueTo: "", source: "" };
 
@@ -108,9 +109,8 @@ const MyTasks = () => {
           </div>
           <div>
             <label htmlFor="my-task-due-from" className={filterLabelClass}>Due Date From</label>
-            <input
+            <DateInput
               id="my-task-due-from"
-              type="date"
               value={filters.dueFrom}
               max={filters.dueTo || undefined}
               onChange={(e) => changeFilter("dueFrom", e.target.value)}
@@ -119,9 +119,8 @@ const MyTasks = () => {
           </div>
           <div>
             <label htmlFor="my-task-due-to" className={filterLabelClass}>Due Date To</label>
-            <input
+            <DateInput
               id="my-task-due-to"
-              type="date"
               value={filters.dueTo}
               min={filters.dueFrom || undefined}
               onChange={(e) => changeFilter("dueTo", e.target.value)}

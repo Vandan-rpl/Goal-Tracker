@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
-import { isGoalReviewWindowOpen } from "../../utils/goalReviewWindow";
 import useAuth from "../../hooks/useAuth";
 import CompletionRequests from "../../components/GoalCompletion/CompletionRequests";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const MAX_GOALS_PER_QUARTER = 8;
 
@@ -218,7 +218,7 @@ const TeamManagement = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">
-          Team Management & Goals Review
+          Goal Review & approval
         </h2>
       </div>
 
@@ -325,7 +325,7 @@ const TeamManagement = () => {
                 <thead className="bg-gray-50/75">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Goal No / Title
+                      Goal No / Description
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                       Category
@@ -367,7 +367,7 @@ const TeamManagement = () => {
                           <div className="text-xs text-gray-400">
                             Timeline:{" "}
                             {goal.Timeline
-                              ? new Date(goal.Timeline).toLocaleDateString()
+                              ? formatDisplayDate(goal.Timeline)
                               : "N/A"}
                           </div>
                         </td>
@@ -408,15 +408,6 @@ const TeamManagement = () => {
                           >
                             View
                           </Link>
-                          {goal.GoalStatus !== "Rejected" &&
-                            isGoalReviewWindowOpen(goal) && (
-                              <Link
-                                to={`/goals/review?goalId=${goal.GoalID}`}
-                                className="text-emerald-600 hover:text-emerald-900 font-semibold bg-emerald-50 px-3 py-1.5 rounded-md transition hover:bg-emerald-100"
-                              >
-                                Review
-                              </Link>
-                            )}
                         </td>
                       </tr>
                     ))

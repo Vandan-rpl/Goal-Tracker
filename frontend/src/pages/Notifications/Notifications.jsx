@@ -14,6 +14,7 @@ import {
   deleteNotification,
   deleteAllNotifications,
 } from "../../redux/slices/notificationSlice";
+import { formatDisplayDateTime } from "../../utils/dateTime";
 
 const Notifications = () => {
   const dispatch = useDispatch();
@@ -146,10 +147,7 @@ const Notifications = () => {
                   </span>
 
                   <span className="text-[11px] text-slate-400 font-medium">
-                    {new Date(item.CreatedAt).toLocaleString(undefined, {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
+                    {formatDisplayDateTime(item.CreatedAt)}
                   </span>
                 </div>
               </div>

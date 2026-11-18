@@ -18,14 +18,12 @@ import {
   isGoalActiveForOwner,
   isGoalAwaitingStart,
 } from "../../utils/goalStatus";
-import {
-  isGoalReviewWindowOpen,
-  REVIEWABLE_GOAL_STATUSES,
-} from "../../utils/goalReviewWindow";
+import { REVIEWABLE_GOAL_STATUSES } from "../../utils/goalReviewWindow";
 import {
   getCfoApprovalWindow,
   getManagerHodApprovalWindow,
 } from "../../utils/fiscalQuarter";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const ViewGoal = () => {
   const { id } = useParams();
@@ -42,11 +40,6 @@ const ViewGoal = () => {
   // Last pending sub-goal awaiting the "submit for completion" confirmation
   const [lastSubGoalToConfirm, setLastSubGoalToConfirm] = useState(null);
   const [submittingLastSubGoal, setSubmittingLastSubGoal] = useState(false);
-
-  // Review form state
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   // User & Role parsing
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -133,14 +126,6 @@ const ViewGoal = () => {
     normalizedRole,
   );
   const isJointParticipant = goal?.IsJointParticipant === true && !isGoalOwner;
-  const isReviewer =
-    isAuthorizedApprover &&
-    goal &&
-    !isJointParticipant &&
-    !goal.HasReviewed &&
-    reviewableStatuses.includes(goal.GoalStatus);
-
-  const canSubmitReview = isReviewer && isGoalReviewWindowOpen(goal);
 
   const canShowApproveReject =
     goal &&
@@ -295,33 +280,6 @@ const ViewGoal = () => {
       );
     } finally {
       setActionLoading(false);
-    }
-  };
-
-  const handleSubmitReview = async () => {
-    try {
-      setReviewSubmitting(true);
-      const response = await api.post(`/goals/review`, {
-        goalId: id,
-        rating: reviewRating,
-        comment: reviewComment,
-      });
-
-      if (response.data.success) {
-        alert(response.data.message || "Review submitted successfully!");
-        await fetchGoalDetails();
-        setReviewComment("");
-        setReviewRating(5);
-      } else {
-        alert(response.data.message || "Failed to submit review.");
-      }
-    } catch (err) {
-      console.error("Error submitting review:", err);
-      alert(
-        err.response?.data?.message || "Server error while submitting review.",
-      );
-    } finally {
-      setReviewSubmitting(false);
     }
   };
 
@@ -519,8 +477,8 @@ const ViewGoal = () => {
               : approvalWindow.isOpen
                 ? "Manager/HOD approval and goal editing are open through "
                 : "Manager/HOD approval and goal editing are available only on quarter days 8-25. This quarter's window is "}
-            {approvalWindow.startDate.toLocaleDateString()} through{" "}
-            {approvalWindow.endDate.toLocaleDateString()}.
+            {formatDisplayDate(approvalWindow.startDate)} through{" "}
+            {formatDisplayDate(approvalWindow.endDate)}.
           </div>
         )}
 
@@ -601,12 +559,6 @@ const ViewGoal = () => {
               <span className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-700 bg-indigo-50 px-3 py-1 rounded-md border border-indigo-200">
                 Goal #{goal.GoalNumber}
               </span>
-              <span className="text-xs font-medium text-slate-500">
-                Category:{" "}
-                <span className="text-slate-800 font-semibold">
-                  {goal.GoalCategory || "General"}
-                </span>
-              </span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
               {goal.GoalTitle}
@@ -630,14 +582,14 @@ const ViewGoal = () => {
             >
               Completion requested
               {goal.CompletionRequestedDate
-                ? ` on ${new Date(goal.CompletionRequestedDate).toLocaleDateString()}`
+                ? ` on ${formatDisplayDate(goal.CompletionRequestedDate)}`
                 : ""}
               . Waiting for your manager's approval.
             </div>
           )}
 
           {/* Key Metrics Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/80 hover:border-indigo-300 transition-all duration-300">
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
                 Weightage
@@ -652,79 +604,20 @@ const ViewGoal = () => {
               </span>
               <div className="text-sm font-bold text-slate-800 mt-3 truncate">
                 {goal.Timeline
-                  ? new Date(goal.Timeline).toLocaleDateString()
+                  ? formatDisplayDate(goal.Timeline)
                   : "N/A"}
               </div>
             </div>
-            <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/80 hover:border-indigo-300 transition-all duration-300">
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                Cross-Functional
-              </span>
-              <div className="text-sm font-bold text-slate-800 mt-3">
-                {goal.CrossFunctionalGoal ? "Yes" : "No"}
-              </div>
-            </div>
-            <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/80 hover:border-indigo-300 transition-all duration-300">
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                Draft Version
-              </span>
-              <div className="text-sm font-bold text-slate-800 mt-3">
-                v{goal.DraftVersion || 1}
-              </div>
-            </div>
           </div>
 
-          {/* Description & Measurability */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 space-y-2">
-              <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
-                Goal Description
-              </h4>
-              <p className="text-slate-700 text-sm leading-relaxed">
-                {goal.GoalDescription || "No description provided."}
-              </p>
+          {goal.ValidationSource && (
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm">
+              <span className="font-bold text-slate-800">
+                Validation Source:{" "}
+              </span>
+              <span className="text-slate-600">{goal.ValidationSource}</span>
             </div>
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 space-y-2 flex flex-col justify-between">
-              <div>
-                <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-2">
-                  Measurability & Validation
-                </h4>
-                <p className="text-slate-700 text-sm leading-relaxed">
-                  {goal.Measurability || "N/A"}
-                </p>
-              </div>
-              {goal.ValidationSource && (
-                <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-indigo-700 font-medium flex items-center gap-2">
-                  <span className="font-extrabold uppercase tracking-wider text-[9px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded border border-indigo-200">
-                    Source
-                  </span>
-                  <span className="truncate">{goal.ValidationSource}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Performance Criteria Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-200 relative overflow-hidden">
-              <div className="w-1.5 h-full bg-emerald-500 absolute left-0 top-0" />
-              <h4 className="font-extrabold text-emerald-800 text-xs uppercase tracking-wider mb-2">
-                Meet Performance
-              </h4>
-              <p className="text-slate-700 text-sm leading-relaxed">
-                {goal.MeetPerformance || "Not specified"}
-              </p>
-            </div>
-            <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-200 relative overflow-hidden">
-              <div className="w-1.5 h-full bg-indigo-500 absolute left-0 top-0" />
-              <h4 className="font-extrabold text-indigo-900 text-xs uppercase tracking-wider mb-2">
-                Exceed Performance
-              </h4>
-              <p className="text-slate-700 text-sm leading-relaxed">
-                {goal.ExceedPerformance || "Not specified"}
-              </p>
-            </div>
-          </div>
+          )}
 
           {goal.JointAccountability && (
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm">
@@ -813,7 +706,7 @@ const ViewGoal = () => {
                     {goal.ReviewedDate && (
                       <span className="text-xs text-slate-500">
                         Reviewed on{" "}
-                        {new Date(goal.ReviewedDate).toLocaleDateString()}
+                        {formatDisplayDate(goal.ReviewedDate)}
                       </span>
                     )}
                   </div>
@@ -849,7 +742,7 @@ const ViewGoal = () => {
                           <p className="text-xs font-medium text-slate-500">
                             {review.ReviewerType}
                             {review.ReviewedDate &&
-                              ` · ${new Date(review.ReviewedDate).toLocaleDateString()}`}
+                              ` · ${formatDisplayDate(review.ReviewedDate)}`}
                           </p>
                         </div>
                         <div
@@ -879,74 +772,6 @@ const ViewGoal = () => {
               </div>
             </>
           )}
-
-          {/* Submit Review Form */}
-          {isReviewer && !canSubmitReview ? (
-            <>
-              <hr className="border-slate-200" />
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Submit Your Review
-                </h3>
-                <div className="bg-amber-50/60 border border-amber-200 p-6 rounded-2xl text-sm text-amber-900 font-medium">
-                  Review opens when the goal is complete or near quarter end
-                </div>
-              </div>
-            </>
-          ) : canSubmitReview ? (
-            <>
-              <hr className="border-slate-200" />
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Submit Your Review
-                </h3>
-                <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-200 space-y-5">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
-                      Rating (1 to 5 Stars)
-                    </label>
-                    <div className="flex space-x-2">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          type="button"
-                          key={star}
-                          onClick={() => setReviewRating(star)}
-                          className={`text-3xl transition-transform hover:scale-125 focus:outline-none ${
-                            star <= reviewRating
-                              ? "text-amber-400"
-                              : "text-slate-300"
-                          }`}
-                        >
-                          ★
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                      Comments
-                    </label>
-                    <textarea
-                      rows="3"
-                      value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className="w-full p-4 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm text-slate-800 placeholder-slate-400 outline-none transition-all shadow-xs"
-                      placeholder="Provide constructive feedback or comments..."
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleSubmitReview}
-                    disabled={reviewSubmitting}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 px-4 rounded-xl font-bold text-sm shadow-md transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
-                  >
-                    {reviewSubmitting ? "Submitting..." : "Submit Review"}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : null}
 
           {/* Bottom Actions */}
           <div className="pt-6 border-t border-slate-200 flex items-center justify-between">
@@ -993,7 +818,7 @@ const ViewGoal = () => {
               <div className="w-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-4 rounded-xl font-bold text-sm">
                 ✓ This goal has been successfully {goal.GoalStatus}.
               </div>
-            ) : goal.GoalStatus === "Completed" && !canSubmitReview ? (
+            ) : goal.GoalStatus === "Completed" ? (
               <div className="w-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-4 rounded-xl font-bold text-sm">
                 ✓ This goal has been completed.
               </div>
@@ -1026,10 +851,6 @@ const ViewGoal = () => {
                     {actionLoading ? "Processing..." : "Approve Goal"}
                   </button>
                 </div>
-              </div>
-            ) : canSubmitReview ? (
-              <div className="w-full text-center text-xs font-medium text-slate-500 py-1">
-                Please submit your review above to proceed.
               </div>
             ) : (
               <div className="w-full text-center text-xs font-medium text-slate-500 py-1">

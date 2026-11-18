@@ -29,8 +29,15 @@ const getTimelineError = (row, targetRange) => {
 // left blank are skipped.
 // - goals: the GET /goals/bring-forward list.
 // - targetRange: { quarter, min, max } the new End Date must fall in.
+// - targetQuarter: the open entry quarter the list was loaded for, sent with
+//   each goal; omitted for the normal next quarter.
 // - onBroughtForward(goalIds): called with the goals that were submitted.
-const BringForwardSheet = ({ goals, targetRange, onBroughtForward }) => {
+const BringForwardSheet = ({
+  goals,
+  targetRange,
+  targetQuarter,
+  onBroughtForward,
+}) => {
   const [rows, setRows] = useState([]);
   const [goalNumbers, setGoalNumbers] = useState({});
   const [currentEndDates, setCurrentEndDates] = useState({});
@@ -147,6 +154,7 @@ const BringForwardSheet = ({ goals, targetRange, onBroughtForward }) => {
       try {
         await api.put(`/goals/${row.GoalID}/bring-forward`, {
           Timeline: parseDateInput(row.Timeline),
+          ...(targetQuarter ? { Quarter: targetQuarter } : {}),
         });
         submittedKeys.push(row.key);
       } catch (err) {
@@ -192,7 +200,8 @@ const BringForwardSheet = ({ goals, targetRange, onBroughtForward }) => {
           Brought forward goals
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Approved goals ending this quarter or earlier. Enter a new End Date
+          Approved goals ending before{" "}
+          {formatQuarterLabel(targetRange.quarter)} starts. Enter a new End Date
           within {formatQuarterLabel(targetRange.quarter)} for each goal to bring forward; it goes
           back for approval and everything else stays as it is. Leave the End
           Date blank to skip a goal.

@@ -227,3 +227,35 @@ const DateTime = {
 };
 
 export default DateTime;
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const toDisplayDate = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  // A bare 'YYYY-MM-DD' is a calendar date: never shift it by timezone.
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/**
+ * App-wide date display: DD/MM/YYYY (e.g. 21/07/2026).
+ * Returns `fallback` for empty or invalid values.
+ */
+export const formatDisplayDate = (value, fallback = "") => {
+  const date = toDisplayDate(value);
+  if (!date) return fallback;
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+};
+
+/**
+ * App-wide date + time display: DD/MM/YYYY, h:mm AM/PM.
+ */
+export const formatDisplayDateTime = (value, fallback = "") => {
+  const date = toDisplayDate(value);
+  if (!date) return fallback;
+  const hour = date.getHours();
+  return `${formatDisplayDate(date)}, ${hour % 12 || 12}:${pad2(date.getMinutes())} ${hour < 12 ? "AM" : "PM"}`;
+};

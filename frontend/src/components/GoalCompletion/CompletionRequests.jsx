@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import api from "../../services/api";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const REMARK_MAX_LENGTH = 500;
 
 const formatDate = (value) =>
-  value ? new Date(value).toLocaleDateString() : "N/A";
+  value ? formatDisplayDate(value) : "N/A";
 
 // Goals awaiting completion approval from the logged-in Reporting Manager
 // (or HOD). The caller decides visibility; the backend re-checks the approver.

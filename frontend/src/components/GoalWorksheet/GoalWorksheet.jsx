@@ -30,27 +30,17 @@ const COLUMN_LETTERS = [
   "G",
   "H",
   "I",
-  "J",
-  "K",
-  "L",
-  "M",
-  "N",
 ];
 
 const COLUMN_HEADINGS = [
   "Goal No.",
-  "Goal Title",
-  "Category",
+  "Goal Description",
   "Priority",
   "Weightage (%)",
   "Start Date",
   "End Date",
   "Sub-goals (% of this goal)",
   "Joint Accountability",
-  "Goal Description",
-  "Measurability",
-  "Meet Performance Target",
-  "Exceed Performance Target",
   "Actions",
 ];
 
@@ -63,22 +53,17 @@ export const GoalWorksheet = ({ ariaLabel, children }) => (
     aria-label={ariaLabel}
     tabIndex="0"
   >
-    <table className="w-full min-w-[2812px] table-fixed border-separate border-spacing-0 text-xs text-[#202522] [&_td]:h-32 [&_td]:border-r [&_td]:border-b [&_td]:border-[#d5dce5] [&_td]:bg-white [&_td]:p-0 [&_td]:align-top [&_td:last-child]:border-r-0">
+    <table className="w-full min-w-[1784px] table-fixed border-separate border-spacing-0 text-xs text-[#202522] [&_td]:h-32 [&_td]:border-r [&_td]:border-b [&_td]:border-[#d5dce5] [&_td]:bg-white [&_td]:p-0 [&_td]:align-top [&_td:last-child]:border-r-0">
       <colgroup>
-        <col className="w-10.5" />
+        <col className="w-16" />
         <col className="w-22.5" />
         <col className="w-57.5" />
-        <col className="w-37.5" />
         <col className="w-31.25" />
         <col className="w-31.25" />
         <col className="w-41.25" />
         <col className="w-41.25" />
         <col className="w-85" />
         <col className="w-90" />
-        <col className="w-55" />
-        <col className="w-55" />
-        <col className="w-57.5" />
-        <col className="w-57.5" />
         <col className="w-30" />
       </colgroup>
       <thead>
@@ -98,10 +83,9 @@ export const GoalWorksheet = ({ ariaLabel, children }) => (
         </tr>
         <tr>
           <th
-            className="sticky left-0 top-6.5 z-4 border-r border-b border-[#d5dce5] bg-[#e5eaf3] px-2.5 py-2 text-center text-[11px] font-bold text-[#30415f]"
-            aria-label="Row number"
+            className="sticky left-0 top-6.5 z-4 border-r border-b border-[#d5dce5] bg-[#e5eaf3] px-2.5 py-2 whitespace-nowrap text-center text-[11px] font-bold text-[#30415f]"
           >
-            #
+            Sr. No.
           </th>
           {COLUMN_HEADINGS.map((heading, index) => (
             <th
@@ -109,7 +93,7 @@ export const GoalWorksheet = ({ ariaLabel, children }) => (
               key={heading}
             >
               {heading}
-              {[0, 1, 2, 3, 4, 5, 6, 9, 10, 11].includes(index) && (
+              {[0, 1, 2, 3, 4, 5].includes(index) && (
                 <span className="text-red-600"> *</span>
               )}
             </th>
@@ -295,19 +279,6 @@ const GoalSheetRow = ({
       </>
     );
 
-  const renderTextareaCell = (field, label, placeholder) => (
-    <td>
-      <textarea
-        className={`${worksheetControlClass} min-h-31.5 resize-y`}
-        aria-label={`Goal ${goalNumber} ${label}`}
-        rows="4"
-        placeholder={placeholder}
-        {...fieldProps(field)}
-      />
-      {renderCellMessage(field)}
-    </td>
-  );
-
   return (
     <tr>
       <th
@@ -332,21 +303,10 @@ const GoalSheetRow = ({
           aria-label={`Goal ${goalNumber} title`}
           aria-required="true"
           type="text"
-          placeholder="Enter goal title"
+          placeholder="Enter goal description"
           {...fieldProps("GoalTitle")}
         />
         {renderCellMessage("GoalTitle")}
-      </td>
-      <td>
-        <input
-          className={worksheetControlClass}
-          aria-label={`Goal ${goalNumber} category`}
-          aria-required="true"
-          type="text"
-          placeholder="Category"
-          {...fieldProps("GoalCategory")}
-        />
-        {renderCellMessage("GoalCategory")}
       </td>
       <td>
         {isEditable("Priority") ? (
@@ -529,7 +489,7 @@ const GoalSheetRow = ({
             {row.JointAccountabilities.map((ja, jaIndex) => (
               <div className={worksheetLineClass} key={ja.key}>
                 <select
-                  className={`${worksheetControlClass} w-36 shrink-0 truncate px-2`}
+                  className={`${worksheetControlClass} min-w-0 flex-1 truncate px-2`}
                   aria-label={`Goal ${goalNumber} joint employee ${jaIndex + 1}`}
                   name="UserID"
                   value={ja.UserID}
@@ -557,24 +517,6 @@ const GoalSheetRow = ({
                   value={ja.ContributionNote}
                   onChange={(e) => handleJointAccountabilityChange(ja.key, e)}
                 />
-                <div className="relative w-17 shrink-0 border-l border-[#e4e9f0]">
-                  <input
-                    className={`${worksheetControlClass} pr-6 text-right`}
-                    aria-label={`Goal ${goalNumber} joint employee ${jaIndex + 1} weightage percentage (optional)`}
-                    type="number"
-                    step="0.01"
-                    name="Weightage"
-                    placeholder="opt."
-                    value={ja.Weightage}
-                    onChange={(e) => handleJointAccountabilityChange(ja.key, e)}
-                  />
-                  <span
-                    className="pointer-events-none absolute right-2.5 top-3.5 text-[11px] text-slate-500"
-                    aria-hidden="true"
-                  >
-                    %
-                  </span>
-                </div>
                 <button
                   type="button"
                   className={worksheetLineRemoveClass}
@@ -605,7 +547,7 @@ const GoalSheetRow = ({
             {row.JointAccountabilities.map((ja, jaIndex) => (
               <div className={worksheetLineClass} key={ja.key}>
                 <input
-                  className={`${worksheetControlClass} w-36 shrink-0 truncate px-2`}
+                  className={`${worksheetControlClass} min-w-0 flex-1 truncate px-2`}
                   aria-label={`Goal ${goalNumber} joint employee ${jaIndex + 1}`}
                   type="text"
                   value={getJointEmployeeName(ja)}
@@ -618,23 +560,6 @@ const GoalSheetRow = ({
                   value={ja.ContributionNote}
                   readOnly
                 />
-                <div className="relative w-17 shrink-0 border-l border-[#e4e9f0]">
-                  <input
-                    className={`${worksheetControlClass} pr-6 text-right`}
-                    aria-label={`Goal ${goalNumber} joint employee ${jaIndex + 1} weightage percentage`}
-                    type="text"
-                    value={ja.Weightage}
-                    readOnly
-                  />
-                  {ja.Weightage !== "" && (
-                    <span
-                      className="pointer-events-none absolute right-2.5 top-3.5 text-[11px] text-slate-500"
-                      aria-hidden="true"
-                    >
-                      %
-                    </span>
-                  )}
-                </div>
               </div>
             ))}
             {row.JointAccountabilities.length === 0 && (
@@ -646,22 +571,6 @@ const GoalSheetRow = ({
         )}
         {renderCellMessage("JointAccountabilities")}
       </td>
-      {renderTextareaCell("GoalDescription", "description")}
-      {renderTextareaCell(
-        "Measurability",
-        "measurability",
-        "Source of validation",
-      )}
-      {renderTextareaCell(
-        "MeetPerformance",
-        "meet performance target",
-        "Expected target",
-      )}
-      {renderTextareaCell(
-        "ExceedPerformance",
-        "exceed performance target",
-        "Exceed target",
-      )}
       <td>
         {onRemove && (
           <div className="flex flex-col gap-1.5 p-2">

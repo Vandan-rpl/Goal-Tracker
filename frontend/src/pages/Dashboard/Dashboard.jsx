@@ -18,7 +18,10 @@ import {
   getEmployeeGoals,
   getEmployeeQuarterSummary,
 } from "../../services/dashboardService";
-import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
+import {
+  formatFiscalQuarterLabel,
+  getCurrentFiscalQuarterValue,
+} from "../../utils/fiscalQuarter";
 import {
   isCompletionBlockedByOverdue,
   OVERDUE_COMPLETION_MESSAGE,
@@ -32,6 +35,7 @@ import {
 } from "../../utils/goalStatus";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 import QuarterSummaryTable from "../../components/QuarterSummaryTable/QuarterSummaryTable";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const MAX_GOALS_PER_QUARTER = 8;
 const STATUS_GROUPS = {
@@ -119,10 +123,7 @@ function formatDate(dateStr) {
   if (!dateStr) return "—";
   const date = getDateOnly(dateStr);
   if (!date) return "—";
-  return new Date(date.year, date.month - 1, date.day).toLocaleDateString(
-    "en-IN",
-    { day: "numeric", month: "short", year: "numeric" },
-  );
+  return formatDisplayDate(new Date(date.year, date.month - 1, date.day));
 }
 
 // ---------------------------------------------------------------------------
@@ -463,11 +464,11 @@ export default function GoalDashboard() {
 
         <section
           className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
-          aria-label={`${currentQuarterAllocation.quarter} progress`}
+          aria-label={`${formatFiscalQuarterLabel(currentQuarterAllocation.quarter)} progress`}
         >
           <div className="flex items-start justify-between gap-3">
             <p className="text-sm font-semibold text-gray-800">
-              {currentQuarterAllocation.quarter} progress
+              {formatFiscalQuarterLabel(currentQuarterAllocation.quarter)} progress
             </p>
             <p className="shrink-0 text-xs font-medium text-gray-500">
               {currentQuarterAllocation.goalCount} of {MAX_GOALS_PER_QUARTER} goals
@@ -607,7 +608,7 @@ export default function GoalDashboard() {
 
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-800">
-              Sub-goal progress · {currentQuarterLabel}
+              Sub-goal progress · {formatFiscalQuarterLabel(currentQuarterLabel)}
             </h2>
             {currentQuarterGoalCount === 0 ? (
               <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
@@ -631,7 +632,7 @@ export default function GoalDashboard() {
           </section>
 
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-800">Needs attention</h2>
+            <h2 className="text-sm font-semibold text-gray-800">Needs attention (Overdue goals)</h2>
             {dashboardSummary?.needsAttention?.length ? (
               <ul className="mt-3 divide-y divide-gray-100">
                 {dashboardSummary.needsAttention.map((goal) => (

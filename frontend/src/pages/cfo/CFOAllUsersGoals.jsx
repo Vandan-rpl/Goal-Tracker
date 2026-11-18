@@ -7,6 +7,7 @@ import {
 } from "../../utils/fiscalQuarter";
 import { canEditGoal } from "../../utils/goalEditability";
 import useAuth from "../../hooks/useAuth";
+import { formatDisplayDate } from "../../utils/dateTime";
 
 const statusBadgeClass = (status) => {
   if (status === "Completed") return "bg-blue-100 text-blue-700";
@@ -167,8 +168,8 @@ const CFOAllUsersGoals = () => {
         {approvalWindow.isOpen
           ? "Your approvals are open through "
           : "Your approvals are open only on quarter days 16-30. This quarter's window is "}
-        {approvalWindow.startDate.toLocaleDateString()} through{" "}
-        {approvalWindow.endDate.toLocaleDateString()}.
+        {formatDisplayDate(approvalWindow.startDate)} through{" "}
+        {formatDisplayDate(approvalWindow.endDate)}.
       </div>
 
       {/* Filters */}
@@ -309,7 +310,7 @@ const CFOAllUsersGoals = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Goal Title
+                  Goal Description
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Quarter
@@ -344,7 +345,7 @@ const CFOAllUsersGoals = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {goal.CreatedDate
-                        ? new Date(goal.CreatedDate).toLocaleDateString()
+                        ? formatDisplayDate(goal.CreatedDate)
                         : "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
