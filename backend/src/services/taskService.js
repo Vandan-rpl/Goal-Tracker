@@ -495,7 +495,7 @@ const createTask = async (body = {}, user, { projectId = null } = {}) => {
         taskName: checkTaskName(body.taskName, errors),
         priority: checkPriority(body.priority, errors),
         dueDate: checkDueDate(body.dueDate, errors),
-        status: has(body, "status") && text(body.status) ? checkStatus(body.status, errors) : TaskStatus.PENDING,
+        status: has(body, "status") && text(body.status) ? checkStatus(body.status, errors) : TaskStatus.NOT_STARTED,
         userRemarks: checkRemarks(body.userRemarks, "User's Remarks", errors),
     };
     // Project task: the member adding it is its Responsible Person.
@@ -567,7 +567,7 @@ const insertAssignedTask = async (transaction, { employeeId, input, businessHead
         ...input,
         ...project,
         userId: employeeId,
-        status: TaskStatus.PENDING,
+        status: TaskStatus.NOT_STARTED,
         userRemarks: null,
         assignedBy: businessHeadId,
         createdBy: businessHeadId,
@@ -582,7 +582,7 @@ const insertAssignedTask = async (transaction, { employeeId, input, businessHead
             TaskName: input.taskName,
             Priority: input.priority,
             DueDate: input.dueDate,
-            Status: TaskStatus.PENDING,
+            Status: TaskStatus.NOT_STARTED,
             CFORemarks: input.cfoRemarks,
             AssignedBy: businessHeadId,
             ProjectID: project.projectId,
@@ -706,8 +706,8 @@ const updateTask = async (taskIdParam, body = {}, user) => {
         const values = Object.fromEntries(changed.map((column) => [column, next[column]]));
         let completedDate;
         if (changed.includes("Status")) {
-            if (next.Status === TaskStatus.DONE) completedDate = "now";
-            else if (current.Status === TaskStatus.DONE) completedDate = "clear";
+            if (next.Status === TaskStatus.COMPLETED) completedDate = "now";
+            else if (current.Status === TaskStatus.COMPLETED) completedDate = "clear";
         }
 
         const updated = await taskModel.updateTask(transaction, taskId, values, { completedDate });

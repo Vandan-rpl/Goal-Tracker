@@ -23,7 +23,7 @@ const TODAY = "CAST(SYSDATETIME() AS DATE)";
 // Overdue: DueDate before today and not Done (dates only). Not stored.
 const IS_OVERDUE = `
     CAST(CASE
-        WHEN t.Status <> N'${TaskStatus.DONE}'
+        WHEN t.Status <> N'${TaskStatus.COMPLETED}'
          AND t.DueDate < ${TODAY}
         THEN 1 ELSE 0
     END AS BIT)
@@ -156,7 +156,7 @@ const insertTask = async (db, task) => {
                  @UserRemarks,
                  @AssignedBy,
                  CASE WHEN @IsAssigned = 1 THEN SYSDATETIME() END,
-                 CASE WHEN @Status = N'${TaskStatus.DONE}' THEN SYSDATETIME() END,
+                 CASE WHEN @Status = N'${TaskStatus.COMPLETED}' THEN SYSDATETIME() END,
                  CASE WHEN @IsAssigned = 1 THEN 0 ELSE 1 END,
                  0, @CreatedBy, SYSDATETIME(),
                  @ProjectID, @ResponsiblePersonID, @AssignmentGroupID);
@@ -265,7 +265,7 @@ const buildTaskListWhere = ({ scope, viewerId, filters }) => {
         params.push(["Status", sql.NVarChar(20), filters.status]);
     } else {
         conditions.push(`
-            t.Status <> N'${TaskStatus.DONE}'
+            t.Status <> N'${TaskStatus.COMPLETED}'
             OR t.CompletedDate >= CAST(DATEADD(DAY, -${TASK_DONE_RECENT_DAYS}, ${TODAY}) AS DATETIME2)
         `);
     }
@@ -324,8 +324,8 @@ const listTasks = async (db, { scope, viewerId, filters }) => {
         ${TASK_FROM}
         WHERE ${where}
         ORDER BY
-            CASE WHEN t.Status = N'${TaskStatus.DONE}' THEN 1 ELSE 0 END,
-            CASE WHEN t.Status = N'${TaskStatus.DONE}' THEN NULL ELSE t.DueDate END,
+            CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN 1 ELSE 0 END,
+            CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN NULL ELSE t.DueDate END,
             t.CompletedDate DESC,
             t.TaskID DESC;
     `);
@@ -500,14 +500,14 @@ const getEmployeeTaskSummary = async (db) => {
             ON d.DepartmentID = u.DepartmentID
         OUTER APPLY (
             SELECT
-                SUM(CASE WHEN t.Status <> N'${TaskStatus.DONE}' THEN 1 ELSE 0 END) AS OpenCount,
+                SUM(CASE WHEN t.Status <> N'${TaskStatus.COMPLETED}' THEN 1 ELSE 0 END) AS OpenCount,
                 SUM(CASE WHEN ${IS_OVERDUE} = 1 THEN 1 ELSE 0 END) AS OverdueCount,
                 SUM(CASE
-                    WHEN t.Status = N'${TaskStatus.DONE}'
+                    WHEN t.Status = N'${TaskStatus.COMPLETED}'
                      AND t.CompletedDate >= CAST(DATEADD(DAY, -${TASK_DONE_RECENT_DAYS}, ${TODAY}) AS DATETIME2)
                     THEN 1 ELSE 0
                 END) AS DoneRecentCount,
-                SUM(CASE WHEN t.Status <> N'${TaskStatus.DONE}' AND t.AssignedBy IS NOT NULL THEN 1 ELSE 0 END) AS AssignedOpenCount
+                SUM(CASE WHEN t.Status <> N'${TaskStatus.COMPLETED}' AND t.AssignedBy IS NOT NULL THEN 1 ELSE 0 END) AS AssignedOpenCount
             FROM dbo.Tasks t
             WHERE t.UserID = u.UserID
               AND t.IsDeleted = 0
@@ -591,7 +591,7 @@ const listProjectTasks = async (db, projectId, { ownerId = null } = {}) => {
               AND t.IsDeleted = 0
               AND (@OwnerID IS NULL OR t.UserID = @OwnerID)
             ORDER BY
-                CASE WHEN t.Status = N'${TaskStatus.DONE}' THEN 1 ELSE 0 END,
+                CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN 1 ELSE 0 END,
                 t.DueDate,
                 t.TaskID;
         `);

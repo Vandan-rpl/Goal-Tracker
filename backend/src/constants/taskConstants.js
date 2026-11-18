@@ -7,10 +7,13 @@
 // Match CK_Tasks_Priority / CK_Tasks_Status in dbo.Tasks.
 const TASK_PRIORITIES = Object.freeze(["Low", "Medium", "High"]);
 
+// Order = workflow order (shown in dropdowns). COMPLETED is the closed state:
+// it sets CompletedDate; every other status counts as open.
 const TaskStatus = Object.freeze({
-  PENDING: "Pending",
+  NOT_STARTED: "Not Started",
+  STARTED: "Started",
   IN_PROGRESS: "In Progress",
-  DONE: "Done",
+  COMPLETED: "Completed",
 });
 
 const TASK_STATUSES = Object.freeze(Object.values(TaskStatus));

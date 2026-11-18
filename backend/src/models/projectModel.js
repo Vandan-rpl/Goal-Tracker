@@ -27,9 +27,9 @@ const PROJECT_TASK_COUNTS = `
     OUTER APPLY (
         SELECT
             COUNT(*) AS TaskCount,
-            SUM(CASE WHEN t.Status <> N'${TaskStatus.DONE}' THEN 1 ELSE 0 END) AS OpenCount,
+            SUM(CASE WHEN t.Status <> N'${TaskStatus.COMPLETED}' THEN 1 ELSE 0 END) AS OpenCount,
             SUM(CASE
-                WHEN t.Status <> N'${TaskStatus.DONE}'
+                WHEN t.Status <> N'${TaskStatus.COMPLETED}'
                  AND t.DueDate < CAST(SYSDATETIME() AS DATE)
                 THEN 1 ELSE 0
             END) AS OverdueCount
