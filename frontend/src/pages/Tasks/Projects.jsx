@@ -122,7 +122,7 @@ const Projects = () => {
         )
       }
       footer={
-        "Tasks / Open / Overdue cover every task in projects you created (or all projects for the Business Head), and only your own tasks in projects you are a member of."
+        "Tasks / Open / Overdue cover every task in projects you created (or all projects for the CFO), and only your own tasks in projects you are a member of."
       }
     >
       {creating && (

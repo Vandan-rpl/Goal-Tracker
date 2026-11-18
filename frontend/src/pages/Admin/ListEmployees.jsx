@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { getUniqueDepartments } from '../../utils/departmentOptions';
+import { getRoleLabel } from "../../utils/roleLabel";
 
 const ListEmployees = () => {
   const [employees, setEmployees] = useState([]);
@@ -212,7 +213,7 @@ const ListEmployees = () => {
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                          {emp.Role}
+                          {getRoleLabel(emp.Role)}
                         </span>
                       </td>
 
@@ -346,7 +347,7 @@ const ListEmployees = () => {
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     >
                       {['Employee', 'Manager', 'HOD', 'BusinessHead'].map((role) => (
-                        <option key={role} value={role}>{role}</option>
+                        <option key={role} value={role}>{getRoleLabel(role)}</option>
                       ))}
                     </select>
                   </div>
@@ -362,7 +363,7 @@ const ListEmployees = () => {
                   {[
                     ['ReportingManagerID', 'Reporting Manager'],
                     ['HODID', 'HOD'],
-                    ['BusinessHeadID', 'Business Head'],
+                    ['BusinessHeadID', 'CFO'],
                   ].map(([field, label]) => (
                     <div key={field}>
                       <label className="block text-xs font-medium text-slate-700 mb-1">{label}</label>
@@ -374,7 +375,7 @@ const ListEmployees = () => {
                         <option value="">-- None --</option>
                         {allEmployees.map((emp) => (
                           <option key={emp.UserID} value={emp.UserID}>
-                            {emp.FirstName} {emp.LastName} ({emp.Role})
+                            {emp.FirstName} {emp.LastName} ({getRoleLabel(emp.Role)})
                           </option>
                         ))}
                       </select>

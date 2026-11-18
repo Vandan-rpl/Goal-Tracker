@@ -816,7 +816,7 @@ const ViewGoal = () => {
               </div>
             ) : isApproved && !reviewableStatuses.includes(goal.GoalStatus) ? (
               <div className="w-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-4 rounded-xl font-bold text-sm">
-                ✓ This goal has been successfully {goal.GoalStatus}.
+                ✓ This goal has been successfully {getGoalStatusLabel(goal.GoalStatus)}.
               </div>
             ) : goal.GoalStatus === "Completed" ? (
               <div className="w-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-4 rounded-xl font-bold text-sm">

@@ -9,6 +9,7 @@ import {
   formatScorePercent,
   toSummaryQuarters,
 } from '../../utils/yearlyPerformance';
+import { getGoalStatusLabel } from "../../utils/goalStatus";
 
 // Simple hand-rolled SVG gauge — no charting library needed, keeps this
 // page consistent with the rest of the (plain Tailwind, zero-extra-deps)
@@ -333,7 +334,7 @@ const FinalEvaluation = () => {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="px-2.5 py-1 inline-flex text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                          {g.GoalStatus}
+                          {getGoalStatusLabel(g.GoalStatus)}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-700">

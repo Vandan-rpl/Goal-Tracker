@@ -19,7 +19,7 @@ const WORKLOAD_FILTERS = [
 ];
 
 const matchesWorkload = (tasks, workload) => {
-  const open = tasks.filter((t) => t.Status !== "Done").length;
+  const open = tasks.filter((t) => t.Status !== "Completed").length;
   if (workload === "none") return open === 0;
   if (workload === "open") return open > 0;
   if (workload === "overdue") return tasks.some((t) => t.IsOverdue);
@@ -175,7 +175,7 @@ export default function TaskEmployeesView({ canAssign = false, headerActions = n
           )}
         </>
       }
-      footer="Status and User's Remarks are updated by the employee. Task Name, Priority and Due Date can be changed only on tasks you assigned. Done tasks older than 30 days are not listed."
+      footer="Status and User's Remarks are updated by the employee. Task Name, Priority and Due Date can be changed only on tasks you assigned. Completed tasks older than 30 days are not listed."
     >
       {error && (
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>

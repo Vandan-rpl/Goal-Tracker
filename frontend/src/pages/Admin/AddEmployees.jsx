@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { getUniqueDepartments } from '../../utils/departmentOptions';
+import { getRoleLabel } from "../../utils/roleLabel";
 
 const AddEmployees = () => {
   const roleRanks = {
@@ -310,7 +311,7 @@ const AddEmployees = () => {
                   <option value="">-- None --</option>
                   {managers.map((emp) => (
                     <option key={emp.UserID} value={emp.UserID}>
-                      {emp.FirstName} {emp.LastName} ({emp.Role})
+                      {emp.FirstName} {emp.LastName} ({getRoleLabel(emp.Role)})
                     </option>
                   ))}
                 </select>
@@ -327,14 +328,14 @@ const AddEmployees = () => {
                   <option value="">-- None --</option>
                   {hods.map((emp) => (
                     <option key={emp.UserID} value={emp.UserID}>
-                      {emp.FirstName} {emp.LastName} ({emp.Role})
+                      {emp.FirstName} {emp.LastName} ({getRoleLabel(emp.Role)})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">Business Head</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">CFO</label>
                 <select
                   value={formData.BusinessHeadID}
                   onChange={(e) => handleChange('BusinessHeadID', e.target.value)}
@@ -344,7 +345,7 @@ const AddEmployees = () => {
                   <option value="">-- None --</option>
                   {businessHeads.map((emp) => (
                     <option key={emp.UserID} value={emp.UserID}>
-                      {emp.FirstName} {emp.LastName} ({emp.Role})
+                      {emp.FirstName} {emp.LastName} ({getRoleLabel(emp.Role)})
                     </option>
                   ))}
                 </select>
@@ -368,7 +369,7 @@ const AddEmployees = () => {
                 <option value="Employee">Employee</option>
                 <option value="Manager">Manager</option>
                 <option value="HOD">HOD</option>
-                <option value="BusinessHead">Business Head</option>
+                <option value="BusinessHead">CFO</option>
               </select>
             </div>
           </div>

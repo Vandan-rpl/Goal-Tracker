@@ -4,6 +4,8 @@ import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 import useAuth from "../../hooks/useAuth";
 import CompletionRequests from "../../components/GoalCompletion/CompletionRequests";
 import { formatDisplayDate } from "../../utils/dateTime";
+import { getGoalStatusLabel } from "../../utils/goalStatus";
+import { getRoleLabel } from "../../utils/roleLabel";
 
 const MAX_GOALS_PER_QUARTER = 8;
 
@@ -68,7 +70,7 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
           {user.FirstName} {user.LastName}
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-          {user.Designation || user.Role}
+          {user.Designation || getRoleLabel(user.Role)}
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
           <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold">
@@ -398,7 +400,7 @@ const TeamManagement = () => {
                                 : "bg-emerald-100 text-emerald-800"
                             }`}
                           >
-                            {goal.GoalStatus}
+                            {getGoalStatusLabel(goal.GoalStatus)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">

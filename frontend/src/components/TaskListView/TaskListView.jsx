@@ -41,9 +41,10 @@ const cellClass = "border-r border-b border-[#d5dce5] px-2.5 py-2.5 align-top te
 
 // Square labels in the workbook palette.
 const STATUS_LABEL_CLASSES = {
-  Pending: "border-slate-300 bg-slate-50 text-slate-700",
+  "Not Started": "border-slate-300 bg-slate-50 text-slate-700",
+  Started: "border-amber-200 bg-amber-50 text-amber-800",
   "In Progress": "border-blue-200 bg-blue-50 text-[#2c3e82]",
-  Done: "border-green-200 bg-green-50 text-green-800",
+  Completed: "border-green-200 bg-green-50 text-green-800",
 };
 
 const PRIORITY_LABEL_CLASSES = {
@@ -183,9 +184,10 @@ export default function TaskListView({
   const summary = useMemo(
     () => ({
       total: tasks.length,
-      pending: tasks.filter((t) => t.Status === "Pending").length,
+      notStarted: tasks.filter((t) => t.Status === "Not Started").length,
+      started: tasks.filter((t) => t.Status === "Started").length,
       inProgress: tasks.filter((t) => t.Status === "In Progress").length,
-      done: tasks.filter((t) => t.Status === "Done").length,
+      completed: tasks.filter((t) => t.Status === "Completed").length,
       overdue: tasks.filter((t) => t.IsOverdue).length,
       assigned: tasks.filter((t) => t.IsAssignedByBusinessHead).length,
       employees: new Set(tasks.map((t) => t.UserID)).size,
@@ -453,9 +455,10 @@ export default function TaskListView({
   const summaryBoxes = [
     showEmployee && { label: "Employees", value: summary.employees },
     { label: "Tasks", value: summary.total },
-    { label: "Pending", value: summary.pending },
+    { label: "Not Started", value: summary.notStarted },
+    { label: "Started", value: summary.started },
     { label: "In Progress", value: summary.inProgress },
-    { label: "Done", value: summary.done },
+    { label: "Completed", value: summary.completed },
     { label: "Assigned", value: summary.assigned },
   ].filter(Boolean);
 
@@ -545,7 +548,7 @@ export default function TaskListView({
       {filterKeys.includes("dueRange") && (
         <>
           <div>
-            <label htmlFor="task-filter-due-from" className={filterLabelClass}>Due Date From</label>
+            <label htmlFor="task-filter-due-from" className={filterLabelClass}>Date From</label>
             <DateInput
               id="task-filter-due-from"
               value={filters.dueFrom}
@@ -555,7 +558,7 @@ export default function TaskListView({
             />
           </div>
           <div>
-            <label htmlFor="task-filter-due-to" className={filterLabelClass}>Due Date To</label>
+            <label htmlFor="task-filter-due-to" className={filterLabelClass}>Date To</label>
             <DateInput
               id="task-filter-due-to"
               value={filters.dueTo}
@@ -687,7 +690,7 @@ export default function TaskListView({
             ) : groupByEmployee && pageGroups.length > 0 ? (
               pageGroups.map((group) => {
                 const expanded = expandedIds.has(group.userId);
-                const open = group.tasks.filter((t) => t.Status !== "Done").length;
+                const open = group.tasks.filter((t) => t.Status !== "Completed").length;
                 const overdue = group.tasks.filter((t) => t.IsOverdue).length;
                 return (
                   <React.Fragment key={group.userId}>

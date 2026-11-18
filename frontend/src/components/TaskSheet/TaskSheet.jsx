@@ -34,7 +34,7 @@ const EMPTY_DRAFT = {
   taskName: "",
   priority: "Medium",
   dueDate: "",
-  status: "Pending",
+  status: "Not Started",
   cfoRemarks: "",
   userRemarks: "",
   responsiblePersonId: "",
@@ -45,7 +45,7 @@ const draftFromTask = (task) => ({
   taskName: task.TaskName || "",
   priority: task.Priority || "Medium",
   dueDate: task.DueDate || "",
-  status: task.Status || "Pending",
+  status: task.Status || "Not Started",
   cfoRemarks: task.CFORemarks || "",
   userRemarks: task.UserRemarks || "",
   responsiblePersonId: task.ResponsiblePersonID ? String(task.ResponsiblePersonID) : "",
@@ -586,7 +586,7 @@ export default function TaskSheet({
             )}
           </td>
 
-          <td className={`${cellClass} w-32`}>
+          <td className={`${cellClass} w-32 min-w-[110px]`}>
             {editable.details ? (
               <select
                 value={draft.priority}
@@ -602,7 +602,7 @@ export default function TaskSheet({
             )}
           </td>
 
-          <td className={`${cellClass} w-40`}>
+          <td className={`${cellClass} w-40 min-w-[150px]`}>
             {editable.details ? (
               <DateInput
                 value={draft.dueDate}
@@ -618,7 +618,7 @@ export default function TaskSheet({
             )}
           </td>
 
-          <td className={`${cellClass} w-40`}>
+          <td className={`${cellClass} min-w-[210px]`}>
             <div className="flex items-center gap-1.5">
               {editable.status ? (
                 <select
@@ -632,11 +632,11 @@ export default function TaskSheet({
                 </select>
               ) : (
                 <span className={`${readOnlyClass} ${isNewRow ? "text-slate-400" : ""}`}>
-                  {isNewRow ? "Pending" : task.Status}
+                  {isNewRow ? "Not Started" : task.Status}
                 </span>
               )}
               {task?.IsOverdue && (
-                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-50 text-[#b3403f] border border-red-200 mr-1 shrink-0">
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-50 text-[#b3403f] border border-red-200 mr-1 shrink-0 whitespace-nowrap">
                   Overdue
                 </span>
               )}
@@ -737,8 +737,8 @@ export default function TaskSheet({
     const expanded = expandedGroups.has(group.groupId);
 
     const total = group.copies.length;
-    const done = group.copies.filter((t) => t.Status === "Done").length;
-    const pending = group.copies.filter((t) => t.Status !== "Done");
+    const done = group.copies.filter((t) => t.Status === "Completed").length;
+    const pending = group.copies.filter((t) => t.Status !== "Completed");
     const overdue = group.copies.some((t) => t.IsOverdue);
     const hasNew = group.copies.some((t) => newTaskIds?.has(t.TaskID));
 
@@ -768,7 +768,7 @@ export default function TaskSheet({
             )}
           </td>
 
-          <td className={`${cellClass} w-32`}>
+          <td className={`${cellClass} w-32 min-w-[110px]`}>
             {canManage ? (
               <select
                 value={draft.priority}
@@ -784,7 +784,7 @@ export default function TaskSheet({
             )}
           </td>
 
-          <td className={`${cellClass} w-40`}>
+          <td className={`${cellClass} w-40 min-w-[150px]`}>
             {canManage ? (
               <DateInput
                 value={draft.dueDate}
@@ -800,11 +800,11 @@ export default function TaskSheet({
             )}
           </td>
 
-          <td className={`${cellClass} w-48`}>
+          <td className={`${cellClass} min-w-[210px]`}>
             <div className="px-2.5 py-2 text-xs">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className={`font-semibold ${done === total ? "text-green-800" : "text-[#2c3e82]"}`}>
-                  {done} of {total} done
+                  {done} of {total} completed
                 </span>
                 {overdue && (
                   <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-50 text-[#b3403f] border border-red-200">Overdue</span>
@@ -815,7 +815,7 @@ export default function TaskSheet({
               </div>
               {pending.length > 0 && (
                 <p className="mt-1 text-[10px] leading-snug text-slate-600">
-                  Pending: {pending.map((t) => t.EmployeeName).join(", ")}
+                  Not completed: {pending.map((t) => t.EmployeeName).join(", ")}
                 </p>
               )}
             </div>
@@ -899,7 +899,7 @@ export default function TaskSheet({
         <tbody>
           {groups.map(({ employee, tasks, canAdd }) => {
             const newKeys = canAdd ? newRowKeysFor(employee.UserID) : [];
-            const openCount = tasks.filter((t) => t.Status !== "Done").length;
+            const openCount = tasks.filter((t) => t.Status !== "Completed").length;
             const overdueCount = tasks.filter((t) => t.IsOverdue).length;
             const items = toSheetItems(tasks, collapseGroups);
             const addRow = () =>

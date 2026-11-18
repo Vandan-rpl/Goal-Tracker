@@ -8,6 +8,8 @@ import {
   getManagerHodApprovalWindow,
 } from '../../utils/fiscalQuarter';
 import { formatDisplayDate } from "../../utils/dateTime";
+import { getGoalStatusLabel } from "../../utils/goalStatus";
+import { getRoleLabel } from "../../utils/roleLabel";
 
 const ApproveGoals = () => {
   const { user } = useAuth();
@@ -134,7 +136,7 @@ const ApproveGoals = () => {
                     <p className={`font-bold ${selectedUser?.UserID === member.UserID ? 'text-indigo-900' : 'text-gray-900'}`}>
                       {member.FirstName} {member.LastName}
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5">{member.Designation || member.Role}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{member.Designation || getRoleLabel(member.Role)}</p>
                     <span className="inline-block mt-3 px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full">
                       Submitted Goals: {member.TotalGoals}
                     </span>
@@ -170,7 +172,7 @@ const ApproveGoals = () => {
                         <h3 className="font-bold text-gray-900 text-base mt-0.5">{goal.GoalTitle}</h3>
                       </div>
                       <span className="px-3 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">
-                        {goal.GoalStatus}
+                        {getGoalStatusLabel(goal.GoalStatus)}
                       </span>
                     </div>
 

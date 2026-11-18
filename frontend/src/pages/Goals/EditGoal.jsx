@@ -16,6 +16,7 @@ import {
   getSubGoalWeightageSummary,
 } from "../../utils/subGoals";
 import DateInput from "../../components/DateInput/DateInput";
+import { getGoalStatusLabel } from "../../utils/goalStatus";
 
 const MIN_GOAL_WEIGHTAGE = 5;
 const MAX_GOAL_WEIGHTAGE = 100;
@@ -395,7 +396,7 @@ const EditGoal = () => {
       <div className="flex-1 bg-gray-50 min-h-screen p-8 text-center">
         <div className="bg-amber-50 text-amber-800 p-4 rounded-xl max-w-md mx-auto mb-4 font-medium">
           {terminalStatus
-            ? `This goal is ${formData.GoalStatus} and cannot be edited.`
+            ? `This goal is ${getGoalStatusLabel(formData.GoalStatus)} and cannot be edited.`
             : `This goal is ${originalStatus} and can only be edited when it is Draft or Rejected, or after its Timeline has passed.`}
         </div>
         <button
@@ -655,7 +656,7 @@ const EditGoal = () => {
                   "Rejected",
                 ].includes(formData.GoalStatus) && (
                   <option value={formData.GoalStatus}>
-                    {formData.GoalStatus}
+                    {getGoalStatusLabel(formData.GoalStatus)}
                   </option>
                 )}
                 <option value="Running">Running</option>

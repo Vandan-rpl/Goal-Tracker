@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../services/api';
+import { getRoleLabel } from '../../utils/roleLabel';
 
 const SOURCE_STYLES = {
   file: 'text-slate-700',
@@ -13,10 +14,10 @@ const SOURCE_STYLES = {
 const SOURCE_LABELS = {
   file: 'Matched in file',
   database: 'Matched existing user',
-  businessHead: 'Blank — reports to Business Head',
-  businessHeadMatched: 'Business Head',
+  businessHead: 'Blank — reports to CFO',
+  businessHeadMatched: 'CFO',
   notLinked: 'Not linked',
-  unchanged: 'Business Head (unchanged)',
+  unchanged: 'CFO (unchanged)',
 };
 
 const isHighlighted = (h) => ['businessHead', 'notLinked'].includes(h.reportingManager?.source);
@@ -229,7 +230,7 @@ const ImportEmployees = () => {
                 ))}
               </div>
               <p className="text-xs text-slate-500">
-                Business Head for all uploaded employees: {report.businessHead.name} ({report.businessHead.employeeCode}).
+                CFO for all uploaded employees: {report.businessHead.name} ({report.businessHead.employeeCode}).
                 HOD is set to the same user as the Reporting Manager.
               </p>
             </div>
@@ -323,7 +324,7 @@ const ImportEmployees = () => {
             <div className="space-y-4">
               <SectionTitle>Hierarchy</SectionTitle>
               <p className="text-xs text-slate-500">
-                Highlighted rows report to the Business Head because Reporting Manager was blank, or their manager could not be linked.
+                Highlighted rows report to the CFO because Reporting Manager was blank, or their manager could not be linked.
               </p>
               <TableShell headers={['Row', 'Employee Code', 'Name', 'Reporting Manager / HOD', 'Role']}>
                 {report.hierarchy.map((h) => (
@@ -333,7 +334,7 @@ const ImportEmployees = () => {
                     <td className="px-3 py-2 align-top text-slate-900">{h.name}</td>
                     <HierarchyCell value={h.reportingManager} />
                     <td className="px-3 py-2 align-top">
-                      {h.role}
+                      {getRoleLabel(h.role)}
                       {h.roleChanged && <span className="ml-1 text-[11px] text-indigo-600">(changed)</span>}
                     </td>
                   </tr>

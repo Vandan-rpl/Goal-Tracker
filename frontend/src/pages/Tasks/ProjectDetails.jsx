@@ -116,7 +116,7 @@ const ProjectDetails = () => {
   const tasks = useMemo(() => data?.tasks || [], [data]);
   const canManage = Boolean(data?.canManage);
 
-  const openCount = tasks.filter((t) => t.Status !== "Done").length;
+  const openCount = tasks.filter((t) => t.Status !== "Completed").length;
   const overdueCount = tasks.filter((t) => t.IsOverdue).length;
 
   const startEdit = () => {

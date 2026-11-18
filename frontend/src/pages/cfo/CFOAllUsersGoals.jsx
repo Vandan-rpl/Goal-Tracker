@@ -8,6 +8,7 @@ import {
 import { canEditGoal } from "../../utils/goalEditability";
 import useAuth from "../../hooks/useAuth";
 import { formatDisplayDate } from "../../utils/dateTime";
+import { getGoalStatusLabel } from "../../utils/goalStatus";
 
 const statusBadgeClass = (status) => {
   if (status === "Completed") return "bg-blue-100 text-blue-700";
@@ -204,7 +205,7 @@ const CFOAllUsersGoals = () => {
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {getGoalStatusLabel(s)}
               </option>
             ))}
           </select>
@@ -340,7 +341,7 @@ const CFOAllUsersGoals = () => {
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(goal.GoalStatus)}`}
                       >
-                        {goal.GoalStatus}
+                        {getGoalStatusLabel(goal.GoalStatus)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

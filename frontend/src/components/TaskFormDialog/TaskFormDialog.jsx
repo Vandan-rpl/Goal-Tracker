@@ -18,7 +18,7 @@ const formFromTask = (task) => ({
   taskName: task?.TaskName || "",
   priority: task?.Priority || "Medium",
   dueDate: task?.DueDate || "",
-  status: task?.Status || "Pending",
+  status: task?.Status || "Not Started",
   userRemarks: task?.UserRemarks || "",
 });
 

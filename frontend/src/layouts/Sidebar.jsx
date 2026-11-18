@@ -106,7 +106,7 @@ const Sidebar = () => {
         {isManagerOrHOD && (
           <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-1">
             <p className="px-3.5 pb-1 text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
-              {role === "BUSINESSHEAD" ? "Business Head View" : "For HOD/Reporting Manager"}
+              {role === "BUSINESSHEAD" ? "CFO View" : "For HOD/Reporting Manager"}
             </p>
 
             <Link

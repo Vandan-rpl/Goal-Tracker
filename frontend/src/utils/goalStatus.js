@@ -2,6 +2,10 @@
 const GOAL_STATUS_LABELS = {
   "Completion Submitted": "Pending Completion Approval",
   Completed: "Completion Approved",
+  // The Business Head role is shown as "CFO" in the UI; the stored status
+  // values (and the BusinessHead role value) are unchanged.
+  "Business Head Approved": "CFO Approved",
+  "Review By Business Head": "Review By CFO",
 };
 
 export const getGoalStatusLabel = (status) =>

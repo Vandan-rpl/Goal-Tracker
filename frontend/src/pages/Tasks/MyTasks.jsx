@@ -72,7 +72,7 @@ const MyTasks = () => {
   const hasFilters = Object.values(filters).some((value) => value !== "");
   const changeFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
 
-  const openCount = tasks.filter((t) => t.Status !== "Done").length;
+  const openCount = tasks.filter((t) => t.Status !== "Completed").length;
   const overdueCount = tasks.filter((t) => t.IsOverdue).length;
 
   return (
@@ -80,7 +80,7 @@ const MyTasks = () => {
       barSubtitle="My tasks"
       badge="MY TASKS"
       title="My Tasks"
-      description="Type a new task in a blank row, or change a task, and press Submit on that row."
+      description="Type a new task in a blank row and press Submit on that row."
       actions={
         !loading && (
           <div className="flex items-center gap-4 text-sm">
@@ -108,7 +108,7 @@ const MyTasks = () => {
             </select>
           </div>
           <div>
-            <label htmlFor="my-task-due-from" className={filterLabelClass}>Due Date From</label>
+            <label htmlFor="my-task-due-from" className={filterLabelClass}>Date From</label>
             <DateInput
               id="my-task-due-from"
               value={filters.dueFrom}
@@ -118,7 +118,7 @@ const MyTasks = () => {
             />
           </div>
           <div>
-            <label htmlFor="my-task-due-to" className={filterLabelClass}>Due Date To</label>
+            <label htmlFor="my-task-due-to" className={filterLabelClass}>Date To</label>
             <DateInput
               id="my-task-due-to"
               value={filters.dueTo}
@@ -146,7 +146,7 @@ const MyTasks = () => {
           )}
         </>
       }
-      footer="On tasks assigned by the Business Head you can change only Status and User's Remarks. CFO's Remarks are added by the Business Head. Done tasks older than 30 days are hidden unless you pick Status = Done."
+      footer="On tasks assigned by the CFO you can change only Status and User's Remarks. CFO's Remarks are added by the CFO. Completed tasks older than 30 days are hidden unless you pick Status = Completed."
     >
       {error && (
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>

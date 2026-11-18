@@ -732,7 +732,7 @@ export default function GoalDashboard() {
                   )
                   .map(([status, count]) => (
                     <option key={status} value={status}>
-                      {status} ({count})
+                      {getGoalStatusLabel(status)} ({count})
                     </option>
                   ))}
               </select>

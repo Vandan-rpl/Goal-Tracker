@@ -78,7 +78,7 @@ const AssignTask = () => {
   return (
     <TaskWorkbookFrame
       barSubtitle="Assign tasks"
-      badge="BUSINESS HEAD"
+      badge="CFO"
       title="Assign Task"
       description="Pick an employee, type tasks into the blank rows and press Submit on each row. The employee is emailed."
       actions={
@@ -94,7 +94,7 @@ const AssignTask = () => {
           />
         </div>
       }
-      footer={employeeId ? "Status and User's Remarks are updated by the employee. Task Name, Priority and Due Date can be changed only on tasks you assigned. Done tasks older than 30 days are not listed." : null}
+      footer={employeeId ? "Status and User's Remarks are updated by the employee. Task Name, Priority and Due Date can be changed only on tasks you assigned. Completed tasks older than 30 days are not listed." : null}
     >
       {error && (
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>
