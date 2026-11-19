@@ -1,5 +1,6 @@
 const { sql } = require("../config/db");
 const { TaskStatus, TASK_DONE_RECENT_DAYS, TASK_BUSINESS_HEAD_ROLE } = require("../constants/taskConstants");
+const { sqlFiscalYear } = require("../utils/moduleReport");
 
 /**
  * ============================================================
@@ -698,8 +699,67 @@ const listDashboardTasks = async (db, userId) => {
     return result.recordset;
 };
 
+/**
+ * CFO Reports & Analytics: every task (personal and project), any owner,
+ * any year; utils/moduleReport filters and counts them. FiscalYear is the
+ * fiscal year the task was assigned (or added, for self-added tasks).
+ * ReportStatus groups (never overlapping): Completed, else Overdue
+ * (IS_OVERDUE), else Not Started, else In Progress (Started / In Progress).
+ * Source: Project (ProjectID set), Self-added (AssignedBy NULL), Assigned.
+ */
+const listReportTasks = async (db) => {
+
+    const addedOn = "COALESCE(t.AssignedDate, t.CreatedDate)";
+
+    const result = await db.request().query(`
+        SELECT
+            t.TaskID,
+            t.TaskName,
+            t.Priority,
+            t.DueDate,
+            t.Status,
+            t.CompletedDate,
+            t.CFORemarks,
+            t.UserRemarks,
+            ${IS_OVERDUE} AS IsOverdue,
+            t.UserID,
+            ${fullName("owner")} AS EmployeeName,
+            owner.DepartmentID,
+            ownerDept.DepartmentName,
+            p.ProjectName,
+            ${fullName("assigner")} AS AssignedByName,
+            ${addedOn} AS AddedDate,
+            ${sqlFiscalYear(addedOn)} AS FiscalYear,
+            CASE
+                WHEN t.ProjectID IS NOT NULL THEN N'Project'
+                WHEN t.AssignedBy IS NULL THEN N'Self-added'
+                ELSE N'Assigned'
+            END AS Source,
+            CASE
+                WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN N'Completed'
+                WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
+                WHEN t.Status = N'${TaskStatus.NOT_STARTED}' THEN N'Not Started'
+                ELSE N'In Progress'
+            END AS ReportStatus
+        FROM dbo.Tasks t
+        INNER JOIN dbo.Users owner
+            ON owner.UserID = t.UserID
+        LEFT JOIN dbo.Departments ownerDept
+            ON ownerDept.DepartmentID = owner.DepartmentID
+        LEFT JOIN dbo.Users assigner
+            ON assigner.UserID = t.AssignedBy
+        LEFT JOIN dbo.Projects p
+            ON p.ProjectID = t.ProjectID
+        WHERE t.IsDeleted = 0
+        ORDER BY ${addedOn} DESC, t.TaskID DESC;
+    `);
+
+    return result.recordset;
+};
+
 module.exports = {
     listDashboardTasks,
+    listReportTasks,
     getTask,
     listAssignedByMonth,
     insertTask,

@@ -10,7 +10,7 @@ const Roles = require("../constants/roles");
  * Idea Routes
  * Base URL : /api/v1/ideas
  * ============================================================
- * Fixed paths (/purposes, /leads, /final-approvers, /dashboard, /my, /assigned, /team,
+ * Fixed paths (/purposes, /leads, /final-approvers, /dashboard, /reports, /my, /assigned, /team,
  * /all, /track) are declared before
  * /:ideaId so they aren't captured as an id.
  */
@@ -89,6 +89,16 @@ router.get(
     "/dashboard",
     verifyToken,
     ideaController.getDashboard
+);
+
+/**
+ * Reports & Analytics (CFO only; 403 for anyone else)
+ * GET /api/v1/ideas/reports?scope=team|organisation&fiscalYear=&departmentId=&employeeId=
+ */
+router.get(
+    "/reports",
+    verifyToken,
+    ideaController.getReport
 );
 
 /**

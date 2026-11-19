@@ -4,6 +4,7 @@ const AppError = require("../utils/AppError");
 const StatusCodes = require("../constants/statusCodes");
 const { sendIdeaMail } = require("./ideaMailService");
 const { pluralDays, formatDate } = require("../utils/ideaFormat");
+const { parseReportQuery, getBusinessHeadTeam, buildReport } = require("../utils/moduleReport");
 const {
     IDEA_PURPOSES,
     IdeaStatus,
@@ -1155,6 +1156,60 @@ const getDashboard = async (user) => {
     };
 };
 
+// Reports & Analytics: the CFO (Business Head) only, like the Goal
+// Tracker's Business Head report.
+const IDEA_REPORT_STATUSES = ["Pending Approval", "In Progress", "Overdue", "Completed", "Rejected"];
+
+// Ideas that got final approval (completion % is out of these).
+const approvedIdeaCount = (counts) =>
+    (counts["In Progress"] || 0) + (counts.Overdue || 0) + (counts.Completed || 0);
+
+/**
+ * CFO Reports & Analytics for ideas (see utils/moduleReport for the team /
+ * organisation views and filters). Ideas are counted in the fiscal year
+ * they were submitted. Completion % = Completed / approved ideas, the same
+ * rule as the user dashboard.
+ */
+const getReport = async (user, query) => {
+    if (String(user.role || "").toUpperCase() !== "BUSINESSHEAD") {
+        throw new AppError("Idea reports are available to the CFO only.", StatusCodes.FORBIDDEN);
+    }
+
+    const reportQuery = parseReportQuery(query);
+    const pool = await poolPromise;
+    const [rows, team] = await Promise.all([
+        ideaModel.listReportIdeas(pool),
+        reportQuery.scope === "team" ? getBusinessHeadTeam(pool, user.userId) : [],
+    ]);
+
+    const { rows: ideas, ...report } = buildReport({
+        query: reportQuery,
+        rows,
+        team,
+        statuses: IDEA_REPORT_STATUSES,
+        categoryField: "Purpose",
+        categories: IDEA_PURPOSES,
+        completedStatus: "Completed",
+        completionBase: approvedIdeaCount,
+    });
+
+    const counts = Object.fromEntries(report.StatusBreakdown.map((row) => [row.label, row.count]));
+
+    return {
+        ...report,
+        Summary: {
+            total: ideas.length,
+            pendingApproval: counts["Pending Approval"],
+            inProgress: counts["In Progress"],
+            overdue: counts.Overdue,
+            completed: counts.Completed,
+            rejected: counts.Rejected,
+            approved: approvedIdeaCount(counts),
+            completionPercent: report.CompletionPercent,
+        },
+    };
+};
+
 module.exports = {
     getPurposes,
     getLeadOptions,
@@ -1169,6 +1224,7 @@ module.exports = {
     submitIdea,
     getMyIdeas,
     getDashboard,
+    getReport,
     getAssignedIdeas,
     getTeamIdeas,
     getTeamIdeaFilterOptions,

@@ -6,6 +6,7 @@ const StatusCodes = require("../constants/statusCodes");
 const withTransaction = require("../utils/withTransaction");
 const { getIO } = require("../sockets/io");
 const { sendTaskMail } = require("./taskMailService");
+const { parseReportQuery, getBusinessHeadTeam, buildReport } = require("../utils/moduleReport");
 const {
     TASK_PRIORITIES,
     TaskStatus,
@@ -422,6 +423,57 @@ const getDashboard = async (user) => {
             { label: "Remaining", count: total - completed },
         ],
         tasks,
+    };
+};
+
+// Reports & Analytics: the CFO (Business Head) only, like the Goal
+// Tracker's Business Head report.
+const TASK_REPORT_STATUSES = ["Not Started", "In Progress", "Overdue", "Completed"];
+
+/**
+ * CFO Reports & Analytics for tasks (see utils/moduleReport for the team /
+ * organisation views and filters). Every task counts, personal and
+ * project, in the fiscal year it was assigned (or added).
+ * Completion % = Completed / all tasks.
+ */
+const getReport = async (user, query) => {
+    assertBusinessHead(user, "Task reports are available to the CFO only.");
+
+    const reportQuery = parseReportQuery(query);
+    const pool = await poolPromise;
+    const [rows, team] = await Promise.all([
+        taskModel.listReportTasks(pool),
+        reportQuery.scope === "team" ? getBusinessHeadTeam(pool, user.userId) : [],
+    ]);
+
+    const { rows: tasks, ...report } = buildReport({
+        query: reportQuery,
+        rows,
+        team,
+        statuses: TASK_REPORT_STATUSES,
+        categoryField: "Priority",
+        categories: ["High", "Medium", "Low"],
+        completedStatus: "Completed",
+        completionBase: (counts, total) => total,
+    });
+
+    const counts = Object.fromEntries(report.StatusBreakdown.map((row) => [row.label, row.count]));
+    const countSource = (source) => tasks.filter((task) => task.Source === source).length;
+
+    return {
+        ...report,
+        Summary: {
+            total: tasks.length,
+            notStarted: counts["Not Started"],
+            inProgress: counts["In Progress"],
+            overdue: counts.Overdue,
+            completed: counts.Completed,
+            highPriority: tasks.filter((task) => task.Priority === "High").length,
+            assigned: countSource("Assigned"),
+            project: countSource("Project"),
+            selfAdded: countSource("Self-added"),
+            completionPercent: report.CompletionPercent,
+        },
     };
 };
 
@@ -1002,6 +1054,7 @@ module.exports = {
     getAccess,
     getUnseenCount,
     getDashboard,
+    getReport,
     getMyTasks,
     getTeamTasks,
     getAllTasks,

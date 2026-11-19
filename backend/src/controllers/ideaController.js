@@ -156,6 +156,26 @@ exports.getDashboard = async (req, res) => {
 };
 
 /**
+ * Get Reports & Analytics (CFO only)
+ * GET /api/v1/ideas/reports?scope=&fiscalYear=&departmentId=&employeeId=
+ */
+exports.getReport = async (req, res) => {
+
+    try {
+
+        const report = await ideaService.getReport(req.user, req.query);
+
+        return successResponse(res, 200, "Idea report fetched successfully.", report);
+
+    } catch (error) {
+
+        return handleError(res, error, "Get Idea Report", "Failed to fetch idea report.");
+
+    }
+
+};
+
+/**
  * Get My Ideas
  * GET /api/v1/ideas/my?status=
  */

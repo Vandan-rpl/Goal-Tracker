@@ -10,7 +10,7 @@ const { verifyToken } = require("../middleware/authMiddleware");
  * Task Routes
  * Base URL : /api/v1/tasks
  * ============================================================
- * Fixed paths (/access, /unseen-count, /dashboard, /my, /team, /all, /employees,
+ * Fixed paths (/access, /unseen-count, /dashboard, /reports, /my, /team, /all, /employees,
  * /assign, /projects) are declared before /:taskId so they aren't captured
  * as an id.
  * Who may do what is checked in taskService (403 otherwise).
@@ -34,6 +34,12 @@ router.get("/unseen-count", verifyToken, taskController.getUnseenCount);
  * GET /api/v1/tasks/dashboard
  */
 router.get("/dashboard", verifyToken, taskController.getDashboard);
+
+/**
+ * Reports & Analytics (CFO only; 403 for anyone else)
+ * GET /api/v1/tasks/reports?scope=team|organisation&fiscalYear=&departmentId=&employeeId=
+ */
+router.get("/reports", verifyToken, taskController.getReport);
 
 /**
  * My Tasks

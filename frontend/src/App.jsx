@@ -36,6 +36,7 @@ import AssignedIdeas from './pages/Ideas/AssignedIdeas';
 import TeamIdeas from './pages/Ideas/TeamIdeas';
 import AllIdeas from './pages/Ideas/AllIdeas';
 import IdeaReports from './pages/Ideas/IdeaReports';
+import TaskReports from './pages/Tasks/TaskReports';
 import TrackIdea from './pages/Ideas/TrackIdea';
 import { IDEAS_DASHBOARD_PATH, IDEAS_HOME_PATH } from './utils/ideasMenu';
 import TasksRoute from './components/TasksRoute';
@@ -153,6 +154,9 @@ function App() {
               </Route>
               <Route element={<TasksRoute menuKey="all" />}>
                 <Route path="/tasks/all" element={<AllTasks />} />
+              </Route>
+              <Route element={<TasksRoute menuKey="reports" />}>
+                <Route path="/tasks/reports" element={<TaskReports />} />
               </Route>
               <Route element={<TasksRoute menuKey="assign" />}>
                 <Route path="/tasks/assign" element={<AssignTask />} />

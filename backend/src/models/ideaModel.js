@@ -9,6 +9,7 @@ const {
     IDEA_EXTENSION_DATE_PREFIX,
     IDEA_EXTENSION_REASON_SEPARATOR,
 } = require("../constants/ideaConstants");
+const { sqlFiscalYear } = require("../utils/moduleReport");
 
 /**
  * ============================================================
@@ -1302,8 +1303,62 @@ const listDashboardIdeas = async (db, userId) => {
     return result.recordset;
 };
 
+/**
+ * CFO Reports & Analytics: every submitted idea (Drafts left out), any
+ * owner, any year; utils/moduleReport filters and counts them. FiscalYear
+ * is the fiscal year the idea was submitted in. ReportStatus groups (never
+ * overlapping):
+ *   Pending Approval  Submitted / Pending Final Approval
+ *   Rejected          Rejected
+ *   Completed         Implemented
+ *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
+ *   In Progress       any other Active / In Implementation idea
+ */
+const listReportIdeas = async (db) => {
+
+    const submittedOn = "COALESCE(i.SubmittedDate, i.CreatedDate)";
+
+    const result = await db.request().query(`
+        SELECT
+            i.IdeaID,
+            i.IdeaNumber,
+            i.Title,
+            i.Purpose,
+            i.Status,
+            i.SubmittedDate,
+            i.TargetDate,
+            i.ImplementedDate,
+            ${IS_OVERDUE} AS IsOverdue,
+            i.UserID,
+            ${fullName("submitter")} AS EmployeeName,
+            submitter.DepartmentID,
+            submitterDept.DepartmentName,
+            ${fullName("lead")} AS ReportingManagerName,
+            ${sqlFiscalYear(submittedOn)} AS FiscalYear,
+            CASE
+                WHEN i.Status IN (${sqlList([IdeaStatus.SUBMITTED, IdeaStatus.PENDING_FINAL_APPROVAL])}) THEN N'Pending Approval'
+                WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
+                WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Completed'
+                WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
+                ELSE N'In Progress'
+            END AS ReportStatus
+        FROM dbo.Ideas i
+        INNER JOIN dbo.Users submitter
+            ON submitter.UserID = i.UserID
+        LEFT JOIN dbo.Departments submitterDept
+            ON submitterDept.DepartmentID = submitter.DepartmentID
+        LEFT JOIN dbo.Users lead
+            ON lead.UserID = i.AssignedLeadID
+        WHERE i.Status <> N'${IdeaStatus.DRAFT}'
+        ORDER BY ${submittedOn} DESC, i.IdeaID DESC;
+    `);
+
+    return result.recordset;
+};
+
 module.exports = {
     listDashboardIdeas,
+    listReportIdeas,
     getLeadOptions,
     getLeadUser,
     getFinalApproverOptions,

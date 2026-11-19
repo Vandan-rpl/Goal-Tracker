@@ -22,6 +22,13 @@ export const getTaskDashboard = async () => {
     return response.data.data;
 };
 
+// CFO Reports & Analytics. params: scope (team | organisation), fiscalYear,
+// departmentId, employeeId (team only); blank ones are ignored.
+export const getTaskReport = async (params) => {
+    const response = await api.get('/tasks/reports', { params });
+    return response.data.data;
+};
+
 // List params (blank ones are ignored by the backend): status, priority,
 // dueFrom, dueTo (YYYY-MM-DD), source (self | assigned), employeeId (team,
 // all), department (all). With no status, Done tasks older than 30 days are

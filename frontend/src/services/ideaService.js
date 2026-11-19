@@ -45,6 +45,13 @@ export const getIdeaDashboard = async () => {
     return response.data.data;
 };
 
+// CFO Reports & Analytics. params: scope (team | organisation), fiscalYear,
+// departmentId, employeeId (team only); blank ones are ignored.
+export const getIdeaReport = async (params) => {
+    const response = await api.get('/ideas/reports', { params });
+    return response.data.data;
+};
+
 export const getMyIdeas = async () => {
     const response = await api.get('/ideas/my');
     return response.data.data;

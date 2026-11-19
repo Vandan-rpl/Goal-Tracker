@@ -67,6 +67,15 @@ exports.getDashboard = handle(
 );
 
 /**
+ * Get Reports & Analytics (CFO only)
+ * GET /api/v1/tasks/reports?scope=&fiscalYear=&departmentId=&employeeId=
+ */
+exports.getReport = handle(
+    "Get Task Report", "Failed to fetch task report.", 200, "Task report fetched successfully.",
+    (req) => taskService.getReport(req.user, req.query)
+);
+
+/**
  * Get My Tasks
  * GET /api/v1/tasks/my
  */
