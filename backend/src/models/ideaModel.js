@@ -1,5 +1,6 @@
 const { sql } = require("../config/db");
 const {
+    IdeaStatus,
     IDEA_OVERDUE_STATUSES,
     IDEA_LEAD_ROLES,
     IdeaActor,
@@ -1254,7 +1255,55 @@ const getIdeaMailData = async (db, ideaId) => {
     return result.recordset[0] || null;
 };
 
+/**
+ * Dashboard (every user): ideas the user submitted themselves, Drafts left
+ * out (ideas where the user is only the Reporting Manager or final approver
+ * are not included). Each idea gets one DashboardStatus so the groups never
+ * overlap:
+ *   Pending Approval  Submitted / Pending Final Approval
+ *   Rejected          Rejected
+ *   Completed         Implemented
+ *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
+ *   Awaiting Completion Approval
+ *                     not overdue, with a pending close request
+ *   Active            any other Active / In Implementation idea
+ * Newest first, like My Ideas.
+ */
+const listDashboardIdeas = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            SELECT
+                i.IdeaID,
+                i.IdeaNumber,
+                i.Title,
+                i.Purpose,
+                i.Status,
+                i.SubmittedDate,
+                i.TargetDate,
+                ${IS_OVERDUE} AS IsOverdue,
+                pendingRequest.PendingRequestType,
+                CASE
+                    WHEN i.Status IN (${sqlList([IdeaStatus.SUBMITTED, IdeaStatus.PENDING_FINAL_APPROVAL])}) THEN N'Pending Approval'
+                    WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
+                    WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Completed'
+                    WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
+                    WHEN pendingRequest.PendingRequestType = N'${IdeaRequestType.CLOSE}' THEN N'Awaiting Completion Approval'
+                    ELSE N'Active'
+                END AS DashboardStatus
+            FROM dbo.Ideas i
+            ${PENDING_REQUEST_APPLY}
+            WHERE i.UserID = @UserID
+              AND i.Status <> N'${IdeaStatus.DRAFT}'
+            ORDER BY i.CreatedDate DESC, i.IdeaID DESC;
+        `);
+
+    return result.recordset;
+};
+
 module.exports = {
+    listDashboardIdeas,
     getLeadOptions,
     getLeadUser,
     getFinalApproverOptions,

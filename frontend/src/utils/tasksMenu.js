@@ -22,6 +22,13 @@ export const TASKS_ACCESS = {
 
 export const TASKS_MENU = [
   {
+    key: "dashboard",
+    label: "Dashboard",
+    path: "/tasks/dashboard",
+    access: TASKS_ACCESS.EVERYONE,
+    icon: "M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10-3a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z",
+  },
+  {
     key: "my-tasks",
     label: "My Tasks",
     path: "/tasks/my-tasks",

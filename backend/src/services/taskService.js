@@ -384,6 +384,47 @@ const assertBusinessHead = (user, message = "Only the Business Head can do this.
 
 const getMyTasks = (user, query) => listTasks("my", user, query);
 
+const DASHBOARD_STATUSES = ["Completed", "Overdue", "In Progress"];
+
+/**
+ * Dashboard of the logged-in user's own tasks (every role). The cards,
+ * breakdown tables and charts are all counted here from the same rows as
+ * the task list, so they always agree:
+ * Completed + Overdue + In Progress = Total.
+ */
+const getDashboard = async (user) => {
+    const pool = await poolPromise;
+    const tasks = await taskModel.listDashboardTasks(pool, user.userId);
+
+    const countBy = (field, values) =>
+        values.map((value) => ({ label: value, count: tasks.filter((task) => task[field] === value).length }));
+
+    const statusBreakdown = countBy("DashboardStatus", DASHBOARD_STATUSES);
+    const priorityBreakdown = countBy("Priority", ["High", "Medium", "Low"]);
+
+    const total = tasks.length;
+    const statusCount = (label) => statusBreakdown.find((row) => row.label === label).count;
+    const completed = statusCount("Completed");
+
+    return {
+        summary: {
+            total,
+            completed,
+            overdue: statusCount("Overdue"),
+            inProgress: statusCount("In Progress"),
+            highPriority: priorityBreakdown.find((row) => row.label === "High").count,
+            completionPercent: total === 0 ? 0 : Math.round((completed / total) * 100),
+        },
+        statusBreakdown,
+        priorityBreakdown,
+        completionSnapshot: [
+            { label: "Completed", count: completed },
+            { label: "Remaining", count: total - completed },
+        ],
+        tasks,
+    };
+};
+
 const getTeamTasks = async (user, query) => {
     await assertCanViewTeamTasks(user);
     return await listTasks("team", user, query);
@@ -960,6 +1001,7 @@ module.exports = {
     },
     getAccess,
     getUnseenCount,
+    getDashboard,
     getMyTasks,
     getTeamTasks,
     getAllTasks,

@@ -10,7 +10,7 @@ const Roles = require("../constants/roles");
  * Idea Routes
  * Base URL : /api/v1/ideas
  * ============================================================
- * Fixed paths (/purposes, /leads, /final-approvers, /my, /assigned, /team,
+ * Fixed paths (/purposes, /leads, /final-approvers, /dashboard, /my, /assigned, /team,
  * /all, /track) are declared before
  * /:ideaId so they aren't captured as an id.
  */
@@ -78,6 +78,17 @@ router.delete(
     verifyToken,
     verifyRole([Roles.ADMIN]),
     ideaController.removeFinalApprover
+);
+
+/**
+ * Dashboard (the logged-in user's own submitted ideas; no params, so no
+ * other user's data can be asked for)
+ * GET /api/v1/ideas/dashboard
+ */
+router.get(
+    "/dashboard",
+    verifyToken,
+    ideaController.getDashboard
 );
 
 /**

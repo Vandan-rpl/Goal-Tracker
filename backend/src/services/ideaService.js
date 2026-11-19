@@ -1101,6 +1101,60 @@ const getMyIdeas = async (user, status) => {
     return await ideaModel.getIdeasByUser(pool, user.userId, status);
 };
 
+/**
+ * Dashboard of the logged-in user's own submitted ideas (every role; no
+ * Drafts). The cards, breakdown tables and charts are all counted here from
+ * the same rows as the ideas list, so they always agree. See
+ * ideaModel.listDashboardIdeas for the DashboardStatus groups.
+ *   Approved ideas = Active + Overdue + Awaiting Completion Approval +
+ *                    Completed (everything that got final approval)
+ *   Completion %   = Completed / Approved (0 when none)
+ */
+const getDashboard = async (user) => {
+    const pool = await poolPromise;
+    const ideas = await ideaModel.listDashboardIdeas(pool, user.userId);
+
+    const count = (...groups) => ideas.filter((idea) => groups.includes(idea.DashboardStatus)).length;
+
+    const pendingApproval = count("Pending Approval");
+    const active = count("Active");
+    const awaitingCompletion = count("Awaiting Completion Approval");
+    const overdue = count("Overdue");
+    const completed = count("Completed");
+    const rejected = count("Rejected");
+    const approved = active + awaitingCompletion + overdue + completed;
+
+    return {
+        summary: {
+            total: ideas.length,
+            pendingApproval,
+            active,
+            completed,
+            rejected,
+            overdue,
+            approved,
+            completionPercent: approved === 0 ? 0 : Math.round((completed / approved) * 100),
+        },
+        // Rejected ideas are only a card, not part of this table.
+        statusBreakdown: [
+            { label: "Pending Approval", count: pendingApproval },
+            { label: "In Progress", count: active + awaitingCompletion },
+            { label: "Overdue", count: overdue },
+            { label: "Completed", count: completed },
+        ],
+        // Every predefined purpose, 0 when the user has none.
+        purposeBreakdown: IDEA_PURPOSES.map((purpose) => ({
+            label: purpose,
+            count: ideas.filter((idea) => idea.Purpose === purpose).length,
+        })),
+        completionSnapshot: [
+            { label: "Completed", count: completed },
+            { label: "Remaining", count: approved - completed },
+        ],
+        ideas,
+    };
+};
+
 module.exports = {
     getPurposes,
     getLeadOptions,
@@ -1114,6 +1168,7 @@ module.exports = {
     deleteDraft,
     submitIdea,
     getMyIdeas,
+    getDashboard,
     getAssignedIdeas,
     getTeamIdeas,
     getTeamIdeaFilterOptions,

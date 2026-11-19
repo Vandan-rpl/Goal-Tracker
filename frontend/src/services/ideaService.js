@@ -38,6 +38,13 @@ export const removeIdeaFinalApprover = async (userId) => {
     return response.data.data;
 };
 
+// The logged-in user's dashboard: { summary, statusBreakdown,
+// purposeBreakdown, completionSnapshot, ideas }, all counted by the backend.
+export const getIdeaDashboard = async () => {
+    const response = await api.get('/ideas/dashboard');
+    return response.data.data;
+};
+
 export const getMyIdeas = async () => {
     const response = await api.get('/ideas/my');
     return response.data.data;

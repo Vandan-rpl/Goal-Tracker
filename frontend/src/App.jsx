@@ -30,6 +30,7 @@ import Notifications from './pages/Notifications/Notifications';
 import IdeasRoute from './components/IdeasRoute';
 import ShareIdea from './pages/Ideas/ShareIdea';
 import MyIdeas from './pages/Ideas/MyIdeas';
+import IdeaDashboard from './pages/Ideas/IdeaDashboard';
 import IdeaDetails from './pages/Ideas/IdeaDetails';
 import AssignedIdeas from './pages/Ideas/AssignedIdeas';
 import TeamIdeas from './pages/Ideas/TeamIdeas';
@@ -39,6 +40,7 @@ import TrackIdea from './pages/Ideas/TrackIdea';
 import { IDEAS_HOME_PATH } from './utils/ideasMenu';
 import TasksRoute from './components/TasksRoute';
 import MyTasks from './pages/Tasks/MyTasks';
+import TaskDashboard from './pages/Tasks/TaskDashboard';
 import TeamTasks from './pages/Tasks/TeamTasks';
 import AllTasks from './pages/Tasks/AllTasks';
 import AssignTask from './pages/Tasks/AssignTask';
@@ -114,6 +116,7 @@ function App() {
               {/* Innovation Ideas module. Every /ideas URL highlights the
                   Ideas switch in the header and shows the Ideas sidebar. */}
               <Route path="/ideas" element={<Navigate to={IDEAS_HOME_PATH} replace />} />
+              <Route path="/ideas/dashboard" element={<IdeaDashboard />} />
               <Route path="/ideas/share" element={<ShareIdea />} />
               <Route path="/ideas/edit/:ideaId" element={<ShareIdea />} />
               <Route path="/ideas/my-ideas" element={<MyIdeas />} />
@@ -139,6 +142,7 @@ function App() {
               {/* Task Tracker module. Every /tasks URL highlights the Tasks
                   switch in the header and shows the Tasks sidebar. */}
               <Route path="/tasks" element={<Navigate to={TASKS_HOME_PATH} replace />} />
+              <Route path="/tasks/dashboard" element={<TaskDashboard />} />
               <Route path="/tasks/my-tasks" element={<MyTasks />} />
               <Route element={<TasksRoute menuKey="projects" />}>
                 <Route path="/tasks/projects" element={<Projects />} />

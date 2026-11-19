@@ -58,6 +58,15 @@ exports.getUnseenCount = handle(
 );
 
 /**
+ * Get Dashboard (the logged-in user's own tasks only)
+ * GET /api/v1/tasks/dashboard
+ */
+exports.getDashboard = handle(
+    "Get Task Dashboard", "Failed to fetch dashboard.", 200, "Dashboard fetched successfully.",
+    (req) => taskService.getDashboard(req.user)
+);
+
+/**
  * Get My Tasks
  * GET /api/v1/tasks/my
  */

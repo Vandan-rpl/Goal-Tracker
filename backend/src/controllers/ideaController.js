@@ -136,6 +136,26 @@ exports.removeFinalApprover = async (req, res) => {
 };
 
 /**
+ * Get Dashboard (the logged-in user's own submitted ideas only)
+ * GET /api/v1/ideas/dashboard
+ */
+exports.getDashboard = async (req, res) => {
+
+    try {
+
+        const dashboard = await ideaService.getDashboard(req.user);
+
+        return successResponse(res, 200, "Dashboard fetched successfully.", dashboard);
+
+    } catch (error) {
+
+        return handleError(res, error, "Get Idea Dashboard", "Failed to fetch dashboard.");
+
+    }
+
+};
+
+/**
  * Get My Ideas
  * GET /api/v1/ideas/my?status=
  */

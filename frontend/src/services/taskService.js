@@ -15,6 +15,13 @@ export const getTaskUnseenCount = async () => {
     return response.data.data.count;
 };
 
+// The logged-in user's dashboard: { summary, statusBreakdown,
+// priorityBreakdown, completionSnapshot, tasks }, all counted by the backend.
+export const getTaskDashboard = async () => {
+    const response = await api.get('/tasks/dashboard');
+    return response.data.data;
+};
+
 // List params (blank ones are ignored by the backend): status, priority,
 // dueFrom, dueTo (YYYY-MM-DD), source (self | assigned), employeeId (team,
 // all), department (all). With no status, Done tasks older than 30 days are
