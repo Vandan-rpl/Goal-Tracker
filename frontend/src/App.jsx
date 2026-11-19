@@ -7,7 +7,7 @@ import ResetPassword from './pages/Auth/ResetPassword';
 import ForceResetPassword from './pages/Auth/ForceResetPassword';
 import ProtectedRoute from './components/ProtectedRoute'; 
 import DashboardLayout from "./layouts/DashboardLayout";
-import Dashboard from './pages/Dashboard/Dashboard';
+import DashboardRoute from './components/DashboardRoute';
 import ListGoal from './pages/Goals/ListGoal';
 import JointGoals from './pages/Goals/JointGoals';
 import AddGoal from './pages/Goals/AddGoal';
@@ -72,7 +72,7 @@ function App() {
           {/* Protected Layout Routes Wrapped with ProtectedRoute Guard */}
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={<DashboardRoute />} />
               <Route path="/goals" element={<ListGoal />} />
               <Route path="/goals/joint" element={<JointGoals />} />
               <Route path="/goals/add" element={<AddGoal />} />

@@ -39,6 +39,8 @@ import { fetchTaskUnseenCount } from "../../redux/slices/taskSlice";
 // import { formatTime, formatLongDate, getGreeting } from "../../utils/dateTime";
 import { IDEAS_DASHBOARD_PATH, isIdeasPath } from "../../utils/ideasMenu";
 import { TASKS_DASHBOARD_PATH, isTasksPath } from "../../utils/tasksMenu";
+import { isAdminUser } from "../../utils/adminHome";
+import useAuth from "../../hooks/useAuth";
 
 import ProfileMenu from "../ProfileMenu/ProfileMenu";
 import CircleIcon from "@mui/icons-material/Circle";
@@ -54,6 +56,10 @@ const Header = ({ drawerWidth = 260 }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const { collapsed } = useSelector((state) => state.sidebar);
+
+  // The Admin only manages the app: no module switch.
+  const { user: authUser } = useAuth();
+  const showModuleSwitch = !isAdminUser(authUser);
 
   // const { user } = useSelector((state) => state.auth);
 
@@ -222,6 +228,7 @@ const Header = ({ drawerWidth = 260 }) => {
 
         {/* Module Switch */}
         <Box sx={{ flexGrow: 1 }}>
+          {showModuleSwitch && (
           <ToggleButtonGroup
             value={activeModule}
             exclusive
@@ -262,6 +269,7 @@ const Header = ({ drawerWidth = 260 }) => {
               </Badge>
             </ToggleButton>
           </ToggleButtonGroup>
+          )}
         </Box>
 
         <Stack direction="row" spacing={1} alignItems="center">

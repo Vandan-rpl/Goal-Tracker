@@ -28,8 +28,7 @@ const Sidebar = () => {
     role,
   );
 
-  // Debug log to check user role in console
-  console.log("Current User Role:", user?.Role);
+  const isAdmin = role === "ADMIN";
 
 
   return (
@@ -53,11 +52,14 @@ const Sidebar = () => {
       {/* Navigation Items */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
 
-        {isIdeasModule ? (
+        {/* The Admin only sees the Administration links, on every page. */}
+        {!isAdmin && isIdeasModule ? (
           <IdeasSidebarMenu />
-        ) : isTasksModule ? (
+        ) : !isAdmin && isTasksModule ? (
           <TasksSidebarMenu />
         ) : (
+        <>
+        {!isAdmin && (
         <>
         {/* Core Links */}
         <Link
@@ -155,9 +157,12 @@ const Sidebar = () => {
           </div>
         )}
 
+        </>
+        )}
+
         {/* Administration Section */}
-        {role === "ADMIN" && (
-          <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-1">
+        {isAdmin && (
+          <div className="space-y-1">
             <p className="px-3.5 pb-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Administration
             </p>

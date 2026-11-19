@@ -300,8 +300,7 @@ const ImportEmployees = () => {
           Uploaded employees are saved as inactive and get no email until you use Activate All Users below.
         </p>
         <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs text-indigo-200">
-          <span>New employees get the default password:</span>
-          <code className="font-mono bg-white/20 px-2 py-0.5 rounded text-white font-medium">Rubamin@123</code>
+          <span>Each new employee gets their own temporary password by email when you activate them.</span>
         </div>
       </div>
 
