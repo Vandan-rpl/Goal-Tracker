@@ -394,6 +394,33 @@ const getAllTasks = async (user, query) => {
     return await listTasks("all", user, query);
 };
 
+/**
+ * Assign Task page: tasks this Business Head assigned in one month
+ * (query.month = "YYYY-MM", default the current month).
+ */
+const getAssignedByMonth = async (user, query = {}) => {
+    assertBusinessHead(user, "Only the Business Head can assign tasks.");
+
+    const now = new Date();
+    const month = text(query.month) || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const match = month.match(/^(\d{4})-(\d{2})$/);
+    const monthNumber = match ? Number(match[2]) : 0;
+    if (!match || monthNumber < 1 || monthNumber > 12) {
+        throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, ["Month must be in YYYY-MM format."]);
+    }
+
+    const year = Number(match[1]);
+    const next = monthNumber === 12 ? `${year + 1}-01` : `${year}-${String(monthNumber + 1).padStart(2, "0")}`;
+
+    const pool = await poolPromise;
+    const rows = await taskModel.listAssignedByMonth(pool, {
+        assignerId: Number(user.userId),
+        from: `${month}-01`,
+        to: `${next}-01`,
+    });
+    return rows.map((row) => withPermissions(row, user));
+};
+
 const getTeamFilterOptions = async (user) => {
     await assertCanViewTeamTasks(user);
     const pool = await poolPromise;
@@ -625,6 +652,75 @@ const assignTask = async (body = {}, user) => {
     emitUnseenCount(employeeId);
 
     return { task: await reloadTask(taskId, user), ...mailResult(mail) };
+};
+
+const MAX_BULK_ASSIGN = 100;
+
+/**
+ * Assign several tasks at once (Business Head, Assign Task page).
+ * body.tasks = [{ employeeId, taskName, priority, dueDate, cfoRemarks }],
+ * one employee per row. All rows are saved in one transaction (none if any
+ * row is invalid); then one "New task assigned" email per task.
+ */
+const assignTasks = async (body = {}, user) => {
+    assertBusinessHead(user, "Only the Business Head can assign tasks.");
+
+    const businessHeadId = Number(user.userId);
+    const rows = Array.isArray(body.tasks) ? body.tasks : [];
+    const errors = [];
+
+    if (rows.length === 0) throw validationError(["Add at least one task."]);
+    if (rows.length > MAX_BULK_ASSIGN) {
+        throw validationError([`You can assign at most ${MAX_BULK_ASSIGN} tasks at a time.`]);
+    }
+
+    const inputs = rows.map((row, index) => {
+        const safeRow = row || {};
+        const rowErrors = [];
+        const rawEmployeeId = Number(safeRow.employeeId);
+        const employeeId = Number.isInteger(rawEmployeeId) && rawEmployeeId > 0 ? rawEmployeeId : null;
+        if (!employeeId) rowErrors.push("Employee is required.");
+        else if (employeeId === businessHeadId) rowErrors.push("You cannot assign a task to yourself.");
+
+        const input = checkAssignInput(safeRow, rowErrors);
+        rowErrors.forEach((message) => errors.push(`Row ${index + 1}: ${message}`));
+        return { employeeId, input };
+    });
+
+    if (errors.length > 0) throw validationError(errors);
+
+    const created = await withTransaction(async (transaction) => {
+        const names = new Map();
+        for (const [index, { employeeId }] of inputs.entries()) {
+            if (names.has(employeeId)) continue;
+            const employee = await taskModel.getActiveUser(transaction, employeeId);
+            if (!employee) throw validationError([`Row ${index + 1}: Selected employee must be an active user.`]);
+            names.set(employeeId, employee.FullName);
+        }
+
+        const out = [];
+        for (const { employeeId, input } of inputs) {
+            const taskId = await insertAssignedTask(transaction, { employeeId, input, businessHeadId });
+            out.push({ taskId, userId: employeeId, name: names.get(employeeId) });
+        }
+        return out;
+    });
+
+    // Committed. The DB change stands whatever the emails do.
+    const failed = [];
+    for (const row of created) {
+        const mail = await sendTaskMail(TaskMailEvent.ASSIGNED, row.taskId);
+        if (!mail.sent) failed.push(`${row.name} (${mail.reason})`);
+    }
+    new Set(created.map((row) => row.userId)).forEach((userId) => emitUnseenCount(userId));
+
+    return {
+        assignedCount: created.length,
+        mailSent: failed.length === 0,
+        mailWarning: failed.length === 0
+            ? null
+            : `The tasks were saved, but ${failed.length} of ${created.length} emails could not be sent: ${failed.join(", ")}.`,
+    };
 };
 
 /**
@@ -875,6 +971,8 @@ module.exports = {
     markTasksSeen,
     createTask,
     assignTask,
+    assignTasks,
+    getAssignedByMonth,
     updateTask,
     submitCFORemarks,
     deleteTask,

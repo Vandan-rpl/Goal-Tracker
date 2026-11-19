@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import SearchableSelect from "../../components/SearchableSelect/SearchableSelect";
 import ProjectMemberPicker from "../../components/ProjectMemberPicker/ProjectMemberPicker";
 import TaskWorkbookFrame, {
   taskFilterControlClass as inputClass,
@@ -13,16 +14,11 @@ import {
   getProjects,
   getTaskApiError,
 } from "../../services/taskService";
-import { formatTaskDate } from "../../utils/taskStatus";
 
 const PROJECT_NAME_MAX = 200;
 const PROJECT_DESCRIPTION_MAX = 2000;
 
 const EMPTY_FORM = { projectName: "", description: "", memberIds: [] };
-
-const headClass =
-  "sticky top-0 z-2 border-r border-b border-[#cbd4e2] bg-[#dce5f2] px-2.5 py-2.5 text-left text-[11px] font-bold leading-[1.35] text-[#30415f] align-middle whitespace-nowrap last:border-r-0";
-const cellClass = "border-r border-b border-[#d5dce5] px-2.5 py-2.5 align-top text-xs text-[#202522] last:border-r-0";
 
 /**
  * Task Tracker > Projects. The Business Head and Managers create projects
@@ -65,6 +61,11 @@ const Projects = () => {
       ignore = true;
     };
   }, []);
+
+  const projectOptions = useMemo(
+    () => projects.map((project) => ({ value: project.ProjectID, label: project.ProjectName })),
+    [projects],
+  );
 
   const openCreate = async () => {
     setCreating(true);
@@ -111,7 +112,7 @@ const Projects = () => {
       title="Projects"
       description={
         canCreate
-          ? "Create projects, add members and assign tasks to one member or to all members."
+          ? "Create projects, add members and assign tasks to one member."
           : "Projects you are a member of. Open one to see and add your tasks."
       }
       actions={
@@ -120,9 +121,6 @@ const Projects = () => {
             + New Project
           </button>
         )
-      }
-      footer={
-        "Tasks / Open / Overdue cover every task in projects you created (or all projects for the CFO), and only your own tasks in projects you are a member of."
       }
     >
       {creating && (
@@ -190,55 +188,25 @@ const Projects = () => {
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>
       )}
 
-      <div className="max-w-full overflow-x-auto border border-[#aeb9cc] bg-white">
-        <table className="min-w-full border-separate border-spacing-0">
-          <thead>
-            <tr>
-              {["Sr.No.", "Project Name", "Description", "Members", "Tasks", "Open", "Overdue", "Created"].map(
-                (heading, i) => (
-                  <th key={heading} className={`${headClass} ${i === 0 ? "bg-[#e5eaf3] text-center" : ""}`}>{heading}</th>
-                ),
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">Loading projects...</td>
-              </tr>
-            ) : projects.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm font-semibold text-slate-700">
-                  {canCreate ? "No projects yet. Create one with + New Project." : "You are not a member of any project."}
-                </td>
-              </tr>
-            ) : (
-              projects.map((project, index) => (
-                <tr key={project.ProjectID} className="bg-white hover:bg-[#f4f6fa]">
-                  <td className={`${cellClass} w-14 bg-[#edf1f7] text-center font-medium text-slate-600`}>{index + 1}</td>
-                  <td className={`${cellClass} whitespace-nowrap`}>
-                    <Link to={`/tasks/projects/${project.ProjectID}`} className="font-semibold text-[#2c3e82] hover:underline">
-                      {project.ProjectName}
-                    </Link>
-                  </td>
-                  <td className={`${cellClass} max-w-md`}>
-                    <p className="line-clamp-2 whitespace-pre-wrap break-words text-slate-600">{project.Description || "—"}</p>
-                  </td>
-                  <td className={`${cellClass} text-center`}>{project.MemberCount}</td>
-                  <td className={`${cellClass} text-center`}>{project.TaskCount}</td>
-                  <td className={`${cellClass} text-center`}>{project.OpenCount}</td>
-                  <td className={`${cellClass} text-center ${project.OverdueCount > 0 ? "font-semibold text-[#b3403f]" : ""}`}>
-                    {project.OverdueCount}
-                  </td>
-                  <td className={`${cellClass} whitespace-nowrap text-slate-600`}>
-                    {formatTaskDate(project.CreatedDate)}
-                    {project.CreatedByName && <p className="text-[10px] text-slate-500">{project.CreatedByName}</p>}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="border border-[#aeb9cc] bg-[#f4f6fa] p-6">
+        <div className="max-w-xl">
+          <label htmlFor="project-select" className={labelClass}>Select Project</label>
+          {!loading && projects.length === 0 ? (
+            <p className="mt-2 text-sm font-semibold text-slate-700">
+              {canCreate ? "No projects yet. Create one with + New Project." : "You are not a member of any project."}
+            </p>
+          ) : (
+            <SearchableSelect
+              id="project-select"
+              options={projectOptions}
+              value={null}
+              onChange={(projectId) => projectId && navigate(`/tasks/projects/${projectId}`)}
+              placeholder="Search a project by name"
+              loading={loading}
+            />
+          )}
+          <p className="mt-2 text-xs text-slate-500">Pick a project to open its tasks.</p>
+        </div>
       </div>
     </TaskWorkbookFrame>
   );

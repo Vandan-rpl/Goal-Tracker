@@ -200,11 +200,7 @@ const BringForwardSheet = ({
           Brought forward goals
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Approved goals ending before{" "}
-          {formatQuarterLabel(targetRange.quarter)} starts. Enter a new End Date
-          within {formatQuarterLabel(targetRange.quarter)} for each goal to bring forward; it goes
-          back for approval and everything else stays as it is. Leave the End
-          Date blank to skip a goal.
+          Approved goals of previous quarters which are going to complete in this quarter or in future. If goal is not completed withing targeted date then you can edit target date and after editing target date it go to Reporting manager for approval.
         </p>
       </div>
 

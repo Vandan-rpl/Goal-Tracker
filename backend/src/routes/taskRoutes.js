@@ -84,6 +84,18 @@ router.get("/employees", verifyToken, taskController.getAssignableEmployees);
 router.post("/assign", verifyToken, taskController.assignTask);
 
 /**
+ * Tasks the Business Head assigned in a month (Assign Task page)
+ * GET /api/v1/tasks/assign/month?month=YYYY-MM
+ */
+router.get("/assign/month", verifyToken, taskController.getAssignedByMonth);
+
+/**
+ * Assign Several Tasks, one employee per row (Business Head)
+ * POST /api/v1/tasks/assign/bulk   body: { tasks: [{ employeeId, taskName, priority, dueDate }] }
+ */
+router.post("/assign/bulk", verifyToken, taskController.assignTasks);
+
+/**
  * ------------------------------------------------------------
  * Projects (who may do what: projectService)
  * ------------------------------------------------------------

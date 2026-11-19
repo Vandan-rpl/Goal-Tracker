@@ -619,8 +619,35 @@ const getGroupTasks = async (db, assignmentGroupId, lock = false) => {
     return result.recordset;
 };
 
+/**
+ * Assign Task page: non-project tasks the Business Head assigned between
+ * @From (inclusive) and @To (exclusive), whatever their status, in the
+ * order they were assigned.
+ */
+const listAssignedByMonth = async (db, { assignerId, from, to }) => {
+
+    const result = await db.request()
+        .input("AssignerID", sql.Int, assignerId)
+        .input("From", sql.Date, from)
+        .input("To", sql.Date, to)
+        .query(`
+            SELECT
+                ${TASK_SELECT}
+            ${TASK_FROM}
+            WHERE t.IsDeleted = 0
+              AND t.ProjectID IS NULL
+              AND t.AssignedBy = @AssignerID
+              AND COALESCE(t.AssignedDate, t.CreatedDate) >= CAST(@From AS DATETIME2)
+              AND COALESCE(t.AssignedDate, t.CreatedDate) <  CAST(@To AS DATETIME2)
+            ORDER BY COALESCE(t.AssignedDate, t.CreatedDate), t.TaskID;
+        `);
+
+    return result.recordset;
+};
+
 module.exports = {
     getTask,
+    listAssignedByMonth,
     insertTask,
     updateTask,
     insertActivity,

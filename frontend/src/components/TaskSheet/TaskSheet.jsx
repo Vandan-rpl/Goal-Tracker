@@ -151,7 +151,7 @@ const toSheetItems = (tasks, collapseGroups) => {
  *   showGroupHeaders  a name row above each employee's tasks
  *   newTaskIds      Set of TaskIDs to highlight as New
  *   onSaved(employeeId)  reload that employee's tasks after a change
- *   showCfoRemarks  false hides the CFO's Remarks column (Assign Task, for now)
+ *   showCfoRemarks  false hides the CFO's Remarks column
  */
 export default function TaskSheet({
   groups,

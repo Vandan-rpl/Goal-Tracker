@@ -139,6 +139,25 @@ exports.assignTask = handle(
 );
 
 /**
+ * Tasks I Assigned In A Month (Business Head, Assign Task page)
+ * GET /api/v1/tasks/assign/month?month=YYYY-MM
+ */
+exports.getAssignedByMonth = handle(
+    "Get Assigned Tasks", "Failed to fetch assigned tasks.", 200, "Assigned tasks fetched successfully.",
+    (req) => taskService.getAssignedByMonth(req.user, req.query)
+);
+
+/**
+ * Assign Several Tasks (Business Head)
+ * POST /api/v1/tasks/assign/bulk   body: { tasks: [{ employeeId, taskName, priority, dueDate }] }
+ */
+exports.assignTasks = handle(
+    "Assign Tasks", "Failed to assign tasks.", 201,
+    withMailWarning((result) => `${result.assignedCount} task(s) assigned successfully.`),
+    (req) => taskService.assignTasks(req.body, req.user)
+);
+
+/**
  * Add Task (self-added)
  * POST /api/v1/tasks
  */

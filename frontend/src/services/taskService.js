@@ -92,6 +92,20 @@ export const assignTask = async ({ employeeId, taskName, priority, dueDate, cfoR
     return response.data.data;
 };
 
+// Business Head, Assign Task page. tasks = [{ employeeId, taskName, priority,
+// dueDate }]; all saved or none. Returns { assignedCount, mailSent, mailWarning }.
+export const assignTasks = async (tasks) => {
+    const response = await api.post('/tasks/assign/bulk', { tasks });
+    return response.data.data;
+};
+
+// Business Head, Assign Task page: tasks they assigned in month "YYYY-MM"
+// (non-project, any status), oldest first.
+export const getAssignedByMonth = async (month) => {
+    const response = await api.get('/tasks/assign/month', { params: { month } });
+    return response.data.data;
+};
+
 export const submitCFORemarks = async (taskId, cfoRemarks) => {
     const response = await api.post(`/tasks/${taskId}/cfo-remarks`, { cfoRemarks });
     return response.data.data;
