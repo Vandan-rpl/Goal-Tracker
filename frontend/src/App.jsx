@@ -37,7 +37,7 @@ import TeamIdeas from './pages/Ideas/TeamIdeas';
 import AllIdeas from './pages/Ideas/AllIdeas';
 import IdeaReports from './pages/Ideas/IdeaReports';
 import TrackIdea from './pages/Ideas/TrackIdea';
-import { IDEAS_HOME_PATH } from './utils/ideasMenu';
+import { IDEAS_DASHBOARD_PATH, IDEAS_HOME_PATH } from './utils/ideasMenu';
 import TasksRoute from './components/TasksRoute';
 import MyTasks from './pages/Tasks/MyTasks';
 import TaskDashboard from './pages/Tasks/TaskDashboard';
@@ -46,7 +46,7 @@ import AllTasks from './pages/Tasks/AllTasks';
 import AssignTask from './pages/Tasks/AssignTask';
 import Projects from './pages/Tasks/Projects';
 import ProjectDetails from './pages/Tasks/ProjectDetails';
-import { TASKS_HOME_PATH } from './utils/tasksMenu';
+import { TASKS_DASHBOARD_PATH, TASKS_HOME_PATH } from './utils/tasksMenu';
 import {ToastContainer} from 'react-toastify';
 
 
@@ -115,7 +115,7 @@ function App() {
 
               {/* Innovation Ideas module. Every /ideas URL highlights the
                   Ideas switch in the header and shows the Ideas sidebar. */}
-              <Route path="/ideas" element={<Navigate to={IDEAS_HOME_PATH} replace />} />
+              <Route path="/ideas" element={<Navigate to={IDEAS_DASHBOARD_PATH} replace />} />
               <Route path="/ideas/dashboard" element={<IdeaDashboard />} />
               <Route path="/ideas/share" element={<ShareIdea />} />
               <Route path="/ideas/edit/:ideaId" element={<ShareIdea />} />
@@ -141,7 +141,7 @@ function App() {
 
               {/* Task Tracker module. Every /tasks URL highlights the Tasks
                   switch in the header and shows the Tasks sidebar. */}
-              <Route path="/tasks" element={<Navigate to={TASKS_HOME_PATH} replace />} />
+              <Route path="/tasks" element={<Navigate to={TASKS_DASHBOARD_PATH} replace />} />
               <Route path="/tasks/dashboard" element={<TaskDashboard />} />
               <Route path="/tasks/my-tasks" element={<MyTasks />} />
               <Route element={<TasksRoute menuKey="projects" />}>

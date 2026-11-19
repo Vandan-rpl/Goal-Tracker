@@ -22,6 +22,11 @@ router.post('/employees', verifyToken, verifyRole([Roles.ADMIN]), adminControlle
 // verifyRole checks the lowercase `role` claim set by authController.login.
 router.post('/employees/import', verifyToken, verifyRole([Roles.ADMIN]), employeeImportUpload, adminController.importEmployees);
 
+// Activate All Users (Admin only): preview, then activate every inactive user
+// and email login details to those who have never logged in.
+router.get('/employees/activation-summary', verifyToken, verifyRole([Roles.ADMIN]), adminController.getActivationSummary);
+router.post('/employees/activate-all', verifyToken, verifyRole([Roles.ADMIN]), adminController.activateAllUsers);
+
 router.put('/employees/:userId', verifyToken, verifyRole([Roles.ADMIN]), adminController.updateEmployee);
 
 // New temporary password + welcome email (Admin only)

@@ -126,7 +126,7 @@ export const DashboardBreakdowns = ({ status, bar, snapshot }) => (
               ))}
             </Pie>
             <Tooltip />
-            <Legend />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
           </PieChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -166,7 +166,7 @@ export const DashboardBreakdowns = ({ status, bar, snapshot }) => (
               ))}
             </Pie>
             <Tooltip />
-            <Legend />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
           </PieChart>
         </ResponsiveContainer>
       </ChartPanel>

@@ -37,8 +37,8 @@ import {
 import { fetchTaskUnseenCount } from "../../redux/slices/taskSlice";
 
 // import { formatTime, formatLongDate, getGreeting } from "../../utils/dateTime";
-import { IDEAS_HOME_PATH, isIdeasPath } from "../../utils/ideasMenu";
-import { TASKS_HOME_PATH, isTasksPath } from "../../utils/tasksMenu";
+import { IDEAS_DASHBOARD_PATH, isIdeasPath } from "../../utils/ideasMenu";
+import { TASKS_DASHBOARD_PATH, isTasksPath } from "../../utils/tasksMenu";
 
 import ProfileMenu from "../ProfileMenu/ProfileMenu";
 import CircleIcon from "@mui/icons-material/Circle";
@@ -95,7 +95,7 @@ const Header = ({ drawerWidth = 260 }) => {
       ? "tasks"
       : "goals";
 
-  const MODULE_HOME = { goals: "/dashboard", ideas: IDEAS_HOME_PATH, tasks: TASKS_HOME_PATH };
+  const MODULE_HOME = { goals: "/dashboard", ideas: IDEAS_DASHBOARD_PATH, tasks: TASKS_DASHBOARD_PATH };
 
   const handleModuleChange = (event, module) => {
     if (!module || module === activeModule) return;

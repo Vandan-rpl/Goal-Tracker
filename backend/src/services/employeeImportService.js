@@ -182,9 +182,11 @@ const validateRows = (rows, { deptMap, existingByCode, usersByEmail, businessHea
  * Import employees from HR's Excel export.
  * Everything runs in one transaction; dryRun rolls back after building the report.
  *
- * Returns { report, welcomeMails }. welcomeMails holds each created user with
- * their own temporary password, for the welcome email after the commit (empty
- * on a dry run). It must never be sent back in the response; report is safe.
+ * Returns { report }. No emails are sent: every user saved from the file
+ * (new or updated, except the Business Head) is left inactive at the end, and
+ * the Admin activates them later with Activate All Users
+ * (userActivationService), which mails login details to users who have never
+ * logged in.
  */
 const importEmployees = async (buffer, { dryRun = false, deactivateMissing = false } = {}) => {
   let parsed;
@@ -267,6 +269,7 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
       inserted: 0,
       updated: 0,
       deactivated: 0,
+      pendingActivation: 0,
       businessHead: { name: fullName(businessHead), employeeCode: businessHead.EmployeeCode },
       newUsers: [],
       notUploaded,
@@ -277,15 +280,15 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
     };
 
     // ---------- Pass 1: insert / update ----------
-    // Every new user gets their own temporary password (DefaultPasswordFlag = 1 below forces a
-    // change on first login). Hashed up front and in parallel to keep the transaction short.
+    // Every new user gets a temporary password hash (DefaultPasswordFlag = 1 below forces a
+    // change on first login). It is never mailed: Activate All Users issues a fresh one with
+    // the email. Hashed up front and in parallel to keep the transaction short.
     const credentials = new Map();
     await Promise.all(
       records
         .filter((rec) => !rec.existing)
         .map(async (rec) => credentials.set(rec, await issueTemporaryPassword())),
     );
-    const welcomeMails = [];
 
     // First + Last Name (from the file) -> [{ UserID, middle }], for manager linking in pass 2.
     const fileNames = new Map();
@@ -345,17 +348,6 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
         rec.UserID = result.recordset[0].UserID;
         report.inserted++;
         report.newUsers.push({ row: rec.row, employeeCode: rec.EmployeeCode, name: rec.name, username });
-        welcomeMails.push({
-          user: {
-            UserID: rec.UserID,
-            Username: username,
-            EmployeeCode: rec.EmployeeCode,
-            FirstName: rec.FirstName,
-            LastName: rec.LastName,
-            Email: rec.Email,
-          },
-          temporaryPassword: credentials.get(rec).temporaryPassword,
-        });
       }
 
       pushTo(fileNames, nameKey(rec.FirstName, rec.LastName), { UserID: rec.UserID, middle: rec.middleName });
@@ -494,12 +486,26 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
       h.roleChanged = roleChanges.has(h.userId);
     });
 
+    // ---------- Leave every user from the file inactive until the Admin activates them ----------
+    // Done last: manager linking and the Manager role above count only active users. The
+    // Business Head (needed active by every import) and Admins stay active.
+    const pendingResult = await request()
+      .input("UserIDs", sql.NVarChar(sql.MAX), JSON.stringify(records.map((rec) => rec.UserID)))
+      .input("BusinessHeadID", sql.Int, businessHead.UserID)
+      .query(`
+        UPDATE dbo.Users SET IsActive = 0, ModifiedDate = GETDATE()
+        WHERE UserID IN (SELECT CAST(value AS INT) FROM OPENJSON(@UserIDs))
+          AND UserID <> @BusinessHeadID
+          AND Role <> 'Admin'
+      `);
+    report.pendingActivation = pendingResult.rowsAffected[0];
+
     if (dryRun) {
       await transaction.rollback();
-      return { report, welcomeMails: [] };
+      return { report };
     }
     await transaction.commit();
-    return { report, welcomeMails };
+    return { report };
   } catch (error) {
     try {
       await transaction.rollback();

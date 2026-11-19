@@ -4,6 +4,8 @@
 
 export const IDEAS_BASE_PATH = "/ideas";
 export const IDEAS_HOME_PATH = "/ideas/my-ideas";
+// Where the Ideas module opens (header module switch, /ideas).
+export const IDEAS_DASHBOARD_PATH = "/ideas/dashboard";
 
 export const isIdeasPath = (pathname = "") =>
   pathname === IDEAS_BASE_PATH || pathname.startsWith(`${IDEAS_BASE_PATH}/`);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { getRoleLabel } from '../../utils/roleLabel';
 
@@ -50,6 +50,183 @@ const TableShell = ({ headers, children }) => (
   </div>
 );
 
+/**
+ * Activate All Users: uploaded users stay inactive (no email) until the
+ * Admin reviews every inactive user here and activates them all. Users who
+ * have never logged in get a new temporary password by email; the mails go
+ * out in the background (30 per minute) and their progress is shown.
+ */
+const ActivateAllUsers = ({ refreshKey }) => {
+  const [summary, setSummary] = useState(null);
+  const [showList, setShowList] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [batch, setBatch] = useState(null);
+
+  const fetchSummary = () => api.get('/admin/employees/activation-summary').then((res) => res.data.data);
+  const summaryError = (err) => err.response?.data?.message || 'Failed to load inactive users.';
+
+  // Reload after every import (and on first open).
+  useEffect(() => {
+    let ignore = false;
+    fetchSummary()
+      .then((data) => {
+        if (!ignore) {
+          setSummary(data);
+          setError('');
+        }
+      })
+      .catch((err) => {
+        if (!ignore) setError(summaryError(err));
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [refreshKey]);
+
+  // Poll the email batch until every mail was attempted.
+  useEffect(() => {
+    if (!batch?.batchId || batch.finished) return undefined;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/admin/welcome-mail-batches/${batch.batchId}`);
+        setBatch(res.data.data);
+      } catch {
+        setBatch((current) => ({ ...current, finished: true, lost: true }));
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [batch]);
+
+  const activateAll = async () => {
+    if (!summary?.total) return;
+    const confirmed = window.confirm(
+      `Activate all ${summary.total} inactive user(s)? ${summary.emails} user(s) who have never logged in will get a new temporary password by email. ` +
+        'This also activates users who were deleted or deactivated earlier.',
+    );
+    if (!confirmed) return;
+
+    setActivating(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await api.post('/admin/employees/activate-all');
+      const data = res.data.data;
+      setMessage(res.data.message);
+      setBatch(
+        data.batchId
+          ? { batchId: data.batchId, total: data.mailsQueued, sent: 0, failed: 0, pending: data.mailsQueued, finished: false, failures: [] }
+          : null,
+      );
+      setSummary(await fetchSummary().catch(() => null));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to activate users.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <SectionTitle>Activate Users</SectionTitle>
+      <p className="text-sm text-slate-600">
+        Uploaded employees are saved as inactive and get no email. When the upload is final, activate everyone here.
+        Users who have never logged in get a new temporary password by email; users who already use the app keep
+        their password and get no email.
+      </p>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200/60 text-rose-800 text-sm font-medium">{error}</div>
+      )}
+      {message && (
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-sm font-medium">{message}</div>
+      )}
+
+      {batch && (
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-sm text-slate-700 space-y-2">
+          {batch.lost ? (
+            <p>Email progress is no longer available (the server may have restarted). Use Resend Credentials for anyone who did not get an email.</p>
+          ) : (
+            <p>
+              Login emails: <strong>{batch.sent}</strong> sent, <strong>{batch.failed}</strong> failed,{' '}
+              <strong>{batch.pending}</strong> waiting{batch.finished ? '. Done.' : ' (about 30 per minute)...'}
+            </p>
+          )}
+          {batch.failures?.length > 0 && (
+            <TableShell headers={['Employee Code', 'Name', 'Email', 'Reason']}>
+              {batch.failures.map((f) => (
+                <tr key={f.userId} className="bg-rose-50/40">
+                  <td className="px-3 py-2 font-mono">{f.employeeCode || '—'}</td>
+                  <td className="px-3 py-2 text-slate-900">{f.name}</td>
+                  <td className="px-3 py-2">{f.email}</td>
+                  <td className="px-3 py-2 text-rose-800">{f.reason}</td>
+                </tr>
+              ))}
+            </TableShell>
+          )}
+        </div>
+      )}
+
+      {summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            ['Inactive users', summary.total],
+            ['Will get a login email', summary.emails],
+            ['Never logged in, no email address', summary.noEmailAddress],
+          ].map(([label, value]) => (
+            <div key={label} className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="text-xs text-slate-500">{label}</div>
+              <div className="text-2xl font-bold text-slate-900">{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button
+          type="button"
+          onClick={() => setShowList((v) => !v)}
+          disabled={!summary?.total}
+          className="flex-1 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-medium py-3 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {showList ? 'Hide inactive users' : 'Show inactive users'}
+        </button>
+        <button
+          type="button"
+          onClick={activateAll}
+          disabled={activating || !summary?.total}
+          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-xl shadow-lg shadow-emerald-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {activating ? 'Activating...' : `Activate All Users${summary?.total ? ` (${summary.total})` : ''}`}
+        </button>
+      </div>
+
+      {showList && summary?.users.length > 0 && (
+        <TableShell headers={['Employee Code', 'Name', 'Email', 'Role', 'Login email']}>
+          {summary.users.map((u) => (
+            <tr key={u.userId}>
+              <td className="px-3 py-2 font-mono">{u.employeeCode || '—'}</td>
+              <td className="px-3 py-2 text-slate-900">{u.name || '—'}</td>
+              <td className="px-3 py-2">{u.email || '—'}</td>
+              <td className="px-3 py-2">{getRoleLabel(u.role)}</td>
+              <td className="px-3 py-2">
+                {u.willGetEmail ? (
+                  <span className="text-emerald-700">Yes</span>
+                ) : u.neverLoggedIn ? (
+                  <span className="text-rose-700">No email address</span>
+                ) : (
+                  <span className="text-slate-500">No (keeps password)</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </TableShell>
+      )}
+    </div>
+  );
+};
+
 const ImportEmployees = () => {
   const [file, setFile] = useState(null);
   const [deactivateMissing, setDeactivateMissing] = useState(false);
@@ -58,6 +235,7 @@ const ImportEmployees = () => {
   const [validationErrors, setValidationErrors] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activationRefresh, setActivationRefresh] = useState(0);
 
   const resetReports = () => {
     setPreview(null);
@@ -95,6 +273,7 @@ const ImportEmployees = () => {
       } else {
         setResult(res.data);
         setPreview(null);
+        setActivationRefresh((key) => key + 1);
       }
     } catch (err) {
       const data = err.response?.data;
@@ -118,6 +297,7 @@ const ImportEmployees = () => {
         <h2 className="text-2xl font-bold tracking-tight text-white">Upload Employees (Excel)</h2>
         <p className="text-slate-300 text-sm mt-1">
           Upload HR's full employee export as-is. Only rows with Employee Status "Active" are uploaded. Preview the changes first, then confirm the import.
+          Uploaded employees are saved as inactive and get no email until you use Activate All Users below.
         </p>
         <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs text-indigo-200">
           <span>New employees get the default password:</span>
@@ -187,6 +367,8 @@ const ImportEmployees = () => {
           </div>
         </div>
 
+        <ActivateAllUsers refreshKey={activationRefresh} />
+
         {/* Validation errors (HTTP 400) */}
         {validationErrors.length > 0 && (
           <div className="space-y-4">
@@ -214,7 +396,7 @@ const ImportEmployees = () => {
             {/* Counts */}
             <div className="space-y-4">
               <SectionTitle>{report.dryRun ? 'Preview (not saved yet)' : 'Upload Summary'}</SectionTitle>
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
                 {[
                   ['Users created', report.inserted],
                   ['Users updated', report.updated],
@@ -222,6 +404,7 @@ const ImportEmployees = () => {
                   ['Manager not linked', report.managerNotLinked.length],
                   ['Skipped (not active)', report.skippedInactive.length],
                   ['Deactivated', report.deactivated],
+                  ['Inactive until activated', report.pendingActivation],
                 ].map(([label, value]) => (
                   <div key={label} className="p-4 rounded-xl bg-slate-50 border border-slate-100">
                     <div className="text-xs text-slate-500">{label}</div>

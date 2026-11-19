@@ -4,6 +4,7 @@ const ExcelJS = require("exceljs");
 const fs = require("fs");
 const { registerUser, issueTemporaryPassword } = require("../services/authService");
 const welcomeMailQueue = require("../services/welcomeMailQueue");
+const userActivationService = require("../services/userActivationService");
 const passwordHistoryModel = require("../models/passwordHistoryModel");
 const withTransaction = require("../utils/withTransaction");
 const logger = require("../utils/logger");
@@ -903,24 +904,19 @@ const importEmployees = async (req, res) => {
     String(req.query.deactivateMissing).toLowerCase() === "true";
 
   try {
-    const { report, welcomeMails } = await importEmployeeFile(req.file.buffer, {
+    // No emails here: uploaded users stay inactive until the Admin uses
+    // Activate All Users (POST /admin/employees/activate-all).
+    const { report } = await importEmployeeFile(req.file.buffer, {
       dryRun,
       deactivateMissing,
     });
-
-    // After the commit: one welcome email per created user, sent in the
-    // background (30 per minute); this request does not wait for them.
-    const mail = dryRun
-      ? { batchId: null, mailsQueued: 0, mailsFailed: 0 }
-      : queueWelcomeMails(welcomeMails, "import-employees");
 
     return res.status(200).json({
       success: true,
       message: dryRun
         ? "Preview generated. No changes were saved."
-        : `Import completed. Created: ${report.inserted}, Updated: ${report.updated}, Not uploaded: ${report.notUploaded.length}, Manager not linked: ${report.managerNotLinked.length}, Skipped (not active): ${report.skippedInactive.length}, Deactivated: ${report.deactivated}, Welcome emails queued: ${mail.mailsQueued}.`,
+        : `Import completed. Created: ${report.inserted}, Updated: ${report.updated}, Not uploaded: ${report.notUploaded.length}, Manager not linked: ${report.managerNotLinked.length}, Skipped (not active): ${report.skippedInactive.length}, Deactivated: ${report.deactivated}. ${report.pendingActivation} uploaded user(s) are inactive until you use Activate All Users; no emails were sent.`,
       ...report,
-      mail,
     });
   } catch (error) {
     if (error instanceof ImportValidationError) {
@@ -1049,6 +1045,42 @@ const resendCredentials = async (req, res) => {
 };
 
 /**
+ * Activate All Users preview (Admin only): every inactive user and who would
+ * get a login email.
+ * GET /admin/employees/activation-summary
+ */
+const getActivationSummary = async (req, res) => {
+  try {
+    const summary = await userActivationService.getActivationSummary();
+    return res.json({ success: true, data: summary });
+  } catch (error) {
+    console.error("Activation Summary Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to load inactive users." });
+  }
+};
+
+/**
+ * Activate All Users (Admin only): every inactive user is activated; users
+ * who have never logged in get a new temporary password by email.
+ * POST /admin/employees/activate-all
+ */
+const activateAllUsers = async (req, res) => {
+  try {
+    const result = await userActivationService.activateAllUsers(req.user);
+    return res.json({
+      success: true,
+      message: result.activated
+        ? `Activated ${result.activated} user(s). Login emails queued: ${result.mailsQueued}.`
+        : "There are no inactive users to activate.",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Activate All Users Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to activate users. No changes were saved." });
+  }
+};
+
+/**
  * Progress of a bulk upload's welcome emails (Admin only).
  * GET /admin/welcome-mail-batches/:batchId
  */
@@ -1064,6 +1096,8 @@ const getWelcomeMailBatch = (req, res) => {
 };
 
 module.exports = {
+  getActivationSummary,
+  activateAllUsers,
   resendCredentials,
   getWelcomeMailBatch,
   importEmployees,
