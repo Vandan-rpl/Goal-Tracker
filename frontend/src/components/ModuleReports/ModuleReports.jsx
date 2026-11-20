@@ -23,6 +23,7 @@ import {
   SummaryCards,
 } from "../Dashboard/Dashboard";
 import { DASHBOARD_COLORS as C, dashboardCellClass as cellClass, dashboardHeadClass as headClass } from "../Dashboard/dashboardStyles";
+import { formatFiscalYearLabel } from "../../utils/fiscalQuarter";
 
 // CFO Reports & Analytics for the Innovation Ideas and Task Tracker modules:
 // the same two views as the Goal Tracker's Business Head report.
@@ -39,7 +40,7 @@ const TABS = [
 
 const SNAPSHOT_COLORS = { Completed: C.green, Remaining: C.slate };
 
-const fiscalYearLabel = (year) => `FY${year} (Apr ${year - 1} – Mar ${year})`;
+const fiscalYearLabel = formatFiscalYearLabel;
 
 // Table of count rows (team members or departments): name, total, one
 // column per status, completion %. onSelect makes rows clickable.
@@ -351,7 +352,7 @@ const ModuleReports = ({
               />
             ) : (
               <DashboardEmptyState
-                title={`No ${nounPlural} in FY${report.FiscalYear}`}
+                title={`No ${nounPlural} in ${fiscalYearLabel(report.FiscalYear)}`}
                 description="Try another fiscal year or department."
               />
             )}

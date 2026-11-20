@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import SearchableSelect from "../../components/SearchableSelect/SearchableSelect";
 import ProjectMemberPicker from "../../components/ProjectMemberPicker/ProjectMemberPicker";
 import TaskWorkbookFrame, {
   taskFilterControlClass as inputClass,
@@ -61,11 +60,6 @@ const Projects = () => {
       ignore = true;
     };
   }, []);
-
-  const projectOptions = useMemo(
-    () => projects.map((project) => ({ value: project.ProjectID, label: project.ProjectName })),
-    [projects],
-  );
 
   const openCreate = async () => {
     setCreating(true);
@@ -188,25 +182,40 @@ const Projects = () => {
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>
       )}
 
-      <div className="border border-[#aeb9cc] bg-[#f4f6fa] p-6">
-        <div className="max-w-xl">
-          <label htmlFor="project-select" className={labelClass}>Select Project</label>
-          {!loading && projects.length === 0 ? (
-            <p className="mt-2 text-sm font-semibold text-slate-700">
-              {canCreate ? "No projects yet. Create one with + New Project." : "You are not a member of any project."}
-            </p>
-          ) : (
-            <SearchableSelect
-              id="project-select"
-              options={projectOptions}
-              value={null}
-              onChange={(projectId) => projectId && navigate(`/tasks/projects/${projectId}`)}
-              placeholder="Search a project by name"
-              loading={loading}
-            />
-          )}
-          <p className="mt-2 text-xs text-slate-500">Pick a project to open its tasks.</p>
-        </div>
+      <div className="border border-[#aeb9cc] bg-[#f4f6fa] p-4 sm:p-6">
+        <p className={labelClass}>Select Project</p>
+        {loading ? (
+          <p className="mt-2 text-sm text-slate-500">Loading projects...</p>
+        ) : projects.length === 0 ? (
+          <p className="mt-2 text-sm font-semibold text-slate-700">
+            {canCreate ? "No projects yet. Create one with + New Project." : "You are not a member of any project."}
+          </p>
+        ) : (
+          // One horizontal row; scrolls sideways when the projects don't fit.
+          <div className="mt-2 flex gap-3 overflow-x-auto pb-2">
+            {projects.map((project) => (
+              <button
+                key={project.ProjectID}
+                type="button"
+                onClick={() => navigate(`/tasks/projects/${project.ProjectID}`)}
+                title={project.Description || project.ProjectName}
+                className="flex w-60 shrink-0 cursor-pointer flex-col border border-[#c6cedc] border-t-4 border-t-[#2c3e82] bg-white p-3 text-left transition hover:border-[#2c3e82] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#2c3e82]"
+              >
+                <span className="truncate text-sm font-bold text-[#202522]">{project.ProjectName}</span>
+                <span className="mt-0.5 truncate text-xs text-slate-500">By {project.CreatedByName || "—"}</span>
+                <span className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+                  <span>{project.MemberCount} {project.MemberCount === 1 ? "member" : "members"}</span>
+                  <span>{project.TaskCount} {project.TaskCount === 1 ? "task" : "tasks"}</span>
+                  <span>{project.OpenCount} open</span>
+                  {project.OverdueCount > 0 && (
+                    <span className="font-semibold text-[#b3403f]">{project.OverdueCount} overdue</span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-slate-500">Click a project to open its tasks.</p>
       </div>
     </TaskWorkbookFrame>
   );

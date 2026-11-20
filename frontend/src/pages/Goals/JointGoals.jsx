@@ -64,7 +64,6 @@ const JointGoals = () => {
                     <tr key={goal.JointAccountabilityID} className="hover:bg-gray-50/50 transition">
                       <td className="px-6 py-4 min-w-64">
                         <div className="text-sm font-bold text-gray-900">#{goal.GoalNumber} - {goal.GoalTitle}</div>
-                        <div className="text-xs text-gray-400">{goal.GoalCategory || "General"}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {[goal.OwnerFirstName, goal.OwnerLastName].filter(Boolean).join(" ") || "Unknown"}

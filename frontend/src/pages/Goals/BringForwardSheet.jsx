@@ -200,7 +200,7 @@ const BringForwardSheet = ({
           Brought forward goals
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Approved goals of previous quarters which are going to complete in this quarter or in future. If goal is not completed withing targeted date then you can edit target date and after editing target date it go to Reporting manager for approval.
+          Approved goals of previous quarters which are going to complete in this quarter or in future. If goal is not completed within targeted date then you can edit target date and after editing target date it go to Reporting manager for approval.
         </p>
       </div>
 

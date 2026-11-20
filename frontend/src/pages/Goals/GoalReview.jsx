@@ -86,7 +86,6 @@ const GoalReview = () => {
           </h3>
           <p className="text-sm text-gray-600 mt-1">{goal.GoalDescription || 'No description provided.'}</p>
           <div className="mt-2 text-xs text-gray-500 space-x-4">
-            <span>Category: <b>{goal.GoalCategory || 'General'}</b></span>
             <span>Weightage: <b>{goal.Weightage || 0}%</b></span>
             <span>Priority: <b>{goal.Priority || 'N/A'}</b></span>
           </div>

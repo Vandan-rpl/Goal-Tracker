@@ -41,6 +41,33 @@ const withMailWarning = (successMessage) => (result) =>
     result.mailWarning ? `${successMessage} ${result.mailWarning}` : successMessage;
 
 /**
+ * Project Creator Settings (Admin)
+ * GET /api/v1/tasks/projects/creators
+ */
+exports.getCreatorSettings = handle(
+    "Get Project Creators", "Failed to fetch project creators.", 200, "Project creators fetched successfully.",
+    () => projectService.getCreatorSettings()
+);
+
+/**
+ * Add Project Creator (Admin)
+ * POST /api/v1/tasks/projects/creators   body: { userId }
+ */
+exports.addCreator = handle(
+    "Add Project Creator", "Failed to add project creator.", 200, "Project creator added successfully.",
+    (req) => projectService.addCreator(req.body)
+);
+
+/**
+ * Remove Project Creator (Admin)
+ * DELETE /api/v1/tasks/projects/creators/:userId
+ */
+exports.removeCreator = handle(
+    "Remove Project Creator", "Failed to remove project creator.", 200, "Project creator removed successfully.",
+    (req) => projectService.removeCreator(req.params.userId)
+);
+
+/**
  * Get Projects
  * GET /api/v1/tasks/projects
  */
@@ -113,14 +140,12 @@ exports.createProjectTask = handle(
 );
 
 /**
- * Assign Project Task (Business Head; one member or all members)
+ * Assign Project Task (whoever runs the project; one member)
  * POST /api/v1/tasks/projects/:projectId/assign
  */
 exports.assignProjectTask = handle(
     "Assign Project Task", "Failed to assign task.", 201,
-    (result) => withMailWarning(result.assignedCount > 1
-        ? `Task assigned to ${result.assignedCount} members.`
-        : "Task assigned successfully.")(result),
+    withMailWarning("Task assigned successfully."),
     (req) => projectService.assignProjectTask(req.params.projectId, req.body, req.user)
 );
 

@@ -208,9 +208,6 @@ const ListGoal = () => {
                     Goal No / Description
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Weightage
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -227,10 +224,10 @@ const ListGoal = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="p-0">
+                    <td colSpan="5" className="p-0">
                       <TableLoader
                         rows={5}
-                        columns={6}
+                        columns={5}
                         showToolbar={false}
                         paper={false}
                       />
@@ -252,9 +249,6 @@ const ListGoal = () => {
                             ? formatDisplayDate(goal.Timeline)
                             : "N/A"}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {goal.GoalCategory || "General"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">
                         {goal.Weightage}%
@@ -320,7 +314,7 @@ const ListGoal = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="p-0">
+                    <td colSpan="5" className="p-0">
                       <EmptyState
                         icon={<AssignmentOutlinedIcon sx={{ fontSize: 40 }} />}
                         title="No goals found"

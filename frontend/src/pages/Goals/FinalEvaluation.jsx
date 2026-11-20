@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../../services/api';
-import { getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
+import { formatFiscalYearLabel, getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
 import QuarterSummaryTable from '../../components/QuarterSummaryTable/QuarterSummaryTable';
 import {
   QUARTER_COMPLETION_TITLE,
@@ -225,7 +225,8 @@ const FinalEvaluation = () => {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-900">
-                Yearly Performance · FY{fiscalYear}
+                Yearly Performance
+                {isValidFiscalYear(fiscalYear) ? ` · ${formatFiscalYearLabel(fiscalYear)}` : ''}
               </h2>
               {/* <p className="mt-1 text-sm text-gray-600">
                 April–March. Goals stay in the quarter they were added, including after carry-forward.
@@ -254,7 +255,7 @@ const FinalEvaluation = () => {
             role={!isValidFiscalYear(fiscalYear) ? 'alert' : undefined}
           >
             {isValidFiscalYear(fiscalYear)
-              ? 'Enter the fiscal year ending year (for example, 2026).'
+              ? `Enter the year the fiscal year ends in (for example, 2027 for ${formatFiscalYearLabel(2027)}).`
               : 'Enter a four-digit year from 1900 to 9998. The report will load once the year is valid.'}
           </p>
           {/* <p className="mb-3 text-sm text-gray-600">

@@ -27,9 +27,6 @@ import { worksheetControlClass, worksheetLineAddClass } from "../../utils/goalWo
 import DateInput from "../DateInput/DateInput";
 import { formatDisplayDate } from "../../utils/dateTime";
 
-// Assigned To value for "All members" (backend PROJECT_ASSIGN_ALL).
-const ASSIGN_ALL = "all";
-
 const EMPTY_DRAFT = {
   taskName: "",
   priority: "Medium",
@@ -131,12 +128,12 @@ const toSheetItems = (tasks, collapseGroups) => {
  *
  * With `project` (project page) the sheet adds Responsible Person and
  * Assigned To columns, and blank rows add to / assign in that project:
- *   assign mode - Assigned To = one member or All members (one copy per
- *                 member); each "All members" task shows as one row with
- *                 per-member progress, expandable to every member's copy.
- *                 Its Task Name / Priority / Due Date are changed (or it is
- *                 deleted) for every copy at once. Responsible Person is
- *                 the assignee for one member, none for All members.
+ *   assign mode - Assigned To = one member, who is also the Responsible
+ *                 Person. Older "All members" tasks (assigning to all is
+ *                 no longer offered) still show as one row with per-member
+ *                 progress, expandable to every member's copy; their Task
+ *                 Name / Priority / Due Date are changed (or the task is
+ *                 deleted) for every copy at once.
  *   own mode    - the member's own project tasks, added like My Tasks; the
  *                 member picks the Responsible Person from the members.
  * Outside a project, project tasks carry a "Project: name" tag.
@@ -170,12 +167,7 @@ export default function TaskSheet({
 
   const [drafts, setDrafts] = useState({}); // rowKey -> draft (edited rows only)
 
-  // While a new row is being assigned to All members there is no Responsible
-  // Person, so the whole column is hidden.
-  const assigningAll =
-    Boolean(project) && isAssignMode &&
-    Object.entries(drafts).some(([rowKey, d]) => rowKey.startsWith("new-") && d.assignTo === ASSIGN_ALL);
-  const showResponsible = Boolean(project) && !assigningAll;
+  const showResponsible = Boolean(project);
   const columns = [...BASE_COLUMNS, ...(project ? projectColumns(showResponsible) : []), ...endColumns(Boolean(project), showCfoRemarks)];
   const [extraRows, setExtraRows] = useState({}); // employeeId -> [rowKey] added with "+ Add row"
   const [baseRowSeed, setBaseRowSeed] = useState({}); // employeeId -> n, to renew used blank rows
@@ -240,7 +232,7 @@ export default function TaskSheet({
         cfoRemarks: isAssignMode,
         userRemarks: !isAssignMode,
         // Never picked: the member adding their own task, or when assigning
-        // the Assigned To member (All members = none).
+        // the Assigned To member.
         responsible: false,
         assignTo: Boolean(project) && isAssignMode,
       };
@@ -264,7 +256,7 @@ export default function TaskSheet({
       if (dueMustBeFuture && draft.dueDate < today) return "Due Date must be today or later.";
     }
     if (checkProject) {
-      if (isAssignMode && !draft.assignTo) return "Assigned To is required: pick a member or All members.";
+      if (isAssignMode && !draft.assignTo) return "Assigned To is required: pick a member.";
     }
     if (draft.cfoRemarks.trim().length > TASK_REMARKS_MAX) return `${remarksLabel} cannot exceed ${TASK_REMARKS_MAX} characters.`;
     if (draft.userRemarks.trim().length > TASK_REMARKS_MAX) return `User's Remarks cannot exceed ${TASK_REMARKS_MAX} characters.`;
@@ -274,15 +266,14 @@ export default function TaskSheet({
   const assignWithMail = async (draft, employee) => {
     if (project) {
       const result = await assignProjectTask(project.ProjectID, {
-        assignTo: draft.assignTo === ASSIGN_ALL ? ASSIGN_ALL : Number(draft.assignTo),
+        assignTo: Number(draft.assignTo),
         taskName: draft.taskName.trim(),
         priority: draft.priority,
         dueDate: draft.dueDate,
         cfoRemarks: draft.cfoRemarks.trim(),
       });
-      const who = result?.assignedCount > 1 ? `${result.assignedCount} members` : "the member";
-      if (result?.mailWarning) toast.warning(`Task assigned to ${who}. ${result.mailWarning}`);
-      else toast.success(`Task assigned and emailed to ${who}.`);
+      if (result?.mailWarning) toast.warning(`Task assigned to the member. ${result.mailWarning}`);
+      else toast.success("Task assigned and emailed to the member.");
       return;
     }
 
@@ -488,8 +479,8 @@ export default function TaskSheet({
         </select>
       );
     }
-    // Blank assign row: the picked member is the Responsible Person; nothing
-    // for All members (or before Assigned To is picked).
+    // Blank assign row: the picked member is the Responsible Person (blank
+    // until Assigned To is picked).
     if (!task && isAssignMode) {
       const assignee = activeMembers.find((m) => String(m.UserID) === draft.assignTo);
       return <div className={readOnlyClass}>{assignee?.FullName || ""}</div>;
@@ -510,9 +501,6 @@ export default function TaskSheet({
           className={`${cellInputClass} cursor-pointer`}
         >
           <option value="">Select...</option>
-          {activeMembers.length > 0 && (
-            <option value={ASSIGN_ALL}>All members ({activeMembers.length})</option>
-          )}
           {activeMembers.map((m) => <option key={m.UserID} value={String(m.UserID)}>{m.FullName}</option>)}
         </select>
       );

@@ -41,7 +41,7 @@ const apiErrorText = (err, fallback) => {
  *                   add / remove members (a Manager: their reportees), and
  *                   the task sheet in assign mode: every task of the project
  *                   (removed members' tasks too), new rows assigned to one
- *                   member or All members, "All members" tasks shown with
+ *                   member, older "All members" tasks shown with
  *                   per-member progress, "Manager / CFO Remarks" per task.
  *   Business Head - on a Manager's project: every task, remarks only.
  *   Admin         - every task, view only.
@@ -233,7 +233,7 @@ const ProjectDetails = () => {
       }
       footer={
         canManage
-          ? "Assigned To = one member or All members (a separate copy for each current member; members added later don't get it). Each member updates their own Status and User's Remarks. Expand an All members task to see each member's copy and add Manager / CFO Remarks per member."
+          ? "Assign each task to one member; that member is its Responsible Person. Each member updates their own Status and User's Remarks."
           : viewsAll
             ? "Every task in this project. Expand an All members task to see each member's copy."
             : "On tasks assigned to you, you can change only Status and User's Remarks. These tasks also appear in My Tasks."

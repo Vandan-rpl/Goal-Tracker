@@ -173,8 +173,8 @@ export const createProjectTask = async (projectId, task) => {
     return response.data.data;
 };
 
-// Business Head. assignTo = a member's UserID or "all". Returns
-// { assignmentGroupId, assignedCount, mailSent, mailWarning }.
+// Business Head. assignTo = a member's UserID. Returns
+// { assignedCount, mailSent, mailWarning }.
 export const assignProjectTask = async (projectId, { assignTo, taskName, priority, dueDate, cfoRemarks }) => {
     const response = await api.post(`/tasks/projects/${projectId}/assign`, {
         assignTo, taskName, priority, dueDate, cfoRemarks,
@@ -196,6 +196,23 @@ export const deleteProjectGroup = async (projectId, groupId) => {
 
 // { status, message, details } from a failed request. `details` holds the
 // backend's per-field validation messages, if any.
+// Admin settings: who besides the CFO can create projects.
+// { creators, candidates }; add / remove return the same shape, refreshed.
+export const getProjectCreatorSettings = async () => {
+    const response = await api.get('/tasks/projects/creators');
+    return response.data.data;
+};
+
+export const addProjectCreator = async (userId) => {
+    const response = await api.post('/tasks/projects/creators', { userId });
+    return response.data.data;
+};
+
+export const removeProjectCreator = async (userId) => {
+    const response = await api.delete(`/tasks/projects/creators/${userId}`);
+    return response.data.data;
+};
+
 export const getTaskApiError = (error, fallback = 'Something went wrong. Please try again.') => {
     const body = error?.response?.data;
     const details = Array.isArray(body?.errors) ? body.errors.filter(Boolean) : [];

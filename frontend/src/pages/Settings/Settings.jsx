@@ -13,6 +13,7 @@ import {
 import api from "../../services/api";
 import useAuth from "../../hooks/useAuth";
 import IdeaFinalApproverSettings from "../../components/IdeaFinalApproverSettings/IdeaFinalApproverSettings";
+import ProjectCreatorSettings from "../../components/ProjectCreatorSettings/ProjectCreatorSettings";
 
 // IDs from the API are numbers; <select> values are strings. Compare everything as strings.
 const toId = (value) => (value === null || value === undefined ? "" : String(value));
@@ -292,6 +293,9 @@ const Settings = () => {
 
           {/* Admin only: Innovation Idea final approvers */}
           {isAdmin && <IdeaFinalApproverSettings />}
+
+          {/* Admin only: who besides the CFO can create Task Tracker projects */}
+          {isAdmin && <ProjectCreatorSettings />}
 
           {/* Preferences Section */}
           {/* <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">

@@ -151,8 +151,10 @@ const sendWelcomeMail = ({ user, temporaryPassword }) => {
                 <p>Your Goal Tracker account has been created.</p>
                 <p>
                     Login ID: <strong>${escapeHtml(user.Email)}</strong><br>
-                    Temporary Password: <strong style="font-family: Consolas, monospace; font-size: 16px;">${escapeHtml(temporaryPassword)}</strong><br>
-                    Login here: <a href="${escapeHtml(link)}">${escapeHtml(link)}</a>
+                    Temporary Password: <strong style="font-family: Consolas, monospace; font-size: 16px;">${escapeHtml(temporaryPassword)}</strong>
+                </p>
+                <p style="margin: 20px 0;">
+                    <a href="${escapeHtml(link)}" style="background-color: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Login here</a>
                 </p>
                 <p>For your security, you will be asked to change this password when you log in for the first time.</p>
                 <p>Please do not share your password with anyone.</p>

@@ -15,7 +15,6 @@ const {
     TaskMailEvent,
     TASK_BUSINESS_HEAD_ROLE,
     TASK_VIEW_ALL_ROLES,
-    PROJECT_CREATOR_ROLES,
     TASK_NAME_MAX_LENGTH,
     TASK_REMARKS_MAX_LENGTH,
 } = require("../constants/taskConstants");
@@ -56,7 +55,10 @@ const isBusinessHead = (user) => roleOf(user) === TASK_BUSINESS_HEAD_ROLE;
 
 const canViewAll = (user) => TASK_VIEW_ALL_ROLES.includes(roleOf(user));
 
-const canCreateProjects = (user) => PROJECT_CREATOR_ROLES.includes(roleOf(user));
+// The Business Head always; anyone else only when Admin put them on
+// dbo.ProjectCreators (user.isProjectCreator, set per request by
+// middleware/projectCreatorMiddleware on every task route).
+const canCreateProjects = (user) => isBusinessHead(user) || user.isProjectCreator === true;
 
 /**
  * Parse a positive integer id, or throw 400
@@ -116,7 +118,7 @@ const taskPermissions = (task, user) => {
 
     const isGroupCopy = Boolean(task.AssignmentGroupID);
     const isProjectTask = task.ProjectID !== null && task.ProjectID !== undefined;
-    // A Manager on any task of a project they created.
+    // A project creator on any task of a project they created.
     const isProjectOwner = isProjectTask && task.ProjectCreatedBy === userId && canCreateProjects(user);
 
     const canChangeTask = (isOwner && isSelfAdded) || isAssigner;
@@ -945,7 +947,7 @@ const updateTask = async (taskIdParam, body = {}, user) => {
 const submitCFORemarks = async (taskIdParam, body = {}, user) => {
     const taskId = parseId(taskIdParam, "task id");
     if (!isBusinessHead(user) && !canCreateProjects(user)) {
-        throw forbidden("Only the Business Head or a project's Manager can add remarks.");
+        throw forbidden("Only the CFO or a project's creator can add remarks.");
     }
 
     const actorId = Number(user.userId);

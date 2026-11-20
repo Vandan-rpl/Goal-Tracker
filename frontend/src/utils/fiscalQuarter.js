@@ -5,8 +5,14 @@ const FISCAL_YEAR_ENDS = [2027];
 const getFiscalYearStart = (date) =>
   date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
 
-const getFiscalYearLabel = (endYear) =>
-  `FY${String(endYear - 1).slice(-2)}-${String(endYear).slice(-2)}`;
+// Display form of a fiscal year, given the year it ENDS in:
+// 2027 (Apr 2026 - Mar 2027) -> "F.Y. 2026-27". Use for text shown to users.
+export const formatFiscalYearLabel = (endYear) => {
+  const year = Number(endYear);
+  return `F.Y. ${year - 1}-${String(year).slice(-2)}`;
+};
+
+const getFiscalYearLabel = formatFiscalYearLabel;
 
 export const getCurrentFiscalQuarterValue = (date = new Date()) => {
   const quarter = Math.floor(((date.getMonth() + 9) % 12) / 3) + 1;
@@ -155,6 +161,5 @@ export const getFiscalQuarterOptions = () => {
 export const formatFiscalQuarterLabel = (label) => {
   const match = /^Q([1-4])-(\d{4})$/.exec(String(label || "").trim());
   if (!match) return label || "";
-  const fyEndYear = Number(match[2]);
-  return `Q${match[1]} F.Y. ${fyEndYear - 1}-${String(fyEndYear).slice(-2)}`;
+  return `Q${match[1]} ${formatFiscalYearLabel(match[2])}`;
 };

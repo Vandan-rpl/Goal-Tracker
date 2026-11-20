@@ -1,4 +1,3 @@
-const crypto = require("crypto");
 const { poolPromise } = require("../config/db");
 const taskModel = require("../models/taskModel");
 const projectModel = require("../models/projectModel");
@@ -10,10 +9,9 @@ const taskService = require("./taskService");
 const {
     TaskAction,
     TaskMailEvent,
-    TASK_MANAGER_ROLE,
+    TASK_BUSINESS_HEAD_ROLE,
     PROJECT_NAME_MAX_LENGTH,
     PROJECT_DESCRIPTION_MAX_LENGTH,
-    PROJECT_ASSIGN_ALL,
 } = require("../constants/taskConstants");
 
 const {
@@ -45,20 +43,21 @@ const {
  * Who may do what ("runs" = canManageProject):
  *   Business Head: creates projects and runs the ones a Business Head
  *     created (rename, add / remove any active user as member, assign tasks
- *     to one member or all members). Sees every project, Managers' too,
+ *     to one member). Sees every project, Managers' too,
  *     with every task, and adds remarks on any task.
- *   Manager: creates projects and runs only their own; members are limited
- *     to their reportees (Users.ReportingManagerID = the Manager). Sees the
- *     projects they created (every task, "Manager / CFO Remarks" on them)
- *     and any project they are a member of.
+ *   Project creator (anyone Admin put on dbo.ProjectCreators): creates
+ *     projects and runs only their own; members are limited to their
+ *     reportees (Users.ReportingManagerID = them). Sees the projects they
+ *     created (every task, "Manager / CFO Remarks" on them) and any project
+ *     they are a member of. Taken off the list = no longer runs them.
  *   Admin: sees every project and its tasks (read-only), like All Tasks.
  *   Member (active): sees the project and their own tasks in it, and adds
  *     their own tasks like personal ones.
  * Project tasks are ordinary dbo.Tasks rows, so editing, status, remarks,
  * delete and emails go through taskService with the same rules.
  *
- * "All members": one copy per current active member, all with the same
- * AssignmentGroupID. Members added later do not get earlier copies. The
+ * "All members" (no longer offered for new tasks): older tasks assigned
+ * as one copy per active member, all with the same AssignmentGroupID. The
  * group's Task Name / Priority / Due Date are changed
  * (and the group deleted) here, for every copy at once, by whoever
  * assigned it.
@@ -77,21 +76,22 @@ const parseGroupId = (value) => {
 
 const notFound = () => new AppError("Project not found.", StatusCodes.NOT_FOUND);
 
-// A project creator who is not the Business Head.
+// A project creator who is not the Business Head (on the Admin's list).
 const isManagerRole = (user) => canCreateProjects(user) && !isBusinessHead(user);
 
 /**
- * True if the user runs the project: the Manager who created it, or the
- * Business Head for projects not created by a Manager.
+ * True if the user runs the project: whoever created it (while they can
+ * still create projects), or any Business Head for projects a Business
+ * Head created.
  */
 const canManageProject = (project, user) => {
     if (!canCreateProjects(user)) return false;
     if (project.CreatedBy === Number(user.userId)) return true;
-    return isBusinessHead(user) && String(project.CreatedByRole || "").toUpperCase() !== TASK_MANAGER_ROLE;
+    return isBusinessHead(user) && String(project.CreatedByRole || "").toUpperCase() === TASK_BUSINESS_HEAD_ROLE;
 };
 
 const assertCanCreate = (user) => {
-    if (!canCreateProjects(user)) throw forbidden("Only the Business Head or a Manager can create projects.");
+    if (!canCreateProjects(user)) throw forbidden("Only the CFO or people allowed by Admin can create projects.");
 };
 
 /**
@@ -356,27 +356,13 @@ const createProjectTask = async (projectIdParam, body = {}, user) => {
     return await taskService.createTask(body, user, { projectId });
 };
 
-// Several { sent, reason } results -> what the assigner sees.
-const groupMailResult = (results) => {
-    const failed = results.filter(({ mail }) => !mail.sent);
-    if (failed.length === 0) return { mailSent: true, mailWarning: null };
-    if (results.length === 1) return mailResult(results[0].mail);
-
-    return {
-        mailSent: false,
-        mailWarning: `The tasks were saved, but the email could not be sent to ${failed.length} of ${results.length} members: ${failed.map(({ name, mail }) => `${name} (${mail.reason})`).join(", ")}.`,
-    };
-};
-
 /**
- * Assign a project task (whoever runs the project: the Business Head, or
- * the Manager who created it).
- *   body.assignTo = a member's UserID - one task for that member
- *   body.assignTo = "all"             - one copy per current active member,
- *                                       linked by a new AssignmentGroupID
- * Responsible Person: the assignee for one member; none for All members
- * (body.responsiblePersonId is ignored). Each assignee is emailed after
- * commit.
+ * Assign a project task to one member (whoever runs the project: the
+ * Business Head, or the Manager who created it). body.assignTo = the
+ * member's UserID; they are also the Responsible Person
+ * (body.responsiblePersonId is ignored). Assigning to all members is no
+ * longer offered; older "All members" tasks are still edited / deleted
+ * below. The assignee is emailed after commit.
  */
 const assignProjectTask = async (projectIdParam, body = {}, user) => {
     const projectId = parseId(projectIdParam, "project id");
@@ -385,21 +371,16 @@ const assignProjectTask = async (projectIdParam, body = {}, user) => {
     const assignerId = Number(user.userId);
     const errors = [];
 
-    const assignToAll = text(String(body.assignTo ?? "")).toLowerCase() === PROJECT_ASSIGN_ALL;
     let assigneeId = null;
-    if (!assignToAll) {
-        const id = Number(body.assignTo);
-        if (body.assignTo === null || body.assignTo === undefined || body.assignTo === "" || !Number.isInteger(id) || id <= 0) {
-            errors.push("Assigned To is required: pick a member or All members.");
-        } else if (id === assignerId) {
-            errors.push("You cannot assign a task to yourself.");
-        } else {
-            assigneeId = id;
-        }
+    const id = Number(body.assignTo);
+    if (body.assignTo === null || body.assignTo === undefined || body.assignTo === "" || !Number.isInteger(id) || id <= 0) {
+        errors.push("Assigned To is required: pick a member.");
+    } else if (id === assignerId) {
+        errors.push("You cannot assign a task to yourself.");
+    } else {
+        assigneeId = id;
     }
 
-    // One member: they are the Responsible Person. All members: none for now.
-    const responsiblePersonId = assignToAll ? null : assigneeId;
     const input = checkAssignInput(body, errors);
 
     if (errors.length > 0) throw validationError(errors);
@@ -409,46 +390,23 @@ const assignProjectTask = async (projectIdParam, body = {}, user) => {
         await getManagedProject(transaction, projectId, user, true);
 
         const members = await projectModel.listMembers(transaction, projectId);
-        const activeMembers = members.filter((m) => m.UserIsActive && m.UserID !== assignerId);
+        const member = members.find((m) => m.UserIsActive && m.UserID === assigneeId);
+        if (!member) throw validationError(["Assigned To must be an active member of the project."]);
 
-        let assignees;
-        if (assignToAll) {
-            assignees = activeMembers;
-            if (assignees.length === 0) throw validationError(["This project has no active members to assign to."]);
-        } else {
-            const member = activeMembers.find((m) => m.UserID === assigneeId);
-            if (!member) throw validationError(["Assigned To must be an active member of the project."]);
-            assignees = [member];
-        }
-
-        const project = {
-            projectId,
-            responsiblePersonId,
-            assignmentGroupId: assignToAll ? crypto.randomUUID() : null,
-        };
-
-        const rows = [];
-        for (const member of assignees) {
-            const taskId = await insertAssignedTask(transaction, {
-                employeeId: member.UserID, input, businessHeadId: assignerId, project,
-            });
-            rows.push({ taskId, userId: member.UserID, name: member.FullName });
-        }
-        return { rows, assignmentGroupId: project.assignmentGroupId };
+        const taskId = await insertAssignedTask(transaction, {
+            employeeId: member.UserID,
+            input,
+            businessHeadId: assignerId,
+            project: { projectId, responsiblePersonId: assigneeId, assignmentGroupId: null },
+        });
+        return { taskId, userId: member.UserID };
     });
 
-    // Committed. The DB change stands whatever the emails do.
-    const mails = [];
-    for (const row of created.rows) {
-        mails.push({ name: row.name, mail: await sendTaskMail(TaskMailEvent.ASSIGNED, row.taskId) });
-        emitUnseenCount(row.userId);
-    }
+    // Committed. The DB change stands whatever the email does.
+    const mail = await sendTaskMail(TaskMailEvent.ASSIGNED, created.taskId);
+    emitUnseenCount(created.userId);
 
-    return {
-        assignmentGroupId: created.assignmentGroupId,
-        assignedCount: created.rows.length,
-        ...groupMailResult(mails),
-    };
+    return { assignedCount: 1, ...mailResult(mail) };
 };
 
 /**
@@ -552,7 +510,54 @@ const deleteGroup = async (projectIdParam, groupIdParam, user) => {
     return { AssignmentGroupID: groupId, deletedCount: ownerIds.length };
 };
 
+/**
+ * ------------------------------------------------------------
+ * Project creators (Admin settings; the route allows Admin only)
+ * ------------------------------------------------------------
+ */
+
+/**
+ * Everyone on the list and the active users who can be added.
+ */
+const getCreatorSettings = async () => {
+    const pool = await poolPromise;
+    const [creators, candidates] = await Promise.all([
+        projectModel.listProjectCreators(pool),
+        projectModel.listProjectCreatorCandidates(pool),
+    ]);
+    return { creators, candidates };
+};
+
+const addCreator = async (body = {}) => {
+    const userId = parseId(body.userId, "user");
+    const pool = await poolPromise;
+
+    if (!(await projectModel.addProjectCreator(pool, userId))) {
+        throw new AppError("Selected user was not found or is inactive.", StatusCodes.BAD_REQUEST);
+    }
+
+    return await getCreatorSettings();
+};
+
+/**
+ * Take someone off the list. They can no longer create projects or run the
+ * ones they created; those projects and their tasks stay as they are.
+ */
+const removeCreator = async (userIdParam) => {
+    const userId = parseId(userIdParam, "user");
+    const pool = await poolPromise;
+
+    if (!(await projectModel.removeProjectCreator(pool, userId))) {
+        throw new AppError("This user is not on the project creator list.", StatusCodes.NOT_FOUND);
+    }
+
+    return await getCreatorSettings();
+};
+
 module.exports = {
+    getCreatorSettings,
+    addCreator,
+    removeCreator,
     getProjects,
     getProjectDetails,
     getMemberOptions,

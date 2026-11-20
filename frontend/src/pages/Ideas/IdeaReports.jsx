@@ -28,10 +28,10 @@ const PURPOSE_COLORS = Object.fromEntries(
 const summaryCards = (summary) => [
   { label: "Total Ideas", value: summary.total, accent: "text-[#2c3e82]" },
   { label: "Pending Approval", value: summary.pendingApproval, accent: "text-[#d08a1c]" },
-  { label: "In Progress", value: summary.inProgress, accent: "text-[#2c3e82]" },
-  { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
+  { label: "Approved Ideas", value: summary.approved, accent: "text-[#2c3e82]" },
   { label: "Completed", value: summary.completed, accent: "text-[#1f9d6b]" },
-  { label: "Rejected", value: summary.rejected, accent: "text-[#8a5a9d]" },
+  { label: "Rejected", value: summary.rejected, accent: "text-[#b3403f]" },
+  { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
   { label: "Completion %", value: `${summary.completionPercent}%`, accent: "text-[#2c3e82]" },
 ];
 

@@ -172,11 +172,6 @@ function GoalCard({ goal, onGoalChanged }) {
                 {goal.Priority}
               </span>
             )}
-            {goal.GoalCategory && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                {goal.GoalCategory}
-              </span>
-            )}
             {goal.CrossFunctionalGoal && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 flex items-center gap-1">
                 <Users size={12} /> Shared

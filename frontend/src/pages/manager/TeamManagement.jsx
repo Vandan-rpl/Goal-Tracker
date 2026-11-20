@@ -330,9 +330,6 @@ const TeamManagement = () => {
                       Goal No / Description
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Category
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                       Weightage
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -350,7 +347,7 @@ const TeamManagement = () => {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan="6"
+                        colSpan="5"
                         className="px-6 py-12 text-center text-sm text-gray-500"
                       >
                         Loading goals...
@@ -372,9 +369,6 @@ const TeamManagement = () => {
                               ? formatDisplayDate(goal.Timeline)
                               : "N/A"}
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {goal.GoalCategory || "General"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">
                           {goal.Weightage}%
@@ -416,7 +410,7 @@ const TeamManagement = () => {
                   ) : (
                     <tr>
                       <td
-                        colSpan="6"
+                        colSpan="5"
                         className="px-6 py-12 text-center text-sm text-gray-500"
                       >
                         No active goals found for this user.

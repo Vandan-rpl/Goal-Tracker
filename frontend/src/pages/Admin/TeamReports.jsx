@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import api from "../../services/api";
 import QuarterSummaryTable from "../../components/QuarterSummaryTable/QuarterSummaryTable";
-import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
+import { formatFiscalYearLabel, getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 import {
   QUARTER_COMPLETION_TITLE,
   formatScorePercent,
@@ -32,7 +32,7 @@ const formatWeight = (value) => `${Number(Number(value || 0).toFixed(2))}%`;
 const QUARTER_AVERAGE_TITLE =
   "Average of the Quarter Completion % of started quarters; quarters with nothing due are skipped.";
 
-const fiscalYearLabel = (year) => `FY${year} (Apr ${year - 1} – Mar ${year})`;
+const fiscalYearLabel = formatFiscalYearLabel;
 
 const StatCard = ({ label, value, hint, accent }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -148,7 +148,7 @@ const TeamView = ({ members, fiscalYear, onSelect }) => {
       <div className="mb-5">
         <h2 className="text-lg font-bold text-gray-800">Quarter Average by team member</h2>
         <p className="text-sm text-gray-500 mt-1">
-          FY{fiscalYear}, started quarters only. Select a member to see their quarters.
+          {fiscalYearLabel(fiscalYear)}, started quarters only. Select a member to see their quarters.
         </p>
       </div>
 
@@ -190,7 +190,7 @@ const TeamView = ({ members, fiscalYear, onSelect }) => {
           </div>
         </div>
       ) : (
-        <SectionMessage>Nothing due yet in the started quarters of FY{fiscalYear}.</SectionMessage>
+        <SectionMessage>Nothing due yet in the started quarters of {fiscalYearLabel(fiscalYear)}.</SectionMessage>
       )}
       {chartMembers.length > 0 && unscoredCount > 0 && (
         <p className="mt-2 text-xs text-gray-500">
@@ -297,7 +297,7 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
         <div>
           <h2 className="text-lg font-bold text-gray-800">{employee.employeeName}</h2>
           <p className="text-sm text-gray-500 mt-1">
-            FY{yearlyPerformance.FiscalYear}, quarter by quarter. Grey bars are quarters that have
+            {fiscalYearLabel(yearlyPerformance.FiscalYear)}, quarter by quarter. Grey bars are quarters that have
             not started.
           </p>
         </div>
@@ -341,7 +341,7 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
           </BarChart>
         </ResponsiveContainer>
       ) : (
-        <SectionMessage>No goals for FY{yearlyPerformance.FiscalYear} yet.</SectionMessage>
+        <SectionMessage>No goals for {fiscalYearLabel(yearlyPerformance.FiscalYear)} yet.</SectionMessage>
       )}
 
       <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -543,7 +543,7 @@ const TeamReports = () => {
                 <StatCard
                   label="Total goals"
                   value={summary.TotalGoals}
-                  hint={`Goals in FY${report.FiscalYear}`}
+                  hint={`Goals in ${fiscalYearLabel(report.FiscalYear)}`}
                   accent="text-gray-900"
                 />
                 <StatCard
@@ -559,7 +559,7 @@ const TeamReports = () => {
                 <StatCard
                   label="Completed"
                   value={summary.CompletedGoals}
-                  hint={`Completed in FY${report.FiscalYear}`}
+                  hint={`Completed in ${fiscalYearLabel(report.FiscalYear)}`}
                   accent="text-emerald-600"
                 />
                 <StatCard

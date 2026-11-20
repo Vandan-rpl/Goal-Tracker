@@ -5,6 +5,7 @@ import IdeasSidebarMenu from "./IdeasSidebarMenu";
 import TasksSidebarMenu from "./TasksSidebarMenu";
 import { isIdeasPath } from "../utils/ideasMenu";
 import { isTasksPath } from "../utils/tasksMenu";
+import rubaminLogo from "../assets/images/rubamin-logo.png";
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
@@ -34,18 +35,23 @@ const Sidebar = () => {
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800/80 flex flex-col h-screen select-none font-sans">
       
-      {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800/80 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white font-black text-sm shadow-md shadow-indigo-500/20">
-          GT
+      {/* Brand Header: the company logo has black text, so it sits on a
+          white panel to stay readable on the dark sidebar. */}
+      <div className="px-4 pt-4 pb-3.5 border-b border-slate-800/80">
+        <div className="rounded-xl bg-white px-3.5 py-2.5 shadow-md shadow-black/30 ring-1 ring-white/10">
+          <img
+            src={rubaminLogo}
+            alt="Rubamin"
+            className="h-8 w-auto mx-auto object-contain"
+            draggable="false"
+          />
         </div>
-        <div>
-          <h1 className="text-base font-bold text-white tracking-wide leading-none">
+        <div className="mt-3 flex items-center justify-center gap-2.5">
+          <span className="h-px w-6 bg-linear-to-r from-transparent to-[#e8102a]" aria-hidden="true" />
+          <h1 className="text-sm font-bold text-white tracking-[0.35em] leading-none pl-[0.35em]">
             GATI
           </h1>
-          {/* <span className="text-[10px] font-semibold text-indigo-400 tracking-wider uppercase">
-            {role || "Workspace"}
-          </span> */}
+          <span className="h-px w-6 bg-linear-to-l from-transparent to-[#e8102a]" aria-hidden="true" />
         </div>
       </div>
 

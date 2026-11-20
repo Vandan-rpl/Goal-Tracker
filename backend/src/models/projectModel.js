@@ -377,7 +377,146 @@ const listReportees = async (db, managerId) => {
     return result.recordset;
 };
 
+/**
+ * ------------------------------------------------------------
+ * Project creators (dbo.ProjectCreators, Admin settings)
+ * ------------------------------------------------------------
+ */
+
+/**
+ * True if the user is on the active project creator list (and active).
+ */
+const isProjectCreator = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            SELECT CAST(CASE WHEN EXISTS (
+                SELECT 1
+                FROM dbo.ProjectCreators pc
+                INNER JOIN dbo.Users u
+                    ON u.UserID = pc.UserID
+                WHERE pc.UserID = @UserID
+                  AND pc.IsActive = 1
+                  AND u.IsActive = 1
+            ) THEN 1 ELSE 0 END AS BIT) AS IsCreator;
+        `);
+
+    return Boolean(result.recordset[0]?.IsCreator);
+};
+
+/**
+ * Admin settings: everyone on the list, including users since deactivated
+ * (flagged by UserIsActive) so the Admin can see and remove them.
+ */
+const listProjectCreators = async (db) => {
+
+    const result = await db.request().query(`
+        SELECT
+            u.UserID,
+            u.EmployeeCode,
+            ${fullName("u")} AS FullName,
+            u.Designation,
+            d.DepartmentName,
+            u.IsActive AS UserIsActive,
+            COALESCE(pc.ModifiedDate, pc.CreatedDate) AS AddedDate
+        FROM dbo.ProjectCreators pc
+        INNER JOIN dbo.Users u
+            ON u.UserID = pc.UserID
+        LEFT JOIN dbo.Departments d
+            ON d.DepartmentID = u.DepartmentID
+        WHERE pc.IsActive = 1
+        ORDER BY u.FirstName, u.LastName;
+    `);
+
+    return result.recordset;
+};
+
+/**
+ * Admin settings: active users not on the list. The Business Head is left
+ * out (they can always create projects), as is Admin (read-only on tasks).
+ */
+const listProjectCreatorCandidates = async (db) => {
+
+    const result = await db.request().query(`
+        SELECT
+            u.UserID,
+            u.EmployeeCode,
+            ${fullName("u")} AS FullName,
+            u.Designation,
+            d.DepartmentName
+        FROM dbo.Users u
+        LEFT JOIN dbo.Departments d
+            ON d.DepartmentID = u.DepartmentID
+        WHERE u.IsActive = 1
+          AND UPPER(u.Role) NOT IN (N'BUSINESSHEAD', N'ADMIN')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.ProjectCreators pc
+              WHERE pc.UserID = u.UserID
+                AND pc.IsActive = 1
+          )
+        ORDER BY u.FirstName, u.LastName;
+    `);
+
+    return result.recordset;
+};
+
+/**
+ * Put a user on the list: reactivate their row or insert one. Returns false
+ * (and changes nothing) when the user doesn't exist or is inactive.
+ */
+const addProjectCreator = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1)
+            BEGIN
+                SELECT CAST(0 AS BIT) AS Added;
+                RETURN;
+            END
+
+            UPDATE dbo.ProjectCreators
+            SET IsActive = 1,
+                ModifiedDate = SYSDATETIME()
+            WHERE UserID = @UserID;
+
+            IF @@ROWCOUNT = 0
+                INSERT INTO dbo.ProjectCreators (UserID, IsActive)
+                VALUES (@UserID, 1);
+
+            SELECT CAST(1 AS BIT) AS Added;
+        `);
+
+    return Boolean(result.recordset?.[0]?.Added);
+};
+
+/**
+ * Take a user off the list (IsActive = 0). Returns false when they weren't
+ * on it.
+ */
+const removeProjectCreator = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            UPDATE dbo.ProjectCreators
+            SET IsActive = 0,
+                ModifiedDate = SYSDATETIME()
+            WHERE UserID = @UserID
+              AND IsActive = 1;
+        `);
+
+    return result.rowsAffected[0] > 0;
+};
+
 module.exports = {
+    isProjectCreator,
+    listProjectCreators,
+    listProjectCreatorCandidates,
+    addProjectCreator,
+    removeProjectCreator,
     listProjects,
     getProject,
     projectNameExists,
