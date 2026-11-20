@@ -11,31 +11,63 @@ import { formatFiscalQuarterLabel } from "../../utils/fiscalQuarter";
 // visiting a goal and coming back.
 //
 // quarters: [{ quarter, isFuture, allocated, achieved, completedCount,
-//              countedGoalCount, broughtForwardPending, broughtForwardAchieved }]
+//              countedGoalCount, overdueCount, overdueWeightage,
+//              broughtForwardAchieved }]
 // employeeId / achievementRule: passed to QuarterGoalDetails.
 // children: extra rows rendered after the quarters (e.g. a yearly average).
+// columns: optional [{ label, title, getValue(quarter), emphasize }] replacing
+//   the default (employee dashboard) columns; Final Evaluation and Team
+//   Reports pass their category columns.
 // extraColumn: optional { label, title, getValue(quarter) } shown last.
-const QUARTER_SUMMARY_COLUMNS = [
-  "Allocated",
-  "Achieved",
-  "Completed",
-  "Brought forward (pending)",
-  "Brought forward achieved",
-];
-
 function formatPercent(value) {
   return `${Number(Number(value || 0).toFixed(2))}%`;
 }
+
+// Goals can be set before a quarter starts, so a future quarter still shows
+// its allocation; the rest is "–".
+const DEFAULT_COLUMNS = [
+  { label: "Allocated", getValue: (quarter) => formatPercent(quarter.allocated) },
+  {
+    label: "Achieved",
+    emphasize: true,
+    getValue: (quarter) =>
+      quarter.isFuture ? "–" : formatPercent(quarter.achieved),
+  },
+  {
+    label: "Completed",
+    getValue: (quarter) =>
+      quarter.isFuture
+        ? "–"
+        : `${quarter.completedCount} of ${quarter.countedGoalCount}`,
+  },
+  {
+    label: "Overdue",
+    title:
+      "This quarter's goals whose End Date has passed and that are not marked complete.",
+    getValue: (quarter) =>
+      quarter.isFuture
+        ? "–"
+        : Number(quarter.overdueCount || 0) === 0
+          ? "0"
+          : `${quarter.overdueCount} (${formatPercent(quarter.overdueWeightage)})`,
+  },
+  {
+    label: "Brought forward achieved",
+    getValue: (quarter) =>
+      quarter.isFuture ? "–" : formatPercent(quarter.broughtForwardAchieved),
+  },
+];
 
 export default function QuarterSummaryTable({
   quarters,
   currentQuarter,
   employeeId,
   achievementRule,
+  columns = DEFAULT_COLUMNS,
   extraColumn,
   children,
 }) {
-  const columnCount = QUARTER_SUMMARY_COLUMNS.length + (extraColumn ? 1 : 0);
+  const columnCount = columns.length + (extraColumn ? 1 : 0);
   const [searchParams, setSearchParams] = useSearchParams();
   const expandedQuarter = searchParams.get("quarter");
   const toggleQuarter = useCallback(
@@ -58,9 +90,13 @@ export default function QuarterSummaryTable({
         <thead className="border-b border-gray-100 text-xs text-gray-400">
           <tr>
             <th className="pb-2 pr-4 font-medium">Quarter</th>
-            {QUARTER_SUMMARY_COLUMNS.map((column) => (
-              <th key={column} className="pb-2 px-3 font-medium last:pr-0">
-                {column}
+            {columns.map((column) => (
+              <th
+                key={column.label}
+                className="pb-2 px-3 font-medium last:pr-0"
+                title={column.title}
+              >
+                {column.label}
               </th>
             ))}
             {extraColumn && (
@@ -73,24 +109,6 @@ export default function QuarterSummaryTable({
         <tbody className="divide-y divide-gray-50">
           {quarters.map((quarter) => {
             const isCurrent = quarter.quarter === currentQuarter;
-            // Goals can be set (or moved) before a quarter starts, so a
-            // future quarter still shows its allocation and pending
-            // brought-forward weightage; the rest is "–".
-            const cells = quarter.isFuture
-              ? [
-                  formatPercent(quarter.allocated),
-                  "–",
-                  "–",
-                  formatPercent(quarter.broughtForwardPending),
-                  "–",
-                ]
-              : [
-                  formatPercent(quarter.allocated),
-                  formatPercent(quarter.achieved),
-                  `${quarter.completedCount} of ${quarter.countedGoalCount}`,
-                  formatPercent(quarter.broughtForwardPending),
-                  formatPercent(quarter.broughtForwardAchieved),
-                ];
             const isExpanded = quarter.quarter === expandedQuarter;
             const ToggleIcon = isExpanded ? ChevronDown : ChevronRight;
             return (
@@ -117,16 +135,16 @@ export default function QuarterSummaryTable({
                       </span>
                     )}
                   </th>
-                  {cells.map((value, index) => (
+                  {columns.map((column) => (
                     <td
-                      key={QUARTER_SUMMARY_COLUMNS[index]}
+                      key={column.label}
                       className={`px-3 py-3 whitespace-nowrap ${
-                        index === 1 && !quarter.isFuture
+                        column.emphasize && !quarter.isFuture
                           ? "font-medium text-indigo-700"
                           : "text-gray-600"
                       }`}
                     >
-                      {value}
+                      {column.getValue(quarter)}
                     </td>
                   ))}
                   {extraColumn && (

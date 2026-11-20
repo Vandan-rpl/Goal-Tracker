@@ -11,6 +11,8 @@ export default function MarkCompleteButton({
   goalTitle,
   onCompleted,
   compact = false,
+  // "text": a plain text action, for table rows that use text links.
+  variant = "button",
   label = "Mark Complete",
   confirmPrompt = `Mark "${goalTitle}" as complete?`,
 }) {
@@ -47,9 +49,13 @@ export default function MarkCompleteButton({
       type="button"
       onClick={handleClick}
       disabled={submitting}
-      className={`inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 cursor-pointer ${
-        compact ? "px-3.5 py-1.5 rounded-lg" : "px-4 py-2 rounded-xl"
-      }`}
+      className={
+        variant === "text"
+          ? "text-emerald-600 hover:text-emerald-900 font-semibold disabled:opacity-50 cursor-pointer"
+          : `inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 cursor-pointer ${
+              compact ? "px-3.5 py-1.5 rounded-lg" : "px-4 py-2 rounded-xl"
+            }`
+      }
     >
       {submitting ? "Submitting..." : label}
     </button>

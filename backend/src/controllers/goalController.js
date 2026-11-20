@@ -23,7 +23,6 @@ const {
   getCfoApprovalWindow,
   isGoLiveOpenQuarter,
   getOpenGoalEntryQuarters,
-  isWithinCarryForwardWindow,
 } = require("../utils/fiscalQuarter");
 const { canAccessEvaluation } = require("./evaluationController");
 
@@ -34,8 +33,11 @@ const formatWindowDate = (date) =>
 const {
   isAllocatedGoal,
   ownAchievedWeightage,
-  isBroughtForwardPending,
   isBroughtForwardAchieved,
+  completionMarkedDate,
+  isCompletedWithin,
+  evaluationCategory,
+  isOverdueGoal,
 } = require("../constants/goalQuarterRules");
 
 // These statuses are set only by the completion request/approve endpoints.
@@ -43,13 +45,18 @@ const COMPLETION_STATUSES = ["Completion Submitted", "Completed"];
 const COMPLETION_STATUS_MESSAGE =
   "Goal completion must be requested and approved through the completion workflow.";
 
-// Goals in these statuses can never be carried forward.
-const CARRY_FORWARD_BLOCKED_STATUSES = [
-  "Completion Submitted",
-  "Completed",
-  "Draft",
-  "Rejected",
-  "Cancelled",
+// The employee edits a goal (dates included) only in these statuses.
+const GOAL_OWNER_EDITABLE_STATUSES = ["Draft", "Rejected"];
+// Pending approval, before final approval: the owner's Manager/HOD and the
+// CFO/Business Head (and Admin) may edit the goal, dates included. Once the
+// goal is finally 'Approved' no one can edit it.
+const PENDING_APPROVAL_STATUSES = [
+  "Submitted",
+  "Manager Approved",
+  "HOD Approved",
+  "Reviewed By HOD",
+  "Review By Business Head",
+  "Business Head Approved",
 ];
 
 const MAX_GOALS_PER_QUARTER = 8;
@@ -348,11 +355,7 @@ const notifyGoalHierarchy = async (
 };
 
 // 1. Get All Goals
-const getEmployeeDashboardSummary = (
-  goals,
-  carryForwardHistory,
-  now = new Date(),
-) => {
+const getEmployeeDashboardSummary = (goals, now = new Date()) => {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const parseDate = (value) => {
     if (!value) return null;
@@ -368,19 +371,17 @@ const getEmployeeDashboardSummary = (
       ? null
       : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
   };
-  const firstCarryForwardByGoal = new Map();
-  for (const entry of carryForwardHistory) {
-    if (!firstCarryForwardByGoal.has(String(entry.GoalID))) {
-      firstCarryForwardByGoal.set(String(entry.GoalID), entry);
-    }
-  }
   const originalQuarterOf = (goal) => {
     const createdDate = parseDate(goal.CreatedDate);
     return (
-      firstCarryForwardByGoal.get(String(goal.GoalID))?.FromQuarter ||
-      goal.Quarter ||
-      (createdDate ? getFiscalQuarter(createdDate).label : "")
+      goal.Quarter || (createdDate ? getFiscalQuarter(createdDate).label : "")
     );
+  };
+  // End Date in a later quarter than the start quarter (calculated).
+  const isBroughtForward = (goal) => {
+    const quarterEnd = parseDate(goal.QuarterEndDate);
+    const timeline = parseDate(goal.Timeline);
+    return Boolean(quarterEnd && timeline && timeline > quarterEnd);
   };
   const dayDifference = (date) =>
     Math.round((date.getTime() - today.getTime()) / 86400000);
@@ -456,18 +457,7 @@ const getEmployeeDashboardSummary = (
     const quarterGoals = goals.filter(
       (goal) => originalQuarterOf(goal) === quarter.label,
     );
-    const quarterProgressGoals = quarterGoals.map((goal) => {
-      const firstCarryForward = firstCarryForwardByGoal.get(
-        String(goal.GoalID),
-      );
-      return firstCarryForward
-        ? {
-            ...goal,
-            SubGoalCompletionPercentage:
-              firstCarryForward.ProgressAtCarryForward,
-          }
-        : goal;
-    });
+    const quarterProgressGoals = quarterGoals;
     const allocated = quarterGoals.filter(
       (goal) => !["rejected", "cancelled"].includes(statusOf(goal)),
     );
@@ -485,9 +475,7 @@ const getEmployeeDashboardSummary = (
       completedGoals: quarterGoals.filter(
         (goal) => statusOf(goal) === "completed",
       ).length,
-      carriedForwardGoals: quarterGoals.filter((goal) =>
-        firstCarryForwardByGoal.has(String(goal.GoalID)),
-      ).length,
+      carriedForwardGoals: quarterGoals.filter(isBroughtForward).length,
     };
   });
 
@@ -499,7 +487,9 @@ const getEmployeeDashboardSummary = (
       const timeline = parseDate(goal.Timeline);
       return (
         statusOf(goal) !== "rejected" &&
-        !["completed", "cancelled"].includes(statusOf(goal)) &&
+        !["completion submitted", "completed", "cancelled"].includes(
+          statusOf(goal),
+        ) &&
         timeline &&
         timeline < today
       );
@@ -541,38 +531,6 @@ const getEmployeeDashboardSummary = (
       DaysUntilDeadline: daysUntilDeadline,
     }));
 
-  const currentQuarterStart = getQuarterStartDate(
-    currentQuarter.quarterEndDate,
-  );
-  const previousQuarterEnd = new Date(currentQuarterStart);
-  previousQuarterEnd.setDate(previousQuarterEnd.getDate() - 1);
-  const carryForwardWindowOpen = [
-    currentQuarter.quarterEndDate,
-    previousQuarterEnd,
-  ].some(isWithinCarryForwardWindow);
-  const carryForwardStatuses = [
-    "hod approved",
-    "manager approved",
-    "business head approved",
-    "reviewed by hod",
-    "review by business head",
-    "approved",
-  ];
-  const eligibleCarryForwardGoals = carryForwardWindowOpen
-    ? goals.filter((goal) => {
-        const quarterEnd = parseDate(goal.QuarterEndDate);
-        const timeline = parseDate(goal.Timeline);
-        return (
-          carryForwardStatuses.includes(statusOf(goal)) &&
-          Number(goal.CarryForwardCount || 0) === 0 &&
-          timeline &&
-          timeline < today &&
-          quarterEnd &&
-          isWithinCarryForwardWindow(quarterEnd)
-        );
-      }).length
-    : 0;
-
   return {
     currentQuarterWeightage: {
       quarter: currentQuarter.label,
@@ -600,10 +558,6 @@ const getEmployeeDashboardSummary = (
     needsAttention,
     upcomingDeadlines,
     quarterHistory,
-    carryForward: {
-      windowOpen: carryForwardWindowOpen,
-      eligibleGoalCount: eligibleCarryForwardGoals,
-    },
   };
 };
 
@@ -623,29 +577,9 @@ const getGoals = async (req, res) => {
                   AS SubGoalCompletionPercentage,
                 progress.CompletedSubGoalCount,
                 progress.PendingSubGoalCount,
-                progress.TotalSubGoalCount,
-                timelineForDashboard.DashboardTimeline
+                progress.TotalSubGoalCount
             FROM dbo.Goals g
             JOIN dbo.Users u ON g.UserID = u.UserID
-            OUTER APPLY (
-              SELECT TOP 1
-                TRY_CONVERT(
-                  date,
-                  CASE WHEN ISJSON(h.OldValue) = 1
-                    THEN JSON_VALUE(h.OldValue, '$.Timeline')
-                  END
-                ) AS PreviousTimeline
-              FROM dbo.GoalHistory h
-              WHERE h.GoalID = g.GoalID
-                AND h.Action = 'Updated'
-                AND TRY_CONVERT(
-                  date,
-                  CASE WHEN ISJSON(h.NewValue) = 1
-                    THEN JSON_VALUE(h.NewValue, '$.Timeline')
-                  END
-                ) = g.Timeline
-              ORDER BY h.PerformedDate DESC, h.GoalHistoryID DESC
-            ) pendingTimeline
             OUTER APPLY (
               -- Sub-goals are Pending or Completed; legacy 'In Progress' /
               -- 'Cancelled' rows count as Pending.
@@ -656,14 +590,6 @@ const getGoals = async (req, res) => {
               FROM dbo.GoalSubGoals sg
               WHERE sg.GoalID = g.GoalID
             ) progress
-            CROSS APPLY (
-              SELECT CASE
-                WHEN ISNULL(g.CarryForwardCount, 0) > 0
-                  AND g.GoalStatus NOT IN ('Approved', 'Completed', 'Cancelled')
-                  THEN ISNULL(pendingTimeline.PreviousTimeline, g.Timeline)
-                ELSE g.Timeline
-              END AS DashboardTimeline
-            ) timelineForDashboard
             WHERE g.UserID = @UserID
     `;
 
@@ -683,27 +609,11 @@ const getGoals = async (req, res) => {
     query += ` ORDER BY g.CreatedDate DESC`;
 
     const result = await request.query(query);
-    const carryForwardResult = await pool
-      .request()
-      .input("UserID", sql.Int, userId)
-      .query(`
-        SELECT history.GoalID, history.FromQuarter,
-               history.ProgressAtCarryForward,
-               history.CarriedForwardDate, history.HistoryID
-        FROM dbo.GoalCarryForwardHistory history
-        INNER JOIN dbo.Goals goal ON goal.GoalID = history.GoalID
-        WHERE goal.UserID = @UserID
-        ORDER BY history.CarriedForwardDate, history.HistoryID
-      `);
-
     res.set("Cache-Control", "no-store");
     return res.status(200).json({
       success: true,
       data: result.recordset,
-      summary: getEmployeeDashboardSummary(
-        result.recordset,
-        carryForwardResult.recordset,
-      ),
+      summary: getEmployeeDashboardSummary(result.recordset),
     });
   } catch (error) {
     console.error("Get Goals Error:", error);
@@ -717,9 +627,12 @@ const getGoals = async (req, res) => {
 
 // Per-quarter summary of the employee's goals for the current fiscal year.
 // A goal belongs to its start quarter (Goals.Quarter) and is allocated there
-// once approved. Only goals the owner extended (carry-forward) are brought
-// forward; an extended goal completed later counts as brought forward
-// achieved in its completion quarter, not as Achieved in its own quarter.
+// once approved. A goal whose End Date is in a later quarter than its start
+// quarter is brought forward (calculated, no user action); one completed
+// after its own quarter counts as brought forward achieved in the quarter
+// the user marked it complete, not as Achieved in its own quarter.
+// Overdue: this quarter's goals whose End Date has passed and that are not
+// marked complete (count and weightage).
 // "Earlier" is decided by QuarterEndDate, never by comparing quarter labels.
 const getMyQuarterSummary = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
@@ -729,7 +642,10 @@ const getMyQuarterSummary = async (req, res) => {
     const currentQuarter = getFiscalQuarterBounds();
     const fiscalYearQuarters = getFiscalYearQuarters();
 
-    const request = pool.request().input("UserID", sql.Int, userId);
+    const request = pool
+      .request()
+      .input("UserID", sql.Int, userId)
+      .input("Today", sql.Date, formatLocalDateKey(new Date()));
     fiscalYearQuarters.forEach((quarter, index) => {
       request
         .input(`Q${index}Label`, sql.VarChar, quarter.label)
@@ -753,7 +669,8 @@ const getMyQuarterSummary = async (req, res) => {
              ISNULL(own.CompletedCount, 0) AS CompletedCount,
              ISNULL(own.CountedGoalCount, 0) AS CountedGoalCount,
              ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
-             ISNULL(broughtForwardPending.Pending, 0) AS BroughtForwardPending
+             ISNULL(overdue.OverdueCount, 0) AS OverdueCount,
+             ISNULL(overdue.OverdueWeightage, 0) AS OverdueWeightage
       FROM FiscalQuarters q
       -- Rules: constants/goalQuarterRules.js
       OUTER APPLY (
@@ -773,11 +690,12 @@ const getMyQuarterSummary = async (req, res) => {
           AND ${isBroughtForwardAchieved("g", "q.StartDate", "q.EndDate")}
       ) broughtForward
       OUTER APPLY (
-        SELECT SUM(g.Weightage) AS Pending
+        SELECT COUNT(*) AS OverdueCount, SUM(g.Weightage) AS OverdueWeightage
         FROM dbo.Goals g
         WHERE g.UserID = @UserID
-          AND ${isBroughtForwardPending("g", "q.StartDate", "q.EndDate")}
-      ) broughtForwardPending
+          AND g.Quarter = q.Label
+          AND ${isOverdueGoal("g", "@Today")}
+      ) overdue
       ORDER BY q.EndDate
     `);
 
@@ -800,7 +718,8 @@ const getMyQuarterSummary = async (req, res) => {
             broughtForwardAchieved: roundPercent(row.BroughtForwardAchieved),
             completedCount: row.CompletedCount,
             countedGoalCount: row.CountedGoalCount,
-            broughtForwardPending: roundPercent(row.BroughtForwardPending),
+            overdueCount: row.OverdueCount,
+            overdueWeightage: roundPercent(row.OverdueWeightage),
           };
         }),
       },
@@ -819,15 +738,20 @@ const getMyQuarterSummary = async (req, res) => {
 // the caller). The WHERE clauses repeat getMyQuarterSummary's exactly, so the
 // totals returned here always equal that row's figures.
 //   ownGoals:      Allocated / Achieved / Completed
-//   broughtForward: Brought forward (pending) / Brought forward achieved
-// Rules live in constants/goalQuarterRules.js: an extended goal completed
-// after its quarter ended adds nothing to Achieved (it is counted only as
-// brought forward achieved where it was completed). The achievementRule
-// query parameter is accepted but no longer changes anything.
+//   overdue:       this quarter's goals past their End Date, not marked complete
+//   broughtForward: Brought forward achieved (completed in this quarter)
+// Rules live in constants/goalQuarterRules.js: a brought-forward goal
+// completed after its quarter ended adds nothing to Achieved (it is counted
+// only as brought forward achieved where it was completed).
+// achievementRule=evaluation (Final Evaluation / Team Reports, Manager/HOD/
+// CFO only) also returns `evaluation`: the goals completed in this quarter
+// grouped into the four Final Evaluation categories, plus this quarter's
+// overdue (not marked complete) goals.
 const getQuarterGoalDetails = async (req, res) => {
   const requesterId = req.user?.UserID || req.user?.userId;
   const targetUserId =
     req.query.userId == null ? Number(requesterId) : Number(req.query.userId);
+  const isEvaluationView = req.query.achievementRule === "evaluation";
   const quarterBounds = getFiscalQuarterBoundsFromLabel(req.query.quarter);
 
   if (!quarterBounds) {
@@ -841,7 +765,10 @@ const getQuarterGoalDetails = async (req, res) => {
 
   try {
     const pool = await poolPromise;
-    if (!(await canAccessEvaluation(pool, requesterId, targetUserId))) {
+    if (
+      (isEvaluationView && Number(requesterId) === targetUserId) ||
+      !(await canAccessEvaluation(pool, requesterId, targetUserId))
+    ) {
       return res.status(403).json({
         success: false,
         message: "You do not have access to this employee's goals.",
@@ -854,18 +781,21 @@ const getQuarterGoalDetails = async (req, res) => {
       .input("Quarter", sql.VarChar, quarterBounds.label)
       .input("QStart", sql.Date, quarterBounds.startKey)
       .input("QEnd", sql.Date, quarterBounds.endKey)
+      .input("Today", sql.Date, formatLocalDateKey(new Date()))
       .query(`
         SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Weightage,
                g.AchievedWeightage, g.Timeline, g.GoalStatus,
                g.CompletedDate, g.CompletionRemark, g.Quarter,
-               g.QuarterEndDate, ISNULL(g.CarryForwardCount, 0) AS CarryForwardCount,
+               g.QuarterEndDate,
+               ${completionMarkedDate("g")} AS CompletionMarkedDate,
                progress.CompletedSubGoalCount, progress.TotalSubGoalCount,
                ${ownAchievedWeightage("g")} AS OwnAchievedWeightage,
                CASE WHEN g.Quarter = @Quarter
                      AND ${isAllocatedGoal("g")}
                     THEN 1 ELSE 0 END AS IsOwnGoal,
-               CASE WHEN ${isBroughtForwardPending("g", "@QStart", "@QEnd")}
-                    THEN 1 ELSE 0 END AS IsBroughtForwardPending,
+               CASE WHEN g.Quarter = @Quarter
+                     AND ${isOverdueGoal("g", "@Today")}
+                    THEN 1 ELSE 0 END AS IsOverdue,
                CASE WHEN ${isBroughtForwardAchieved("g", "@QStart", "@QEnd")}
                     THEN 1 ELSE 0 END AS IsBroughtForwardAchieved
         FROM dbo.Goals g
@@ -878,7 +808,6 @@ const getQuarterGoalDetails = async (req, res) => {
         WHERE g.UserID = @UserID
           AND (
             (g.Quarter = @Quarter AND ${isAllocatedGoal("g")})
-            OR ${isBroughtForwardPending("g", "@QStart", "@QEnd")}
             OR ${isBroughtForwardAchieved("g", "@QStart", "@QEnd")}
           )
         ORDER BY g.GoalNumber, g.GoalID
@@ -901,45 +830,107 @@ const getQuarterGoalDetails = async (req, res) => {
         completedDate: toDateKey(row.CompletedDate),
         completionRemark: row.CompletionRemark || null,
         fromQuarter: row.Quarter,
-        carryForwardCount: Number(row.CarryForwardCount || 0),
-        // End Date moved past the goal's own quarter by a carry-forward.
-        // A goal created with an End Date in a later quarter was not moved.
-        // (Date keys compare correctly as strings; quarter labels do not.)
+        // End Date in a later quarter than the start quarter: brought
+        // forward to that quarter. (Date keys compare correctly as strings;
+        // quarter labels do not.)
         movedToQuarter:
-          Number(row.CarryForwardCount || 0) > 0 &&
           timelineKey && quarterEndKey && timelineKey > quarterEndKey
             ? getFiscalQuarter(timelineKey).label
             : null,
+        completionMarkedDate: toDateKey(row.CompletionMarkedDate),
         completedSubGoals: Number(row.CompletedSubGoalCount || 0),
         totalSubGoals: Number(row.TotalSubGoalCount || 0),
       };
     };
 
     const ownRows = result.recordset.filter((row) => row.IsOwnGoal === 1);
-    const pendingRows = result.recordset.filter(
-      (row) => row.IsBroughtForwardPending === 1,
-    );
+    const overdueRows = result.recordset.filter((row) => row.IsOverdue === 1);
     const achievedRows = result.recordset.filter(
       (row) => row.IsBroughtForwardAchieved === 1,
     );
-    const broughtForwardRows = result.recordset.filter(
-      (row) => row.IsBroughtForwardPending === 1 || row.IsBroughtForwardAchieved === 1,
-    );
+
+    // Final Evaluation categories: goals whose completion was marked in this
+    // quarter and approved, grouped by category; plus this quarter's goals
+    // that are overdue (End Date passed, not marked complete).
+    let evaluation;
+    if (isEvaluationView) {
+      const evaluationResult = await pool
+        .request()
+        .input("UserID", sql.Int, targetUserId)
+        .input("Quarter", sql.VarChar, quarterBounds.label)
+        .input("QStart", sql.Date, quarterBounds.startKey)
+        .input("QEnd", sql.Date, quarterBounds.endKey)
+        .input("Today", sql.Date, formatLocalDateKey(new Date()))
+        .query(`
+          SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Weightage,
+                 g.AchievedWeightage, g.Timeline, g.GoalStatus,
+                 g.CompletedDate, g.CompletionRemark, g.Quarter,
+                 g.QuarterEndDate,
+                 ${completionMarkedDate("g")} AS CompletionMarkedDate,
+                 progress.CompletedSubGoalCount, progress.TotalSubGoalCount,
+                 CASE WHEN ${isCompletedWithin("g", "@QStart", "@QEnd")}
+                      THEN ${evaluationCategory("g", "@QStart")}
+                      WHEN g.Quarter = @Quarter AND ${isOverdueGoal("g", "@Today")}
+                      THEN 'Overdue'
+                 END AS EvaluationCategory
+          FROM dbo.Goals g
+          OUTER APPLY (
+            SELECT ISNULL(SUM(CASE WHEN sg.Status = 'Completed' THEN 1 ELSE 0 END), 0) AS CompletedSubGoalCount,
+                   COUNT(sg.SubGoalID) AS TotalSubGoalCount
+            FROM dbo.GoalSubGoals sg
+            WHERE sg.GoalID = g.GoalID
+          ) progress
+          WHERE g.UserID = @UserID
+            AND (
+              ${isCompletedWithin("g", "@QStart", "@QEnd")}
+              OR (g.Quarter = @Quarter AND ${isOverdueGoal("g", "@Today")})
+            )
+          ORDER BY g.GoalNumber, g.GoalID
+        `);
+      const rowsIn = (category) =>
+        evaluationResult.recordset.filter(
+          (row) => row.EvaluationCategory === category,
+        );
+      const categoryOf = (category) => {
+        const rows = rowsIn(category);
+        return {
+          goals: rows.map(toGoal),
+          weightage: sumBy(
+            rows,
+            (row) => row.AchievedWeightage ?? row.Weightage,
+          ),
+        };
+      };
+      evaluation = {
+        achieved: categoryOf("Achieved"),
+        broughtForward: categoryOf("BroughtForward"),
+        broughtForwardOverdue: categoryOf("BroughtForwardOverdue"),
+        overdueAchieved: categoryOf("OverdueAchieved"),
+        overdue: {
+          goals: rowsIn("Overdue").map(toGoal),
+          weightage: sumBy(rowsIn("Overdue"), (row) => row.Weightage),
+        },
+      };
+    }
 
     res.set("Cache-Control", "no-store");
     return res.status(200).json({
       success: true,
       data: {
         quarter: quarterBounds.label,
+        ...(evaluation ? { evaluation } : {}),
         ownGoals: {
           goals: ownRows.map(toGoal),
           allocated: sumBy(ownRows, (row) => row.Weightage),
           achieved: sumBy(ownRows, (row) => row.OwnAchievedWeightage),
           completedCount: ownRows.filter((row) => row.GoalStatus === "Completed").length,
         },
+        overdue: {
+          goals: overdueRows.map(toGoal),
+          weightage: sumBy(overdueRows, (row) => row.Weightage),
+        },
         broughtForward: {
-          goals: broughtForwardRows.map(toGoal),
-          pending: sumBy(pendingRows, (row) => row.Weightage),
+          goals: achievedRows.map(toGoal),
           achieved: sumBy(achievedRows, (row) => row.AchievedWeightage),
         },
       },
@@ -1544,17 +1535,6 @@ const getGoalDateErrors = (startKey, timelineKey, bounds) => {
   return Object.keys(errors).length > 0 ? errors : null;
 };
 
-const isDateBeforeToday = (dateValue) => {
-  if (!dateValue) return false;
-  const date =
-    dateValue instanceof Date
-      ? dateValue.toISOString().slice(0, 10)
-      : String(dateValue).slice(0, 10);
-  const today = new Date();
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return date < todayDate;
-};
-
 const isGoalReviewWindowOpen = (goal) => {
   if (!goal) return false;
 
@@ -1821,9 +1801,6 @@ const createGoal = async (req, res) => {
 };
 
 // 4. Update Goal
-// NOTE: make sure this import exists at the top of the real controller file,
-// pointing at wherever fiscalQuarter.js actually lives relative to this file:
-// const { getFiscalQuarter, isWithinCarryForwardWindow } = require("../utils/fiscalQuarter");
 
 const updateGoal = async (req, res) => {
   const { id } = req.params;
@@ -1849,8 +1826,9 @@ const updateGoal = async (req, res) => {
 
   const userId = req.user?.UserID || req.user?.userId;
   const role = (req.user?.Role || req.user?.role || "").toUpperCase();
-  const isEnterpriseGoalManager =
-    role === "CFO" || role === "BUSINESSHEAD" || role === "ADMIN";
+  // CFO (BusinessHead role) edits any employee's pending goal. Admin cannot
+  // edit goals at any stage (other than as the owner of their own goal).
+  const isEnterpriseGoalManager = role === "CFO" || role === "BUSINESSHEAD";
 
   if (COMPLETION_STATUSES.includes(GoalStatus)) {
     return res
@@ -1926,53 +1904,31 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    const terminalStatus = ["Completed", "Cancelled"].includes(currentStatus);
+    // Edit rules (dates included):
+    //  - Draft / Rejected: the employee (goal owner) only.
+    //  - Pending approval: the owner's Manager/HOD and CFO/Business Head, at
+    //    any pending stage, up to final approval. Never Admin.
+    //  - Finally Approved and later (Completion Submitted, Completed,
+    //    Cancelled): no one. Dates are locked for good.
     const isGoalOwner = Number(existingGoal.UserID) === Number(userId);
-    // A Business Head can only view a goal once it is approved.
-    const isBusinessHeadLocked =
-      role === "BUSINESSHEAD" &&
-      ["Business Head Approved", "Approved"].includes(currentStatus);
-    const isApprover =
-      (isEnterpriseGoalManager || isTeamGoalManager) && !isBusinessHeadLocked;
+    const isApprover = isEnterpriseGoalManager || isTeamGoalManager;
     const canEditAllFields =
-      !terminalStatus &&
-      (["Draft", "Rejected"].includes(currentStatus) ||
-        (isApprover && !isGoalOwner));
-    const timelineOnlyEditStatuses = [
-      "HOD Approved",
-      "Manager Approved",
-      "Business Head Approved",
-      "Reviewed By HOD",
-      "Review By Business Head",
-      "Approved",
-    ];
-    const isCarryForward =
-      isGoalOwner &&
-      !canEditAllFields &&
-      !terminalStatus &&
-      timelineOnlyEditStatuses.includes(currentStatus) &&
-      Number(existingGoal.CarryForwardCount || 0) === 0 &&
-      // bringForwardGoal has already checked that the goal ends this quarter
-      // or earlier, so it need not be overdue yet.
-      (isDateBeforeToday(existingGoal.Timeline) || req.isBringForward === true);
+      (isGoalOwner && GOAL_OWNER_EDITABLE_STATUSES.includes(currentStatus)) ||
+      (isApprover &&
+        !isGoalOwner &&
+        PENDING_APPROVAL_STATUSES.includes(currentStatus));
 
-    if (
-      isGoalOwner &&
-      !canEditAllFields &&
-      CARRY_FORWARD_BLOCKED_STATUSES.includes(currentStatus)
-    ) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: `Goals in '${currentStatus}' status cannot be carried forward.`,
-      });
-    }
-
-    if (!canEditAllFields && !isCarryForward) {
+    if (!canEditAllFields) {
       await transaction.rollback();
       return res.status(403).json({
         success: false,
-        message: "This goal cannot be modified in its current status.",
+        message:
+          role === "ADMIN" && !isGoalOwner
+            ? "Admin cannot edit goals."
+            : GOAL_OWNER_EDITABLE_STATUSES.includes(currentStatus) ||
+                PENDING_APPROVAL_STATUSES.includes(currentStatus)
+              ? "You cannot edit this goal in its current status."
+              : "This goal has been finally approved and can no longer be edited.",
       });
     }
 
@@ -2000,7 +1956,7 @@ const updateGoal = async (req, res) => {
 
     // Full edits keep the goal's stored quarter; StartDate must stay inside
     // it. Goals saved before Quarter was stored fall back to the current
-    // quarter. Carry-forward edits keep the stored StartDate untouched.
+    // quarter.
     const storedQuarterBounds =
       (existingGoal.QuarterEndDate &&
         getFiscalQuarterBounds(toDateKey(existingGoal.QuarterEndDate))) ||
@@ -2027,28 +1983,6 @@ const updateGoal = async (req, res) => {
       }
     }
 
-    if (isCarryForward) {
-      if (!timelineKey) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: "A valid Timeline is required to resubmit this goal.",
-          errors: { Timeline: "A valid Timeline is required." },
-        });
-      }
-
-      const previousTimelineKey = toDateKey(existingGoal.Timeline);
-      if (previousTimelineKey && timelineKey <= previousTimelineKey) {
-        const message = `New Timeline must be after the current Timeline (${previousTimelineKey}).`;
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message,
-          errors: { Timeline: message },
-        });
-      }
-    }
-
     // A rejected goal is returned to its owner for revision. The owner may
     // keep it rejected while saving changes, or submit it back into the
     // approval workflow; other status changes remain manager-only.
@@ -2067,11 +2001,9 @@ const updateGoal = async (req, res) => {
       });
     }
 
-    const newStatus = isCarryForward
-      ? "Submitted"
-      : GoalStatus || currentStatus;
+    const newStatus = GoalStatus || currentStatus;
 
-    // A goal always stays in its start quarter, including on carry-forward.
+    // A goal always stays in its start quarter.
     const { label: newQuarter, quarterEndDate: newQuarterEndDate } =
       canEditAllFields
         ? {
@@ -2096,11 +2028,11 @@ const updateGoal = async (req, res) => {
         ? GoalDescription
         : existingGoal.GoalDescription;
     const finalMeasurability =
-      !isCarryForward && Measurability !== undefined
+      Measurability !== undefined
         ? Measurability
         : existingGoal.Measurability;
-    const finalWeightage = isCarryForward ? existingGoal.Weightage : Weightage;
-    const finalPriority = isCarryForward ? existingGoal.Priority : Priority;
+    const finalWeightage = Weightage;
+    const finalPriority = Priority;
     const finalMeetPerf =
       canEditAllFields && MeetPerformance !== undefined
         ? MeetPerformance
@@ -2256,7 +2188,6 @@ const updateGoal = async (req, res) => {
     updateRequest.input("CurrentStatus", sql.VarChar, currentStatus);
     updateRequest.input("Quarter", sql.VarChar, newQuarter);
     updateRequest.input("QuarterEndDate", sql.Date, newQuarterEndDate);
-    updateRequest.input("IsCarryForward", sql.Bit, isCarryForward ? 1 : 0);
 
     let updateQuery = `
     UPDATE dbo.Goals SET 
@@ -2268,11 +2199,6 @@ const updateGoal = async (req, res) => {
         GoalStatus = @GoalStatus,
         Quarter = @Quarter,
         QuarterEndDate = @QuarterEndDate,
-        ApprovedDate = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE ApprovedDate END,
-        BusinessHeadApprovedBy = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE BusinessHeadApprovedBy END,
-        BusinessHeadApprovedDate = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE BusinessHeadApprovedDate END,
-        CarryForwardCount = CASE WHEN @IsCarryForward = 1 THEN ISNULL(CarryForwardCount, 0) + 1 ELSE CarryForwardCount END,
-        CompletionRemark = CASE WHEN @IsCarryForward = 1 THEN NULL ELSE CompletionRemark END,
         SubmittedDate = CASE
           WHEN @GoalStatus = 'Submitted' AND @CurrentStatus <> 'Submitted'
             THEN GETDATE()
@@ -2330,32 +2256,6 @@ const updateGoal = async (req, res) => {
       // Approved goals through the sub-goal status endpoints.
       await replaceSubGoals(transaction, id, validSubGoals);
     }
-    // Note: when isCarryForward is true, canEditSubGoals is false, so this
-    // block is skipped entirely — sub-goals are left exactly as they are,
-    // which is the intended behavior (they carry over as-is, completed ones
-    // stay Completed).
-
-    if (isCarryForward) {
-      await new sql.Request(transaction)
-        .input("GoalID", sql.BigInt, id)
-        .input(
-          "FromQuarter",
-          sql.VarChar,
-          existingGoal.Quarter || storedQuarterBounds.label,
-        )
-        .input(
-          "ToQuarter",
-          sql.VarChar,
-          req.bringForwardToQuarter || getFiscalQuarterBounds().label,
-        )
-        .input("ProgressAtCarryForward", sql.Decimal(5, 2), 0)
-        .query(`
-          INSERT INTO dbo.GoalCarryForwardHistory (
-            GoalID, FromQuarter, ToQuarter, ProgressAtCarryForward, CarriedForwardDate
-          )
-          VALUES (@GoalID, @FromQuarter, @ToQuarter, @ProgressAtCarryForward, GETDATE())
-        `);
-    }
 
     await transaction.commit();
 
@@ -2388,9 +2288,7 @@ const updateGoal = async (req, res) => {
           ? notifiedEmails.length > 0
             ? `Goal submitted and email has been sent to ${notifiedEmails.length} approver(s) in your reporting hierarchy.`
             : "Goal submitted successfully."
-          : isCarryForward
-            ? "Goal carried forward and resubmitted for approval."
-            : "Goal updated successfully.",
+          : "Goal updated successfully.",
     });
   } catch (error) {
     if (transaction._aborted === false && transaction._acquiredConnection) {
@@ -3949,21 +3847,15 @@ const getGoalForCompletion = async (transaction, goalId) => {
     .input("GoalID", sql.BigInt, goalId)
     .query(`
       SELECT GoalID, UserID, GoalTitle, GoalStatus, Weightage, StartDate,
-             Timeline, CarryForwardCount
+             Timeline
       FROM dbo.Goals WITH (UPDLOCK, ROWLOCK)
       WHERE GoalID = @GoalID
     `);
   return result.recordset[0] || null;
 };
 
-// An overdue goal that has not been carried forward yet cannot be completed.
-// The owner must carry it forward to a new Timeline and get it approved
-// again first.
-const getGoalOverdueCompletionMessage = (goal) =>
-  Number(goal?.CarryForwardCount || 0) === 0 &&
-  isDateBeforeToday(goal?.Timeline)
-    ? "This goal is overdue. Carry it forward to the next quarter and get it approved again before marking it complete."
-    : null;
+// Completion can be requested at any time (including after the End Date) once
+// the goal is finally Approved and its start date has arrived.
 
 // A goal approved ahead of its quarter (e.g. a Q4 goal approved during Q3)
 // cannot be worked on or completed until its start date arrives.
@@ -4128,32 +4020,9 @@ const requestGoalCompletion = async (req, res) => {
         .json({ success: false, message: notStartedMessage });
     }
 
-    const overdueMessage = getGoalOverdueCompletionMessage(goal);
-    if (overdueMessage) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: overdueMessage });
-    }
-
-    // Goals with sub-goals are submitted by ticking the last sub-goal. This
-    // endpoint only serves them as "Resubmit for completion" after a
-    // rejection, when every sub-goal is still Completed.
-    const subGoalCountsResult = await new sql.Request(transaction)
-      .input("GoalID", sql.BigInt, id)
-      .query(`
-        SELECT COUNT(*) AS TotalCount,
-               ISNULL(SUM(CASE WHEN Status = 'Completed' THEN 1 ELSE 0 END), 0) AS CompletedCount
-        FROM dbo.GoalSubGoals WITH (UPDLOCK, HOLDLOCK)
-        WHERE GoalID = @GoalID
-      `);
-    const { TotalCount, CompletedCount } = subGoalCountsResult.recordset[0];
-    if (TotalCount > 0 && CompletedCount < TotalCount) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message:
-          "Complete all sub-goals first. Ticking the last sub-goal submits the goal for completion approval.",
-      });
-    }
+    // Pending sub-goals do not block a completion request (e.g. Mark Complete
+    // on an overdue goal from the Add Goal page or Goal Management). Goal
+    // pages still offer the tick-the-last-sub-goal path.
 
     const approverId = await getCompletionApproverId(transaction, goal.UserID);
     if (approverId === null) {
@@ -4219,12 +4088,6 @@ const completeLastSubGoalAndSubmit = async (req, res) => {
           ? "This sub-goal is already completed."
           : "This is not the last pending sub-goal. Complete the other sub-goals first.",
       });
-    }
-
-    const overdueMessage = getGoalOverdueCompletionMessage(goal);
-    if (overdueMessage) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: overdueMessage });
     }
 
     const approverId = await getCompletionApproverId(transaction, goal.UserID);
@@ -4584,175 +4447,89 @@ const getAddGoalStatus = async (req, res) => {
   }
 };
 
-// The open goal-entry quarter a goal is brought forward into, when the
-// caller names one (the Add Goal sheet's quarter); null when none is named.
-// Undefined when one is named but is not open for entry now.
-const getBringForwardTargetQuarter = (quarterLabel) => {
-  const label = String(quarterLabel ?? "").trim();
-  if (!label) return null;
-  return getOpenGoalEntryQuarters().find((quarter) => quarter.label === label);
-};
-
-// 8. The user's goals that can be brought forward: finally Approved (not
-// pending, rejected, completion submitted, completed or cancelled) and
-// ending before the target quarter starts. Submitting an End Date change
-// moves a goal out of 'Approved', so it drops off this list.
-// - ?quarter=<open entry quarter> (several quarters can be open at go-live):
-//   goals ending before that quarter's first day.
-// - no quarter: goals ending on or before the current quarter's last day,
-//   i.e. before the normal target quarter (the next one) starts.
-const getBringForwardGoals = async (req, res) => {
+// 8. Pending goals for the Add Goal page (information + Mark Complete only;
+// nothing here blocks adding goals). ?quarter= is the target quarter the
+// user is adding goals for; without a valid one, the normal next quarter.
+//   overdue:        finally Approved goals from any quarter whose End Date
+//                   has passed and that the user has not marked complete.
+//                   (Completion Submitted / Completed goals are excluded.)
+//   broughtForward: Approved goals from an earlier quarter whose End Date
+//                   falls inside the target quarter and has not passed.
+//                   Goals ending two or more quarters away are not shown.
+const getPendingGoals = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
-  const currentQuarter = getFiscalQuarterBounds();
-  const target = getBringForwardTargetQuarter(req.query?.quarter);
-
-  if (target === undefined) {
-    return res.status(400).json({
-      success: false,
-      message: `Goal entry is not open for ${String(req.query.quarter).trim()}.`,
-    });
-  }
-
-  try {
-    const pool = await poolPromise;
-    const request = pool.request().input("UserID", sql.Int, userId);
-    const timelineCondition = target
-      ? "Timeline < @TargetStartDate"
-      : "Timeline <= @QuarterEndDate";
-    if (target) {
-      request.input("TargetStartDate", sql.Date, target.startKey);
-    } else {
-      request.input("QuarterEndDate", sql.Date, currentQuarter.endKey);
-    }
-    const result = await request.query(`
-        SELECT GoalID, GoalNumber, GoalTitle, Quarter, Weightage, Timeline
-        FROM dbo.Goals
-        WHERE UserID = @UserID
-          AND GoalStatus = 'Approved'
-          AND ${timelineCondition}
-        ORDER BY Timeline, GoalNumber, GoalID
-      `);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        currentQuarter: currentQuarter.label,
-        quarterEndDate: currentQuarter.endKey,
-        // The quarter the new End Date must fall in, when one was named.
-        targetQuarter: target ? toEntryQuarterSummary(target) : null,
-        goals: result.recordset.map((goal) => ({
-          ...goal,
-          Timeline: toDateKey(goal.Timeline),
-        })),
-      },
-    });
-  } catch (error) {
-    console.error("Get Bring Forward Goals Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error while fetching goals to bring forward.",
-      errors: error.message,
-    });
-  }
-};
-
-// 9. Bring a goal forward: a new End Date in the target quarter, submitted
-// through the existing carry-forward path in updateGoal (approval reset to
-// Submitted, CarryForwardCount and GoalCarryForwardHistory). Only the End
-// Date changes; the goal keeps its Quarter. This adds the bring-forward
-// checks: the caller owns the goal, it is still on the bring-forward list,
-// the goal-entry window is open and the End Date is in the target quarter.
-// Body.Quarter (optional) names the open entry quarter to bring the goal
-// into, as getBringForwardGoals' ?quarter=; without it the target is the
-// normal next quarter.
-const bringForwardGoal = async (req, res) => {
-  const { id } = req.params;
-  const userId = req.user?.UserID || req.user?.userId;
-  const timelineKey = toDateKey(req.body?.Timeline);
-  const namedTarget = getBringForwardTargetQuarter(req.body?.Quarter);
-
-  if (namedTarget === undefined) {
-    return res.status(400).json({
-      success: false,
-      message: `Goals cannot be brought forward into ${String(req.body.Quarter).trim()} now; goal entry is not open for it.`,
-    });
-  }
-
-  let target = namedTarget;
-  if (!target) {
-    const window = getRelevantGoalCreationWindow();
-    if (!window.isOpen) {
-      return res.status(400).json({
-        success: false,
-        message: `Goals can be brought forward only while the goal-entry window is open (next: ${formatDisplayDateKey(window.startDate)} to ${formatDisplayDateKey(window.endDate)}).`,
-      });
-    }
-    target = getFiscalQuarterBoundsFromLabel(window.targetQuarter);
-  }
-  if (!timelineKey || timelineKey < target.startKey || timelineKey > target.endKey) {
-    const message = `End Date must be within ${target.label} (${formatDisplayDateKey(target.startKey)} to ${formatDisplayDateKey(target.endKey)}).`;
-    return res
-      .status(400)
-      .json({ success: false, message, errors: { Timeline: message } });
-  }
+  const target =
+    getFiscalQuarterBoundsFromLabel(req.query?.quarter) ||
+    getTargetGoalQuarterBounds();
+  const todayKey = formatLocalDateKey(new Date());
 
   try {
     const pool = await poolPromise;
     const result = await pool
       .request()
-      .input("GoalID", sql.BigInt, id)
+      .input("UserID", sql.Int, userId)
+      .input("Today", sql.Date, todayKey)
+      .input("TargetStart", sql.Date, target.startKey)
+      .input("TargetEnd", sql.Date, target.endKey)
       .query(`
-        SELECT GoalID, UserID, GoalStatus, Timeline, CarryForwardCount
-        FROM dbo.Goals
-        WHERE GoalID = @GoalID
+        SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Quarter, g.Weightage,
+               g.StartDate, g.Timeline,
+               CASE WHEN ${isOverdueGoal("g", "@Today")} THEN 1 ELSE 0 END AS IsOverdue
+        FROM dbo.Goals g
+        WHERE g.UserID = @UserID
+          AND (
+            ${isOverdueGoal("g", "@Today")}
+            OR (
+              g.GoalStatus IN ('Approved', 'Running', 'Postpone')
+              AND g.QuarterEndDate < @TargetStart
+              AND g.Timeline >= @TargetStart
+              AND g.Timeline <= @TargetEnd
+              AND g.Timeline >= @Today
+            )
+          )
+        ORDER BY g.Timeline, g.GoalNumber, g.GoalID
       `);
-    const goal = result.recordset[0];
 
-    if (!goal) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Goal not found." });
-    }
-    if (Number(goal.UserID) !== Number(userId)) {
-      return res.status(403).json({
-        success: false,
-        message: "You can bring forward only your own goals.",
-      });
-    }
+    const dayNumber = (dateKey) => {
+      const [year, month, day] = dateKey.split("-").map(Number);
+      return Date.UTC(year, month - 1, day) / 86400000;
+    };
+    const toPendingGoal = (row) => {
+      const endDate = toDateKey(row.Timeline);
+      return {
+        GoalID: row.GoalID,
+        GoalNumber: row.GoalNumber,
+        GoalTitle: row.GoalTitle,
+        Quarter: row.Quarter,
+        Weightage: Number(row.Weightage),
+        StartDate: toDateKey(row.StartDate),
+        Timeline: endDate,
+        DaysOverdue:
+          row.IsOverdue === 1 ? dayNumber(todayKey) - dayNumber(endDate) : 0,
+      };
+    };
 
-    // The same rule as getBringForwardGoals.
-    const goalTimelineKey = toDateKey(goal.Timeline);
-    const endsTooLate = namedTarget
-      ? goalTimelineKey >= namedTarget.startKey
-      : goalTimelineKey > getFiscalQuarterBounds().endKey;
-    if (goal.GoalStatus !== "Approved" || !goalTimelineKey || endsTooLate) {
-      return res.status(400).json({
-        success: false,
-        message: "This goal can no longer be brought forward.",
-      });
-    }
-    if (Number(goal.CarryForwardCount || 0) !== 0) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "This goal has already been carried forward once and cannot be brought forward again.",
-      });
-    }
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({
+      success: true,
+      data: {
+        targetQuarter: toEntryQuarterSummary(target),
+        overdue: result.recordset
+          .filter((row) => row.IsOverdue === 1)
+          .map(toPendingGoal),
+        broughtForward: result.recordset
+          .filter((row) => row.IsOverdue !== 1)
+          .map(toPendingGoal),
+      },
+    });
   } catch (error) {
-    console.error("Bring Forward Goal Error:", error);
+    console.error("Get Pending Goals Error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error while bringing the goal forward.",
+      message: "Internal server error while fetching your pending goals.",
       errors: error.message,
     });
   }
-
-  // Only the End Date is sent on, so updateGoal keeps every other field.
-  req.body = { Timeline: timelineKey };
-  req.isBringForward = true;
-  // Recorded as the carry-forward history's ToQuarter.
-  req.bringForwardToQuarter = namedTarget ? namedTarget.label : null;
-  return updateGoal(req, res);
 };
 
 module.exports = {
@@ -4760,8 +4537,7 @@ module.exports = {
   getMyQuarterSummary,
   getQuarterGoalDetails,
   getAddGoalStatus,
-  getBringForwardGoals,
-  bringForwardGoal,
+  getPendingGoals,
   getJointAccountabilityUsers,
   getGoalById,
   createGoal,

@@ -3,7 +3,8 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import { needsPasswordChange, FORCE_RESET_PATH } from '../../utils/passwordChange';
 import { toast } from 'react-toastify';
-import { Eye, EyeOff, Lock, User, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import PortalBrand from '../../components/PortalBrand/PortalBrand';
 
 const Login = () => {
   const [username, setUsername] = useState(''); // Handles either username or email input
@@ -76,10 +77,8 @@ const Login = () => {
       <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl shadow-xl shadow-slate-200/50 p-8 relative z-10">
         
         {/* Header Section */}
+        <PortalBrand compact className="pb-5 mb-5 border-b border-slate-100" />
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 mb-3 shadow-sm">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Sign In</h2>
           <p className="text-sm text-slate-500 mt-1">Please enter your details to access your account</p>
         </div>

@@ -15,7 +15,9 @@ import api from "../../services/api";
 import QuarterSummaryTable from "../../components/QuarterSummaryTable/QuarterSummaryTable";
 import { formatFiscalYearLabel, getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 import {
-  QUARTER_COMPLETION_TITLE,
+  EVALUATION_COLUMNS,
+  YEAR_SCORE_FORMULA,
+  QUARTER_SCORE_TITLE,
   formatScorePercent,
   toSummaryQuarters,
 } from "../../utils/yearlyPerformance";
@@ -28,9 +30,6 @@ import {
 const FUTURE_FILL = "#D1D5DB";
 
 const formatWeight = (value) => `${Number(Number(value || 0).toFixed(2))}%`;
-
-const QUARTER_AVERAGE_TITLE =
-  "Average of the Quarter Completion % of started quarters; quarters with nothing due are skipped.";
 
 const fiscalYearLabel = formatFiscalYearLabel;
 
@@ -50,8 +49,8 @@ const SectionMessage = ({ children }) => (
   </div>
 );
 
-// One Quarter Completion column per quarter (labels from the server, e.g.
-// "Q1-2027"), then the Goals completed and Quarter Average columns.
+// One Quarter Score column per quarter (labels from the server, e.g.
+// "Q1-2027"), then the Goals completed column.
 // getValue drives sorting; render draws the cell.
 const buildTeamColumns = (quarterLabels) => [
   {
@@ -64,7 +63,7 @@ const buildTeamColumns = (quarterLabels) => [
   ...quarterLabels.map((label, index) => ({
     key: label,
     label: label.split("-")[0],
-    title: `${label} Quarter Completion. ${QUARTER_COMPLETION_TITLE}`,
+    title: `${label} ${QUARTER_SCORE_TITLE}`,
     getValue: (member) => {
       const quarter = member.Quarters[index];
       return quarter.isFuture ? null : quarter.QuarterCompletionPercentage;
@@ -85,14 +84,6 @@ const buildTeamColumns = (quarterLabels) => [
     getValue: (member) => member.CompletedCount,
     render: (member) => `${member.CompletedCount} of ${member.CountedGoalCount}`,
   },
-  {
-    key: "QuarterAveragePercentage",
-    label: "Quarter Average",
-    title: QUARTER_AVERAGE_TITLE,
-    getValue: (member) => member.QuarterAveragePercentage,
-    render: (member) => formatScorePercent(member.QuarterAveragePercentage),
-    className: "font-semibold text-indigo-700",
-  },
 ];
 
 // Missing values (nothing due / not started) always sort last.
@@ -110,7 +101,7 @@ const compareMembers = (getValue, direction) => (a, b) => {
 };
 
 const TeamView = ({ members, fiscalYear, onSelect }) => {
-  const [sort, setSort] = useState({ key: "QuarterAveragePercentage", direction: "asc" });
+  const [sort, setSort] = useState({ key: "employeeName", direction: "asc" });
 
   const columns = useMemo(
     () => buildTeamColumns((members[0]?.Quarters || []).map((quarter) => quarter.Quarter)),
@@ -272,24 +263,15 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
     quarter: quarter.quarter,
     isFuture: quarter.isFuture,
     allocated: Number(quarter.allocated || 0),
-    // A quarter that has not started has nothing achieved yet.
-    achieved: quarter.isFuture
-      ? null
-      : Number(quarter.achieved || 0) + Number(quarter.broughtForwardAchieved || 0),
+    // A quarter that has not started has nothing achieved yet. Achieved is
+    // the Quarter Score's numerator (all four categories).
+    achieved: quarter.isFuture ? null : Number(quarter.categoryTotal || 0),
   }));
   const hasAnyWork = summaryQuarters.some(
     (quarter) =>
       Number(quarter.allocated || 0) > 0 ||
-      Number(quarter.broughtForwardPending || 0) > 0 ||
-      Number(quarter.broughtForwardAchieved || 0) > 0,
+      Number(quarter.categoryTotal || 0) > 0,
   );
-
-  const quarterCompletionColumn = {
-    label: "Quarter Completion",
-    title: QUARTER_COMPLETION_TITLE,
-    getValue: (quarter) =>
-      quarter.isFuture ? "Not started" : formatScorePercent(quarter.quarterCompletion),
-  };
 
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
@@ -330,7 +312,7 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
             </Bar>
             <Bar
               dataKey="achieved"
-              name="Achieved + BF achieved"
+              name="Achieved (all 4 categories)"
               fill="#059669"
               radius={[4, 4, 0, 0]}
             >
@@ -350,25 +332,23 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
           currentQuarter={getCurrentFiscalQuarterValue()}
           employeeId={employee.UserID}
           achievementRule="evaluation"
-          extraColumn={quarterCompletionColumn}
+          columns={EVALUATION_COLUMNS}
         >
           {/* Same row as the Final Evaluation page: its server-calculated
-              Year Score, shown under Achieved. */}
+              Year Score. */}
           <tr className="bg-indigo-50/60">
             <th
               className="py-3 pl-2 pr-4 font-bold text-gray-900 whitespace-nowrap"
-              title="(Achieved + Brought forward achieved) ÷ Allocated"
+              title={YEAR_SCORE_FORMULA}
             >
               Year Score
             </th>
-            <td className="px-3 py-3" />
             <td className="px-3 py-3 font-bold text-indigo-800 whitespace-nowrap">
               {formatScorePercent(yearlyPerformance.YearScorePercentage)}
             </td>
-            <td colSpan={3} className="px-3 py-3 text-xs text-gray-500">
-              (Achieved + Brought forward achieved) ÷ Allocated
+            <td colSpan={EVALUATION_COLUMNS.length - 1} className="px-3 py-3 text-xs text-gray-500">
+              {YEAR_SCORE_FORMULA}
             </td>
-            <td className="px-3 py-3" />
           </tr>
         </QuarterSummaryTable>
       </div>
@@ -565,7 +545,7 @@ const TeamReports = () => {
                 <StatCard
                   label="Brought forward achieved"
                   value={summary.BroughtForwardAchievedGoals}
-                  hint="Carried-forward goals completed"
+                  hint="Brought-forward goals completed after their start quarter"
                   accent="text-amber-600"
                 />
               </div>

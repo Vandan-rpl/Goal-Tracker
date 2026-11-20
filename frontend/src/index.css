@@ -59,3 +59,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* GATI wordmark: each letter rises and falls in turn, like a wave.
+   Turned off for users who ask the OS for reduced motion. */
+@keyframes gati-wave {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-0.18em); }
+}
+.gati-wave-letter {
+  display: inline-block;
+  animation: gati-wave 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gati-wave-letter { animation: none; }
+}

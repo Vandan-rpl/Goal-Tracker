@@ -1,5 +1,5 @@
-// Row state and styling shared by the goal worksheet pages (Add Goal and
-// Bring Forward Goal). The row markup is components/GoalWorksheet.
+// Row state and styling shared by the goal worksheet (Add Goal). The row
+// markup is components/GoalWorksheet.
 
 export const worksheetControlClass =
   "block w-full min-h-[42px] px-[10px] border border-transparent bg-transparent text-xs text-[#202522] shadow-none placeholder:text-[#9aa39b] read-only:bg-slate-50 read-only:text-slate-500 focus:relative focus:z-[1] focus:border-2 focus:border-[#2c3e82] focus:bg-white focus:outline-none";

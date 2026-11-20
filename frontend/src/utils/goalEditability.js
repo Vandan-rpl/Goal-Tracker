@@ -1,26 +1,16 @@
+// Edit rules (mirrors updateGoal on the server), dates included:
+//  - Draft / Rejected: the employee (goal owner) only.
+//  - Pending approval: the owner's Manager/HOD and CFO/Business Head, at any
+//    pending stage, up to final approval. Never Admin.
+//  - Finally Approved and later: no one.
 const EDITABLE_STATUSES = new Set(["Draft", "Rejected"]);
-// No one can edit a goal in these statuses ("Completion Submitted" is
-// awaiting completion approval; the server enforces the same rule).
-const TERMINAL_STATUSES = new Set([
-  "Completion Submitted",
-  "Completed",
-  "Cancelled",
-]);
-const TIMELINE_ONLY_EDIT_STATUSES = new Set([
-  "HOD Approved",
+const PENDING_APPROVAL_STATUSES = new Set([
+  "Submitted",
   "Manager Approved",
-  "Business Head Approved",
+  "HOD Approved",
   "Reviewed By HOD",
   "Review By Business Head",
-  "Approved",
-]);
-// Goals in these statuses can never be carried forward.
-const CARRY_FORWARD_BLOCKED_STATUSES = new Set([
-  "Completion Submitted",
-  "Completed",
-  "Draft",
-  "Rejected",
-  "Cancelled",
+  "Business Head Approved",
 ]);
 
 const getDateKey = (value) => {
@@ -45,12 +35,6 @@ export const isTimelineOverdue = (timeline) => {
   return timelineDate < todayDate;
 };
 
-// Once a goal reaches these statuses a Business Head can only view it.
-const BUSINESS_HEAD_LOCKED_STATUSES = new Set([
-  "Business Head Approved",
-  "Approved",
-]);
-
 const normalizeRole = (role) =>
   String(role || "")
     .toLowerCase()
@@ -61,40 +45,20 @@ const normalizeRole = (role) =>
 export const isBusinessHeadRole = (role) =>
   ["businesshead", "business head"].includes(normalizeRole(role));
 
+const isAdminRole = (role) => normalizeRole(role) === "admin";
+
+// isApprover = true: the caller is acting as an approver on someone else's
+// goal (pending stages only; never Admin). Otherwise the caller is the goal
+// owner (callers check ownership): Draft / Rejected only.
 export const canEditGoal = (goal, isApprover = false, role = "") => {
   if (!goal) return false;
-  if (TERMINAL_STATUSES.has(goal.GoalStatus)) return false;
-  if (EDITABLE_STATUSES.has(goal.GoalStatus)) return true;
   if (isApprover) {
-    return !(
-      isBusinessHeadRole(role) &&
-      BUSINESS_HEAD_LOCKED_STATUSES.has(goal.GoalStatus)
+    return (
+      !isAdminRole(role) && PENDING_APPROVAL_STATUSES.has(goal.GoalStatus)
     );
   }
-  return canEditTimelineOnlyGoal(goal);
+  return EDITABLE_STATUSES.has(goal.GoalStatus);
 };
-
-export const canEditTimelineOnlyGoal = (goal) =>
-  Boolean(
-    goal &&
-      !CARRY_FORWARD_BLOCKED_STATUSES.has(goal.GoalStatus) &&
-      TIMELINE_ONLY_EDIT_STATUSES.has(goal.GoalStatus) &&
-      Number(goal.CarryForwardCount || 0) === 0 &&
-      isTimelineOverdue(goal.Timeline),
-  );
-
-// An overdue goal that has not been carried forward yet cannot be completed;
-// it must be carried forward and approved again first. Mirrors the backend.
-export const isCompletionBlockedByOverdue = (goal) =>
-  Boolean(
-    goal &&
-      !TERMINAL_STATUSES.has(goal.GoalStatus) &&
-      Number(goal.CarryForwardCount || 0) === 0 &&
-      isTimelineOverdue(goal.Timeline),
-  );
-
-export const OVERDUE_COMPLETION_MESSAGE =
-  "This goal is overdue. Carry it forward to the next quarter and get it approved again before marking it complete.";
 
 export const isApproverRole = (role) => {
   const normalizedRole = normalizeRole(role);

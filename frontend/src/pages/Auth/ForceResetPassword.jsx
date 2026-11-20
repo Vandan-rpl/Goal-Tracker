@@ -5,6 +5,7 @@ import useAuth from '../../hooks/useAuth';
 import PasswordChecklist from '../../components/PasswordChecklist/PasswordChecklist';
 import PasswordErrorList from '../../components/PasswordChecklist/PasswordErrorList';
 import { passwordErrorsFrom } from '../../utils/passwordPolicy';
+import PortalBrand from '../../components/PortalBrand/PortalBrand';
 
 const ForceResetPassword = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -51,6 +52,7 @@ const ForceResetPassword = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+        <PortalBrand className="pb-6 mb-6 border-b border-slate-100" />
         <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">Change Password Required</h2>
         <p className="text-sm text-gray-600 text-center mb-6">
           You must change your default password before accessing your account.

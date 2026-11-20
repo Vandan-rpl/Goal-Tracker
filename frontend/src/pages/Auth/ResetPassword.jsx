@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, KeyRound } from 'lucide-react';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
+import PortalBrand from '../../components/PortalBrand/PortalBrand';
 import api from '../../services/api';
 
 /**
@@ -28,9 +29,7 @@ const ResetPassword = () => {
   return (
     <div className="min-h-screen relative flex items-center justify-center bg-slate-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] p-4">
       <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl shadow-xl shadow-slate-200/50 p-8 relative z-10 text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 mb-3 shadow-sm">
-          <KeyRound className="w-6 h-6" />
-        </div>
+        <PortalBrand className="pb-6 mb-6 border-b border-slate-100" />
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-5">Reset Password</h2>
 
         <div role="alert" className="mb-6 flex items-start space-x-3 bg-red-50 border border-red-200 text-red-700 p-3.5 rounded-xl text-sm text-left">

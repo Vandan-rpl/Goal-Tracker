@@ -23,10 +23,6 @@ import {
   getCurrentFiscalQuarterValue,
 } from "../../utils/fiscalQuarter";
 import {
-  isCompletionBlockedByOverdue,
-  OVERDUE_COMPLETION_MESSAGE,
-} from "../../utils/goalEditability";
-import {
   getCompletionRejectionRemark,
   getGoalStatusLabel,
   formatGoalStartDate,
@@ -141,18 +137,10 @@ function GoalCard({ goal, onGoalChanged }) {
   const completionRejectionRemark = getCompletionRejectionRemark(goal);
   // My Goals lists only the user's own goals, so the owner check is implicit.
   const canWorkOnGoal = goal.IsGoalOwner !== false && isGoalActiveForOwner(goal);
-  // Overdue goals must be carried forward and re-approved before completion.
-  const completionBlockedByOverdue =
-    canWorkOnGoal && isCompletionBlockedByOverdue(goal);
-  // Goals with sub-goals are submitted by ticking the last sub-goal on the
-  // goal page; Mark Complete is only for goals without sub-goals.
-  const canMarkComplete =
-    canWorkOnGoal && !completionBlockedByOverdue && totalSubGoals === 0;
-  const canResubmitCompletion =
-    canWorkOnGoal &&
-    !completionBlockedByOverdue &&
-    totalSubGoals > 0 &&
-    completedSubGoals === totalSubGoals;
+  // Mark Complete for any finally Approved, started goal, with or without
+  // sub-goals (pending sub-goals keep their status). Ticking the last
+  // sub-goal on the goal page still submits it too.
+  const canMarkComplete = canWorkOnGoal;
   const displayedTimeline = goal.DashboardTimeline || goal.Timeline;
   const days = daysUntil(displayedTimeline);
   const normalizedStatus = normalizeGoalStatus(goal.GoalStatus);
@@ -259,19 +247,6 @@ function GoalCard({ goal, onGoalChanged }) {
                 Starts {formatGoalStartDate(goal)} — completion opens then.
               </span>
             )}
-            {completionBlockedByOverdue && (
-              <span className="mr-auto text-xs text-red-700">
-                {OVERDUE_COMPLETION_MESSAGE}
-              </span>
-            )}
-            {completionBlockedByOverdue && (
-              <Link
-                to={`/goals/edit/${goal.GoalID}`}
-                className="inline-flex items-center justify-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition"
-              >
-                Carry forward
-              </Link>
-            )}
             <Link
               to={`/goals/view/${goal.GoalID}`}
               className="inline-flex items-center justify-center px-4 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold transition"
@@ -283,15 +258,6 @@ function GoalCard({ goal, onGoalChanged }) {
                 goalId={goal.GoalID}
                 goalTitle={goal.GoalTitle}
                 onCompleted={onGoalChanged}
-              />
-            )}
-            {canResubmitCompletion && (
-              <MarkCompleteButton
-                goalId={goal.GoalID}
-                goalTitle={goal.GoalTitle}
-                onCompleted={onGoalChanged}
-                label="Resubmit for completion"
-                confirmPrompt={`Resubmit "${goal.GoalTitle}" for completion?`}
               />
             )}
           </div>
@@ -544,22 +510,6 @@ export default function GoalDashboard() {
             </>
           )}
         </section>
-
-        {dashboardSummary?.carryForward?.windowOpen && (
-          <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
-            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
-            <div>
-              <p className="text-sm font-semibold">Carry-forward window is open</p>
-              <p className="mt-1 text-xs text-amber-800">
-                {dashboardSummary.carryForward.eligibleGoalCount} eligible{" "}
-                {dashboardSummary.carryForward.eligibleGoalCount === 1
-                  ? "goal is"
-                  : "goals are"}{" "}
-                available to carry forward.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Q1–Q4 of the current fiscal year, calculated on the server. */}
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

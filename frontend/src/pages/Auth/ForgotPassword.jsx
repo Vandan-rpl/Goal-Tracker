@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
-  AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Lock, Mail,
+  AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, Lock, Mail,
 } from 'lucide-react';
 import api from '../../services/api';
 import PasswordChecklist from '../../components/PasswordChecklist/PasswordChecklist';
 import PasswordErrorList from '../../components/PasswordChecklist/PasswordErrorList';
 import { passwordErrorsFrom } from '../../utils/passwordPolicy';
+import PortalBrand from '../../components/PortalBrand/PortalBrand';
 
 /**
  * Forgot Password: one guided screen in three steps.
@@ -219,10 +220,8 @@ const ForgotPassword = () => {
       <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl shadow-xl shadow-slate-200/50 p-8 relative z-10">
 
         {/* Header */}
+        <PortalBrand className="pb-6 mb-6 border-b border-slate-100" />
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 mb-3 shadow-sm">
-            <KeyRound className="w-6 h-6" />
-          </div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Forgot Password</h2>
           <p className="text-sm text-slate-500 mt-1">
             {step === STEP.EMAIL && 'Enter your registered email to receive a one-time password (OTP).'}

@@ -7,7 +7,11 @@ import { Button, Tooltip } from "@mui/material";
 import api from "../../services/api";
 import { getFiscalQuarterOptions } from "../../utils/fiscalQuarter";
 import { canEditGoal } from "../../utils/goalEditability";
-import { getGoalStatusLabel } from "../../utils/goalStatus";
+import {
+  getGoalStatusLabel,
+  isGoalActiveForOwner,
+} from "../../utils/goalStatus";
+import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 import { formatDisplayDate } from "../../utils/dateTime";
 
 const STATUS_OPTIONS = [
@@ -299,6 +303,18 @@ const ListGoal = () => {
                           >
                             Edit
                           </Link>
+                        )}
+
+                        {/* Mark complete: finally Approved and started, at any
+                            time (also after the End Date). Goes to the
+                            Manager/HOD for completion approval. */}
+                        {goal.IsGoalOwner && isGoalActiveForOwner(goal) && (
+                          <MarkCompleteButton
+                            goalId={goal.GoalID}
+                            goalTitle={goal.GoalTitle}
+                            onCompleted={fetchGoals}
+                            variant="text"
+                          />
                         )}
 
                         {goal.IsGoalOwner && goal.GoalStatus === "Draft" && (

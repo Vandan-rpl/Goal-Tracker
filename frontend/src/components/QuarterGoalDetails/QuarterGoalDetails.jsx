@@ -8,8 +8,9 @@ import { formatFiscalQuarterLabel } from "../../utils/fiscalQuarter";
 
 // The goals behind one row of the quarter summary. Reusable: pass employeeId
 // to show a team member's goals (Final Evaluation); omit it for the logged-in
-// user. achievementRule="evaluation" totals Achieved like the Final
-// Evaluation summary. Section totals come from the server with the same filters as the
+// user. achievementRule="evaluation" (Final Evaluation / Team Reports) shows
+// the goals behind each Final Evaluation category and the quarter's overdue
+// goals. Section totals come from the server with the same filters as the
 // summary, so the footers always match the summary row.
 
 const COLUMNS = ["Goal No.", "Goal Description", "Weightage", "End Date", "Status", "Sub-goals", "Note"];
@@ -20,6 +21,17 @@ function formatPercent(value) {
 
 // One short line: the first rule that applies.
 function getGoalNote(goal, section) {
+  if (section === "category") {
+    const marked = goal.completionMarkedDate
+      ? `Marked complete on ${formatDateForDisplay(goal.completionMarkedDate)}`
+      : "Completed";
+    return `${marked} · from ${formatFiscalQuarterLabel(goal.fromQuarter)}`;
+  }
+  if (section === "overdue") {
+    return goal.completionRemark
+      ? `Not marked complete · completion rejected: ${goal.completionRemark}`
+      : "Not marked complete";
+  }
   if (goal.status === "Completed" && goal.completedDate) {
     return `Completed on ${formatDateForDisplay(goal.completedDate)}`;
   }
@@ -27,12 +39,10 @@ function getGoalNote(goal, section) {
     return `Completion rejected: ${goal.completionRemark}`;
   }
   if (section === "own" && goal.movedToQuarter) {
-    return `Moved to ${goal.movedToQuarter}`;
+    return `Brought forward to ${goal.movedToQuarter}`;
   }
   if (section === "broughtForward") {
-    return goal.carryForwardCount > 0
-      ? `From ${goal.fromQuarter} · carried forward ${goal.carryForwardCount}×`
-      : `From ${goal.fromQuarter}`;
+    return `From ${goal.fromQuarter}`;
   }
   return "";
 }
@@ -141,7 +151,52 @@ export default function QuarterGoalDetails({ employeeId, quarter, achievementRul
     );
   }
 
-  const { ownGoals, broughtForward } = details;
+  const { ownGoals, overdue, broughtForward, evaluation } = details;
+
+  if (evaluation) {
+    const categories = [
+      { key: "achieved", title: "Achieved", empty: "No goals achieved in their own quarter" },
+      { key: "broughtForward", title: "Brought Forward", empty: "No brought-forward goals completed in this quarter" },
+      {
+        key: "broughtForwardOverdue",
+        title: "Brought Forward Overdue",
+        empty: "No brought-forward goals completed after their End Date's quarter",
+      },
+      { key: "overdueAchieved", title: "Overdue Achieved", empty: "No overdue goals completed in this quarter" },
+    ];
+    return (
+      <div className="space-y-4 p-4">
+        <GoalSection
+          title="This quarter's goals (allocated)"
+          section="own"
+          goals={ownGoals.goals}
+          footer={`Allocated ${formatPercent(ownGoals.allocated)} · Completed ${ownGoals.completedCount}`}
+          emptyMessage="No approved goals start in this quarter"
+          onOpenGoal={openGoal}
+        />
+        {categories.map(({ key, title, empty }) => (
+          <GoalSection
+            key={key}
+            title={`${title} (completed in this quarter)`}
+            section="category"
+            goals={evaluation[key].goals}
+            footer={`${title} ${formatPercent(evaluation[key].weightage)}`}
+            emptyMessage={empty}
+            onOpenGoal={openGoal}
+          />
+        ))}
+        <GoalSection
+          title="Overdue (not completed)"
+          section="overdue"
+          goals={evaluation.overdue.goals}
+          footer={`${formatPercent(evaluation.overdue.weightage)} weightage, contributes 0 until completed`}
+          emptyMessage="No overdue goals from this quarter"
+          onOpenGoal={openGoal}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 p-4">
       <GoalSection
@@ -155,13 +210,19 @@ export default function QuarterGoalDetails({ employeeId, quarter, achievementRul
         onOpenGoal={openGoal}
       />
       <GoalSection
-        title="Brought forward into this quarter"
+        title="Overdue (not completed)"
+        section="overdue"
+        goals={overdue.goals}
+        footer={`${overdue.goals.length} overdue · ${formatPercent(overdue.weightage)} weightage`}
+        emptyMessage="No overdue goals from this quarter"
+        onOpenGoal={openGoal}
+      />
+      <GoalSection
+        title="Brought forward achieved in this quarter"
         section="broughtForward"
         goals={broughtForward.goals}
-        footer={`Pending ${formatPercent(broughtForward.pending)} · Achieved ${formatPercent(
-          broughtForward.achieved,
-        )}`}
-        emptyMessage="No goals brought forward into this quarter"
+        footer={`Achieved ${formatPercent(broughtForward.achieved)}`}
+        emptyMessage="No brought-forward goals completed in this quarter"
         onOpenGoal={openGoal}
       />
     </div>

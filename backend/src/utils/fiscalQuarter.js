@@ -224,23 +224,6 @@ function getOpenGoalEntryQuarters(date = new Date()) {
   return quarters;
 }
 
-function isWithinCarryForwardWindow(quarterEndDate) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const qEnd = new Date(quarterEndDate);
-  qEnd.setHours(0, 0, 0, 0);
-
-  const windowStart = new Date(qEnd);
-  windowStart.setDate(windowStart.getDate() - 10);
-
-  const windowEnd = new Date(qEnd);
-  windowEnd.setDate(windowEnd.getDate() + 15);
-
-  return today >= windowStart && today <= windowEnd;
-}
-
-
 module.exports = {
   getFiscalQuarter,
   getFiscalQuarterBounds,
@@ -257,5 +240,4 @@ module.exports = {
   getGoLiveOpenQuarters,
   isGoLiveOpenQuarter,
   getOpenGoalEntryQuarters,
-  isWithinCarryForwardWindow,
 };

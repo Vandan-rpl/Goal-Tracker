@@ -6,6 +6,7 @@ import TasksSidebarMenu from "./TasksSidebarMenu";
 import { isIdeasPath } from "../utils/ideasMenu";
 import { isTasksPath } from "../utils/tasksMenu";
 import rubaminLogo from "../assets/images/rubamin-logo.png";
+import { GatiWordmark, PORTAL_PILLARS, PORTAL_TITLE } from "../components/PortalBrand/PortalBrand";
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
@@ -35,24 +36,23 @@ const Sidebar = () => {
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800/80 flex flex-col h-screen select-none font-sans">
       
-      {/* Brand Header: the company logo has black text, so it sits on a
-          white panel to stay readable on the dark sidebar. */}
-      <div className="px-4 pt-4 pb-3.5 border-b border-slate-800/80">
-        <div className="rounded-xl bg-white px-3.5 py-2.5 shadow-md shadow-black/30 ring-1 ring-white/10">
-          <img
-            src={rubaminLogo}
-            alt="Rubamin"
-            className="h-8 w-auto mx-auto object-contain"
-            draggable="false"
-          />
-        </div>
-        <div className="mt-3 flex items-center justify-center gap-2.5">
-          <span className="h-px w-6 bg-linear-to-r from-transparent to-[#e8102a]" aria-hidden="true" />
-          <h1 className="text-sm font-bold text-white tracking-[0.35em] leading-none pl-[0.35em]">
-            GATI
-          </h1>
-          <span className="h-px w-6 bg-linear-to-l from-transparent to-[#e8102a]" aria-hidden="true" />
-        </div>
+      {/* Brand Header: static GATI branding (not links). The wordmark
+          waves; the pillar line spells out the acronym. */}
+      <div className="px-5 pt-[22px] pb-[18px] border-b border-slate-800/80 text-left">
+        <GatiWordmark
+          className="text-[22px] font-bold! tracking-[0.14em] drop-shadow-[0_0_8px_rgba(255,92,114,0.45)]"
+          letterClassName="bg-clip-text text-transparent bg-linear-to-b from-[#ff8a98] to-[#FF5C72]"
+        />
+        <p className="mt-0.5 text-xs text-[#9AA1BF]">{PORTAL_TITLE}</p>
+        <p className="mt-3 pt-2.5 border-t border-dashed border-[#262B47] text-[11px] leading-[1.4] text-[#8F96B3] whitespace-nowrap">
+          {PORTAL_PILLARS.map((word, i) => (
+            <React.Fragment key={word}>
+              {i > 0 && " · "}
+              <span className="font-bold text-[#FF5C72]">{word[0]}</span>
+              {word.slice(1)}
+            </React.Fragment>
+          ))}
+        </p>
       </div>
 
       {/* Navigation Items */}
@@ -251,7 +251,7 @@ const Sidebar = () => {
 
       {/* Footer Profile & Logout */}
       <div className="p-4 border-t border-slate-800/80 
-        bg-slate-950/  40 space-y-3">
+        bg-slate-950/  40">
         {/* {user && (
           <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-800/40 border border-slate-800">
             <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center font-bold text-xs uppercase flex-shrink-0">
@@ -273,6 +273,15 @@ const Sidebar = () => {
           </svg>
           Logout
         </button>
+
+        <div className="mt-3.5 inline-flex rounded-md bg-white px-2 py-1">
+          <img
+            src={rubaminLogo}
+            alt="Rubamin"
+            className="h-[18px] w-auto object-contain"
+            draggable="false"
+          />
+        </div>
       </div>
 
     </aside>

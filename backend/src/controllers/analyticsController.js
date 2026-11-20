@@ -5,6 +5,11 @@ const {
     parseFiscalYear,
     getYearlyPerformance
 } = require('./evaluationController');
+const {
+    isBroughtForwardGoal,
+    isCompletedAfterOwnQuarter,
+    isCompletedWithin
+} = require('../constants/goalQuarterRules');
 
 // Final-approved goals that are still being worked on (same set as the
 // "In progress" column of getTeamStats).
@@ -246,9 +251,11 @@ const getActiveDirectReports = async (pool, userId, role) => {
 // Goal counts for the summary cards, over the given employees.
 //   InProgress: approved, not completed, goals of `inProgressQuarter`.
 //   Completed: completed within the fiscal year.
-//   BroughtForwardAchieved: extended (carried-forward) goals completed within
-//     the fiscal year after their own quarter ended — the goals behind the Final Evaluation "Brought
-//     forward achieved" column, summed over Q1-Q4.
+//   BroughtForwardAchieved: brought-forward goals (End Date in a later quarter
+//     than the start quarter) marked complete within the fiscal year after
+//     their own quarter ended, and approved: the goals behind the Final
+//     Evaluation "Brought Forward" and "Brought Forward Overdue" columns,
+//     summed over Q1-Q4.
 const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
     const request = pool.request()
         .input('FiscalYearStart', sql.Date, getFiscalQuarterBoundsFromLabel(`Q1-${fiscalYear}`).startKey)
@@ -266,10 +273,9 @@ const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
                       AND g.CompletedDate >= @FiscalYearStart
                       AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
                      THEN 1 ELSE 0 END) AS CompletedGoals,
-            SUM(CASE WHEN ISNULL(g.CarryForwardCount, 0) > 0
-                      AND g.CompletedDate >= DATEADD(DAY, 1, g.QuarterEndDate)
-                      AND g.CompletedDate >= @FiscalYearStart
-                      AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
+            SUM(CASE WHEN ${isBroughtForwardGoal('g')}
+                      AND ${isCompletedAfterOwnQuarter('g')}
+                      AND ${isCompletedWithin('g', '@FiscalYearStart', '@FiscalYearEnd')}
                      THEN 1 ELSE 0 END) AS BroughtForwardAchievedGoals
         FROM dbo.Goals g
         WHERE ${filter}
@@ -341,7 +347,9 @@ const getTeamPerformance = async (req, res) => {
 
     try {
         const pool = await poolPromise;
-        const employees = await getActiveDirectReports(pool, userId, role);
+        // Never the requester: nobody sees their own evaluation figures.
+        const employees = (await getActiveDirectReports(pool, userId, role))
+            .filter((e) => Number(e.UserID) !== Number(userId));
 
         if (employeeId != null && !employees.some((e) => Number(e.UserID) === employeeId)) {
             return res.status(403).json({

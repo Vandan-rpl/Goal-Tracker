@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
 import useAuth from "../../hooks/useAuth";
 import CompletionRequests from "../../components/GoalCompletion/CompletionRequests";
@@ -113,8 +114,19 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
   );
 };
 
+// Logged-in user's id from the JWT (same approach as Final Evaluation).
+const getLoggedInUserId = () => {
+  try {
+    const token = localStorage.getItem("token");
+    return token ? jwtDecode(token).userId : null;
+  } catch {
+    return null;
+  }
+};
+
 const TeamManagement = () => {
   const { user } = useAuth();
+  const loggedInUserId = getLoggedInUserId();
   const role = String(user?.Role || user?.role || "").toUpperCase();
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -303,12 +315,15 @@ const TeamManagement = () => {
               </span>
             </h3>
             <div className="flex items-center gap-3">
-              <Link
-                to={`/goals/final-evaluation/${selectedUser.id}`}
-                className="text-sm bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-md hover:bg-indigo-100 font-semibold transition"
-              >
-                View Final Evaluation
-              </Link>
+              {/* Nobody can view their own Final Evaluation. */}
+              {Number(selectedUser.id) !== Number(loggedInUserId) && (
+                <Link
+                  to={`/goals/final-evaluation/${selectedUser.id}`}
+                  className="text-sm bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-md hover:bg-indigo-100 font-semibold transition"
+                >
+                  View Final Evaluation
+                </Link>
+              )}
               <button
                 onClick={() => {
                   setSelectedUser(null);

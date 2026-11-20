@@ -5,11 +5,17 @@ import api from '../../services/api';
 import { formatFiscalYearLabel, getCurrentFiscalQuarterValue } from '../../utils/fiscalQuarter';
 import QuarterSummaryTable from '../../components/QuarterSummaryTable/QuarterSummaryTable';
 import {
-  QUARTER_COMPLETION_TITLE,
+  EVALUATION_COLUMNS,
+  YEAR_SCORE_FORMULA,
   formatScorePercent,
   toSummaryQuarters,
 } from '../../utils/yearlyPerformance';
 import { getGoalStatusLabel } from "../../utils/goalStatus";
+
+// Final Evaluation shows the categories and Year Score, not the Quarter Score.
+const FINAL_EVALUATION_COLUMNS = EVALUATION_COLUMNS.filter(
+  (column) => column.label !== 'Quarter Score',
+);
 
 // Simple hand-rolled SVG gauge — no charting library needed, keeps this
 // page consistent with the rest of the (plain Tailwind, zero-extra-deps)
@@ -104,11 +110,17 @@ const FinalEvaluation = () => {
   // looking at a direct report).
   const targetUserId = userIdParam ? Number(userIdParam) : loggedInUserId;
   const isSelf = targetUserId != null && loggedInUserId != null && Number(targetUserId) === Number(loggedInUserId);
+  // Final Evaluation is for the employee's Manager/HOD and CFO only; an
+  // employee cannot open their own (the server enforces the same rule).
+  const isOwnEvaluation = !userIdParam || isSelf;
 
   useEffect(() => {
     if (!isValidFiscalYear(fiscalYear)) return;
 
-    if (targetUserId != null) {
+    if (isOwnEvaluation) {
+      setLoading(false);
+      setError('Final Evaluation is available only to your Manager/HOD and CFO.');
+    } else if (targetUserId != null) {
       fetchEvaluation();
     } else {
       setLoading(false);
@@ -168,17 +180,8 @@ const FinalEvaluation = () => {
     return evaluation.Goals.filter((g) => g.Rating != null).reduce((sum, g) => sum + g.Weightage, 0);
   }, [evaluation]);
 
-  // Same shape as the employee dashboard's quarter summary.
+  // Quarter rows with the four Final Evaluation categories and Quarter Score.
   const summaryQuarters = toSummaryQuarters(evaluation?.YearlyPerformance);
-
-  // Manager/HOD view only; display only, calculated on the server.
-  const quarterCompletionColumn = isSelf
-    ? undefined
-    : {
-        label: 'Quarter Completion',
-        title: QUARTER_COMPLETION_TITLE,
-        getValue: (quarter) => formatScorePercent(quarter.quarterCompletion),
-      };
 
   if (loading) {
     return (
@@ -267,23 +270,21 @@ const FinalEvaluation = () => {
               currentQuarter={getCurrentFiscalQuarterValue()}
               employeeId={targetUserId}
               achievementRule="evaluation"
-              extraColumn={quarterCompletionColumn}
+              columns={FINAL_EVALUATION_COLUMNS}
             >
               <tr className="bg-indigo-50/60">
                 <th
                   className="py-3 pl-2 pr-4 font-bold text-gray-900 whitespace-nowrap"
-                  title="(Achieved + Brought forward achieved) ÷ Allocated"
+                  title={YEAR_SCORE_FORMULA}
                 >
                   Year Score
                 </th>
-                <td className="px-3 py-3" />
                 <td className="px-3 py-3 font-bold text-indigo-800 whitespace-nowrap">
-                  {evaluation.YearlyPerformance.YearScorePercentage == null
-                    ? '—'
-                    : `${Number(evaluation.YearlyPerformance.YearScorePercentage).toFixed(2)}%`}
+                  {formatScorePercent(evaluation.YearlyPerformance.YearScorePercentage)}
                 </td>
-                <td colSpan={3} className="px-3 py-3 text-xs text-gray-500">(Achieved + Brought forward achieved) ÷ Allocated</td>
-                {quarterCompletionColumn && <td className="px-3 py-3" />}
+                <td colSpan={FINAL_EVALUATION_COLUMNS.length - 1} className="px-3 py-3 text-xs text-gray-500">
+                  {YEAR_SCORE_FORMULA}
+                </td>
               </tr>
             </QuarterSummaryTable>
           </div>
@@ -362,12 +363,12 @@ const FinalEvaluation = () => {
         </div> */}
 
         {/* Overall Feedback */}
-        <div>
+        {/* <div>
           <h3 className="text-lg font-bold text-gray-800 mb-3">Overall Feedback</h3>
           <div className="bg-amber-50/50 p-5 rounded-xl border border-amber-100 text-sm text-gray-700 leading-relaxed">
             {evaluation.OverallFeedback}
           </div>
-        </div>
+        </div> */}
 
         {/* Finalize action — HOD/reporting manager/Business Head only;
             enforced server-side, this button just isn't shown for a

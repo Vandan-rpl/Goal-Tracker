@@ -4,10 +4,7 @@ import { jwtDecode } from "jwt-decode";
 import api from "../../services/api";
 import {
   canEditGoal,
-  canEditTimelineOnlyGoal,
   isApproverRole,
-  isBusinessHeadRole,
-  isTimelineOverdue,
 } from "../../utils/goalEditability";
 import { formatQuarterLabel, getFiscalQuarterDateRange } from "../../utils/fiscalQuarter";
 import {
@@ -99,7 +96,6 @@ const EditGoal = () => {
           return;
         }
         setOriginalGoal({
-          CarryForwardCount: goal.CarryForwardCount,
           IsGoalOwner: goal.IsGoalOwner,
           UserID: goal.UserID,
           GoalStatus: goal.GoalStatus || "Draft",
@@ -217,31 +213,19 @@ const EditGoal = () => {
       return;
     }
 
-    if (!canEditTimelineOnly) {
-      if (
-        !formData.StartDate ||
-        formData.StartDate < quarterRange.min ||
-        formData.StartDate > quarterRange.max
-      ) {
-        const message = `Start Date must be within ${formatQuarterLabel(quarterRange.quarter)} (${quarterRange.min} to ${quarterRange.max}).`;
-        setError(message);
-        setFieldErrors({ StartDate: message });
-        return;
-      }
-
-      if (!formData.Timeline || formData.Timeline < formData.StartDate) {
-        const message = "End Date must be on or after Start Date.";
-        setError(message);
-        setFieldErrors({ Timeline: message });
-        return;
-      }
-    } else if (
-      !formData.Timeline ||
-      (originalTimelineKey && formData.Timeline <= originalTimelineKey)
+    if (
+      !formData.StartDate ||
+      formData.StartDate < quarterRange.min ||
+      formData.StartDate > quarterRange.max
     ) {
-      const message = originalTimelineKey
-        ? `New End Date must be after the current End Date (${originalTimelineKey}).`
-        : "End Date is required.";
+      const message = `Start Date must be within ${formatQuarterLabel(quarterRange.quarter)} (${quarterRange.min} to ${quarterRange.max}).`;
+      setError(message);
+      setFieldErrors({ StartDate: message });
+      return;
+    }
+
+    if (!formData.Timeline || formData.Timeline < formData.StartDate) {
+      const message = "End Date must be on or after Start Date.";
       setError(message);
       setFieldErrors({ Timeline: message });
       return;
@@ -352,39 +336,26 @@ const EditGoal = () => {
       (originalGoal.IsGoalOwner == null &&
         currentUserId != null &&
         Number(originalGoal.UserID) === Number(currentUserId)));
-  // A Business Head can no longer edit a goal once it is approved.
+  // Approvers (Manager/HOD, CFO/Business Head; never Admin) may edit a goal
+  // only while it is pending approval; once finally approved no one can.
   const isApprover =
     isApproverRole(currentRole) &&
     !isGoalOwner &&
-    (!isBusinessHeadRole(currentRole) ||
-      canEditGoal(originalGoal, true, currentRole));
+    canEditGoal(originalGoal, true, currentRole);
   const isRejected = originalStatus === "Rejected";
   const isDraft = originalStatus === "Draft";
   const canSubmitForApproval = isDraft || isRejected;
-  const terminalStatus = [
+  const lockedStatus = [
+    "Approved",
     "Completion Submitted",
     "Completed",
     "Cancelled",
   ].includes(originalStatus);
-  const timelineOverdue = isTimelineOverdue(originalGoal?.Timeline);
-  const canEditAllFields = isDraft || isRejected || isApprover;
   // Sub-goal titles/weightages are editable only in Draft or Rejected, for
   // approvers too; their status is ticked from the goal page once Approved.
   const canEditSubGoals = isDraft || isRejected;
-  const canEditTimelineOnly =
-    !canEditAllFields && canEditTimelineOnlyGoal(originalGoal);
-  const canEdit = canEditGoal(originalGoal, isApprover, currentRole);
-  const isRestrictedEdit = canEditTimelineOnly;
-  // On carry-forward the new Timeline must be after the current one.
-  const originalTimelineKey = originalGoal?.Timeline
-    ? String(originalGoal.Timeline).slice(0, 10)
-    : "";
-  const minCarryForwardTimeline = (() => {
-    if (!originalTimelineKey) return undefined;
-    const [year, month, day] = originalTimelineKey.split("-").map(Number);
-    const next = new Date(year, month - 1, day + 1);
-    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
-  })();
+  // Owners edit their own Draft/Rejected goals; anyone else only as an approver.
+  const canEdit = isGoalOwner ? canEditGoal(originalGoal) : isApprover;
   // Start Date stays within the goal's stored quarter.
   const quarterRange =
     (originalGoal?.QuarterEndDate &&
@@ -395,9 +366,11 @@ const EditGoal = () => {
     return (
       <div className="flex-1 bg-gray-50 min-h-screen p-8 text-center">
         <div className="bg-amber-50 text-amber-800 p-4 rounded-xl max-w-md mx-auto mb-4 font-medium">
-          {terminalStatus
-            ? `This goal is ${getGoalStatusLabel(formData.GoalStatus)} and cannot be edited.`
-            : `This goal is ${originalStatus} and can only be edited when it is Draft or Rejected, or after its Timeline has passed.`}
+          {lockedStatus
+            ? `This goal is ${getGoalStatusLabel(formData.GoalStatus)} and can no longer be edited.`
+            : isGoalOwner
+              ? `This goal is ${getGoalStatusLabel(originalStatus)}. You can edit it only while it is Draft or Rejected.`
+              : `You cannot edit this goal while it is ${getGoalStatusLabel(originalStatus)}.`}
         </div>
         <button
           onClick={() => navigate("/goals")}
@@ -445,11 +418,9 @@ const EditGoal = () => {
           </span>
           <h1 className="text-2xl font-bold text-slate-900">Edit Goal</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {canEditTimelineOnly
-              ? "This goal is overdue. Only its Timeline can be changed; saving resubmits it for approval."
-              : isRejected
-                ? "Revise the rejected goal, then submit it again for approval."
-                : "Modify goal targets, metrics, and status."}
+            {isRejected
+              ? "Revise the rejected goal, then submit it again for approval."
+              : "Modify goal targets, metrics, and status."}
           </p>
         </div>
 
@@ -463,16 +434,6 @@ const EditGoal = () => {
       </div>
 
       {/* Notice Banners */}
-      {canEditTimelineOnly && (
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg text-sm">
-          <span className="text-amber-600 font-bold">⚠️</span>
-          <p>
-            This goal's Timeline has passed. Only the Timeline can be changed;
-            saving will resubmit it for approval with the new date.
-          </p>
-        </div>
-      )}
-
       {error && (
         <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg text-sm font-medium">
           <span className="text-red-500 font-bold">✕</span>
@@ -482,14 +443,7 @@ const EditGoal = () => {
 
       <form
         onSubmit={(e) =>
-          handleSubmit(
-            e,
-            canEditTimelineOnly
-              ? "Submitted"
-              : isDraft
-                ? "Draft"
-                : formData.GoalStatus,
-          )
+          handleSubmit(e, isDraft ? "Draft" : formData.GoalStatus)
         }
         className="space-y-6"
       >
@@ -509,7 +463,6 @@ const EditGoal = () => {
                 type="number"
                 name="GoalNumber"
                 required
-                disabled={isRestrictedEdit}
                 value={formData.GoalNumber}
                 onChange={handleChange}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
@@ -524,7 +477,6 @@ const EditGoal = () => {
                 type="text"
                 name="GoalTitle"
                 required
-                disabled={isRestrictedEdit}
                 value={formData.GoalTitle}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
@@ -546,7 +498,6 @@ const EditGoal = () => {
               </label>
               <select
                 name="Priority"
-                disabled={isRestrictedEdit}
                 value={formData.Priority}
                 onChange={handleChange}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
@@ -568,7 +519,6 @@ const EditGoal = () => {
                 step="0.01"
                 name="Weightage"
                 required
-                disabled={isRestrictedEdit}
                 value={formData.Weightage}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
@@ -588,8 +538,7 @@ const EditGoal = () => {
               </label>
               <DateInput
                 name="StartDate"
-                required={!isRestrictedEdit}
-                disabled={isRestrictedEdit}
+                required
                 min={quarterRange.min}
                 max={quarterRange.max}
                 value={formData.StartDate}
@@ -603,11 +552,9 @@ const EditGoal = () => {
                   {fieldErrors.StartDate}
                 </p>
               ) : (
-                !isRestrictedEdit && (
-                  <p className="text-slate-400 text-xs mt-1">
-                    Within {formatQuarterLabel(quarterRange.quarter)}
-                  </p>
-                )
+                <p className="text-slate-400 text-xs mt-1">
+                  Within {formatQuarterLabel(quarterRange.quarter)}
+                </p>
               )}
             </div>
 
@@ -618,16 +565,12 @@ const EditGoal = () => {
               <DateInput
                 name="Timeline"
                 required
-                min={
-                  isRestrictedEdit
-                    ? minCarryForwardTimeline
-                    : formData.StartDate || quarterRange.min
-                }
+                min={formData.StartDate || quarterRange.min}
                 value={formData.Timeline}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
                   fieldErrors.Timeline ? "border-red-500" : "border-slate-300"
-                } ${canEditTimelineOnly ? "ring-2 ring-amber-400 border-amber-400 bg-amber-50/50" : ""}`}
+                }`}
               />
               {fieldErrors.Timeline && (
                 <p className="text-red-600 text-xs mt-1 font-medium">
@@ -642,7 +585,6 @@ const EditGoal = () => {
               </label>
               <select
                 name="GoalStatus"
-                disabled={isRestrictedEdit}
                 value={formData.GoalStatus}
                 onChange={handleChange}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm"
@@ -682,7 +624,6 @@ const EditGoal = () => {
               <input
                 type="text"
                 name="ValidationSource"
-                disabled={isRestrictedEdit}
                 value={formData.ValidationSource}
                 onChange={handleChange}
                 placeholder="e.g. System reports, Audit logs"
@@ -699,7 +640,6 @@ const EditGoal = () => {
                   <input
                     type="text"
                     name="JointAccountability"
-                    disabled={isRestrictedEdit}
                     value={formData.JointAccountability}
                     onChange={handleChange}
                     placeholder="Specify joint team / owner"
@@ -716,7 +656,6 @@ const EditGoal = () => {
                   <button
                     type="button"
                     onClick={addJointAccountability}
-                    disabled={isRestrictedEdit}
                     className="px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md transition disabled:opacity-50"
                   >
                     + Add Participant
@@ -733,7 +672,7 @@ const EditGoal = () => {
                       <select
                         name="UserID"
                         value={item.UserID}
-                        disabled={isRestrictedEdit || jointAccountabilityUsersLoading}
+                        disabled={jointAccountabilityUsersLoading}
                         onChange={(event) => handleJointAccountabilityChange(index, event)}
                         className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-800 disabled:bg-slate-100 focus:border-slate-800 focus:outline-none"
                       >
@@ -763,7 +702,6 @@ const EditGoal = () => {
                         maxLength={500}
                         placeholder="Contribution note"
                         value={item.ContributionNote}
-                        disabled={isRestrictedEdit}
                         onChange={(event) => handleJointAccountabilityChange(index, event)}
                         className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs disabled:bg-slate-100 focus:border-slate-800 focus:outline-none"
                       />
@@ -771,7 +709,6 @@ const EditGoal = () => {
                       <button
                         type="button"
                         onClick={() => removeJointAccountability(index)}
-                        disabled={isRestrictedEdit}
                         className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
                         aria-label={`Remove ${[item.FirstName, item.LastName].filter(Boolean).join(" ") || "joint participant"}`}
                       >
@@ -901,9 +838,7 @@ const EditGoal = () => {
               ? "Saving..."
               : isDraft
                 ? "Save as Draft"
-                : canEditTimelineOnly
-                  ? "Save Timeline & Resubmit"
-                  : "Save Goal"}
+                : "Save Goal"}
           </button>
 
           {canSubmitForApproval && (

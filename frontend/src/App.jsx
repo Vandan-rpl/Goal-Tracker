@@ -11,7 +11,6 @@ import DashboardRoute from './components/DashboardRoute';
 import ListGoal from './pages/Goals/ListGoal';
 import JointGoals from './pages/Goals/JointGoals';
 import AddGoal from './pages/Goals/AddGoal';
-import BringForwardGoal from './pages/Goals/BringForwardGoal';
 import EditGoal from './pages/Goals/EditGoal';
 import ViewGoal from './pages/Goals/ViewGoal';
 import FinalEvaluation from './pages/Goals/FinalEvaluation';
@@ -77,7 +76,6 @@ function App() {
               <Route path="/goals" element={<ListGoal />} />
               <Route path="/goals/joint" element={<JointGoals />} />
               <Route path="/goals/add" element={<AddGoal />} />
-              <Route path="/goals/bring-forward/:id" element={<BringForwardGoal />} />
               <Route path="/goals/edit/:id" element={<EditGoal />} />
               <Route path="/goals/view/:id" element={<ViewGoal />} />
               <Route path="/goals/final-evaluation" element={<FinalEvaluation />} />

@@ -5,8 +5,7 @@ const {
     getMyQuarterSummary,
     getQuarterGoalDetails,
     getAddGoalStatus,
-    getBringForwardGoals,
-    bringForwardGoal,
+    getPendingGoals,
     getJointAccountabilityUsers,
     getJointGoals,
     getAllEmployeeGoals,
@@ -45,10 +44,11 @@ router.get('/dashboard/quarter-details', getQuarterGoalDetails);
 router.get('/sheet', getGoalSheet);
 router.put('/sheet', saveGoalSheet);
 
-// Goal Management header: Add Goal availability and goals to bring
-// forward. Keep above the '/:id' routes.
+// Goal Management header: Add Goal availability, and the Add Goal page's
+// pending (overdue / will be brought forward) goals. Keep above the '/:id'
+// routes.
 router.get('/add-status', getAddGoalStatus);
-router.get('/bring-forward', getBringForwardGoals);
+router.get('/pending', getPendingGoals);
 
 router.get('/joint-accountability-users', getJointAccountabilityUsers);
 router.get('/joint-accountability', getJointGoals);
@@ -79,10 +79,6 @@ router.post('/review', submitGoalReview);
 // IMPORTANT: Keep status update route BEFORE router.put('/:id', updateGoal) 
 // so '/status/:id' matches correctly instead of treating 'status' as an ID.
 router.put('/status/:id', changeGoalStatus);
-
-// New End Date for a goal on the bring-forward list, submitted through the
-// existing carry-forward approval.
-router.put('/:id/bring-forward', bringForwardGoal);
 
 router.put('/:id', updateGoal);
 router.delete('/:id', deleteGoal);

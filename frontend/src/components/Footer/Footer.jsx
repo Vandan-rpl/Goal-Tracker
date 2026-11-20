@@ -16,7 +16,7 @@ import {
 
 const APP_NAME =
   import.meta.env.VITE_APP_NAME ||
-  "Goal Tracker Management System";
+  "GATI - Employee Excellence Portal";
 
 const APP_VERSION =
   import.meta.env.VITE_APP_VERSION ||

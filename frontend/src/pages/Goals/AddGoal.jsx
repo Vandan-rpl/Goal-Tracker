@@ -17,7 +17,7 @@ import {
 import GoalSheetRow, {
   GoalWorksheet,
 } from "../../components/GoalWorksheet/GoalWorksheet";
-import BringForwardSheet from "./BringForwardSheet";
+import PendingGoalsSection from "./PendingGoalsSection";
 import { formatDisplayDate } from "../../utils/dateTime";
 
 const MAX_GOALS_PER_QUARTER = 8;
@@ -78,7 +78,7 @@ const getRowErrors = (row, quarterRange) => {
 const AddGoal = () => {
   const navigate = useNavigate();
   const goalCreationWindow = getGoalCreationWindow();
-  // Bring forward always targets the normal next quarter.
+  // The normal target quarter (the next one) until the sheet loads.
   const currentQuarterRange = getNextFiscalQuarterDateRange();
 
   const [rows, setRows] = useState([]);
@@ -127,11 +127,6 @@ const AddGoal = () => {
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(null);
   const [removingKey, setRemovingKey] = useState(null);
-  const [bringForwardGoals, setBringForwardGoals] = useState([]);
-  // { quarter, min, max } from the server when the list is for the sheet's
-  // quarter; null means the normal next quarter (currentQuarterRange).
-  const [bringForwardTarget, setBringForwardTarget] = useState(null);
-  const [bringForwardOpen, setBringForwardOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -200,9 +195,6 @@ const AddGoal = () => {
     setAttempted(false);
     setError("");
     setSuccess("");
-    setBringForwardOpen(false);
-    setBringForwardGoals([]);
-    setBringForwardTarget(null);
     setSelectedQuarter(quarter);
   };
 
@@ -220,48 +212,6 @@ const AddGoal = () => {
 
     loadJointAccountabilityUsers();
   }, []);
-
-  // The bring-forward list follows the loaded sheet's quarter: goals ending
-  // before it starts, moved into it. When that quarter is not open for entry
-  // the server is asked without one and uses the normal next quarter.
-  const sheetQuarterLabel = sheetQuarter?.quarter || "";
-  const sheetQuarterOpen = Boolean(
-    openQuarters?.some((quarter) => quarter.quarter === sheetQuarterLabel),
-  );
-  useEffect(() => {
-    if (sheetLoading) return undefined;
-    let ignore = false;
-
-    const loadBringForwardGoals = async () => {
-      try {
-        const response = await api.get("/goals/bring-forward", {
-          params: sheetQuarterOpen ? { quarter: sheetQuarterLabel } : {},
-        });
-        if (ignore) return;
-        const data = response.data?.data || {};
-        setBringForwardGoals(data.goals || []);
-        setBringForwardTarget(
-          data.targetQuarter
-            ? {
-                quarter: data.targetQuarter.quarter,
-                min: data.targetQuarter.startDate,
-                max: data.targetQuarter.endDate,
-              }
-            : null,
-        );
-      } catch (err) {
-        console.error("Failed to load goals to bring forward", err);
-      }
-    };
-
-    loadBringForwardGoals();
-    return () => {
-      ignore = true;
-    };
-  }, [sheetLoading, sheetQuarterLabel, sheetQuarterOpen]);
-  const bringForwardRange = bringForwardTarget || currentQuarterRange;
-  const bringForwardAvailable =
-    goalCreationWindow.isOpen || Boolean(bringForwardTarget);
 
   const totalHundredths = rows.reduce(
     (total, row) => total + getWeightageHundredths(row.Weightage),
@@ -557,6 +507,9 @@ const AddGoal = () => {
               </button>
             </div>
 
+            {/* A. Add Goal sheet */}
+            <h2 className="mb-4 text-lg font-bold text-slate-900">Add Goal</h2>
+
             {error && (
               <div
                 className="mb-6 flex items-start gap-3 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700"
@@ -749,19 +702,6 @@ const AddGoal = () => {
               {/* Action Buttons */}
               <div className="flex flex-col gap-2 border-t border-slate-200 pt-6">
                 <div className="flex flex-col-reverse items-center justify-end gap-3 sm:flex-row">
-                  {/* Bring forward: the normal window, or an open quarter's sheet. */}
-                  {bringForwardAvailable && (
-                    <button
-                      type="button"
-                      onClick={() => setBringForwardOpen((open) => !open)}
-                      disabled={!bringForwardOpen && bringForwardGoals.length === 0}
-                      aria-expanded={bringForwardOpen}
-                      className="w-full cursor-pointer border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 sm:mr-auto sm:w-auto"
-                    >
-                      {bringForwardOpen ? "Hide" : "Brought forward goals"} (
-                      {bringForwardGoals.length})
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => navigate("/goals")}
@@ -793,19 +733,13 @@ const AddGoal = () => {
               </div>
             </form>
 
-            {bringForwardAvailable && bringForwardOpen && (
-              <BringForwardSheet
-                key={bringForwardRange.quarter}
-                goals={bringForwardGoals}
-                targetRange={bringForwardRange}
-                targetQuarter={bringForwardTarget?.quarter}
-                onBroughtForward={(goalIds) =>
-                  setBringForwardGoals((previous) =>
-                    previous.filter((goal) => !goalIds.includes(goal.GoalID)),
-                  )
-                }
-              />
+            {/* B. Goals that need action (overdue), then C. goals that will be
+                brought forward. Shown once the sheet's target quarter is
+                known; never blocks adding or submitting goals. */}
+            {!sheetLoading && (
+              <PendingGoalsSection targetQuarter={entryQuarterRange.quarter} />
             )}
+
             <div
               className="-mx-3 mt-4.5 flex min-h-10.5 items-stretch gap-4.5 border-t border-[#d5dce5] bg-[#f4f6fa] px-3 sm:-mx-8 sm:px-6"
               aria-hidden="true"
