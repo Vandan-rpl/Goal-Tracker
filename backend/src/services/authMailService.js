@@ -1,5 +1,6 @@
 const { sendEmail } = require("./notifyService");
 const logger = require("../utils/logger");
+const { PORTAL_NAME } = require("../constants/portalConstants");
 
 /**
  * ============================================================
@@ -90,7 +91,7 @@ const sendAuthMail = async ({ user, subject, bodyHtml, greetingHtml }) => {
                 ${testBanner}
                 ${greetingHtml || `<h3>Hello ${escapeHtml(displayName(user))},</h3>`}
                 ${bodyHtml}
-                <p style="color: #777; font-size: 12px;">This is an automated email from Goal Tracker. Please do not reply.</p>
+                <p style="color: #777; font-size: 12px;">This is an automated email from ${escapeHtml(PORTAL_NAME)}. Please do not reply.</p>
             </div>
         `,
     });
@@ -107,7 +108,7 @@ const sendPasswordResetOtpMail = ({ user, otp, validMinutes }) =>
         user,
         subject: "Password Reset OTP",
         bodyHtml: `
-                <p>We received a request to reset your Goal Tracker password. Your one-time password (OTP) is:</p>
+                <p>We received a request to reset your ${escapeHtml(PORTAL_NAME)} password. Your one-time password (OTP) is:</p>
                 <p style="font-size: 28px; font-weight: bold; letter-spacing: 6px; margin: 16px 0;">${escapeHtml(otp)}</p>
                 <p>This OTP is valid for <strong>${escapeHtml(validMinutes)} minutes</strong>. Do not share it with anyone.</p>
                 <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">If you did not request this, ignore this email; your password will not change.</p>
@@ -124,9 +125,9 @@ const sendPasswordResetOtpMail = ({ user, otp, validMinutes }) =>
 const sendPasswordChangedMail = ({ user, changedAt }) =>
     sendAuthMail({
         user,
-        subject: "Your Goal Tracker password was changed",
+        subject: `Your ${PORTAL_NAME} password was changed`,
         bodyHtml: `
-                <p>The password for your Goal Tracker account was changed using Forgot Password on <strong>${escapeHtml(formatServerDateTime(changedAt))}</strong>.</p>
+                <p>The password for your ${escapeHtml(PORTAL_NAME)} account was changed using Forgot Password on <strong>${escapeHtml(formatServerDateTime(changedAt))}</strong>.</p>
                 <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>If this was not you, contact IT immediately.</strong></p>
         `,
     });
@@ -145,10 +146,10 @@ const sendWelcomeMail = ({ user, temporaryPassword }) => {
 
     return sendAuthMail({
         user,
-        subject: "Your Goal Tracker account has been created",
+        subject: `Your ${PORTAL_NAME} account has been created`,
         greetingHtml: `<p>Dear ${escapeHtml(name)},</p>`,
         bodyHtml: `
-                <p>Your Goal Tracker account has been created.</p>
+                <p>Your ${escapeHtml(PORTAL_NAME)} account has been created.</p>
                 <p>
                     Login ID: <strong>${escapeHtml(user.Email)}</strong><br>
                     Temporary Password: <strong style="font-family: Consolas, monospace; font-size: 16px;">${escapeHtml(temporaryPassword)}</strong>

@@ -2,6 +2,7 @@ const { poolPromise } = require("../config/db");
 const ideaModel = require("../models/ideaModel");
 const { sendEmail } = require("./notifyService");
 const logger = require("../utils/logger");
+const { PORTAL_NAME } = require("../constants/portalConstants");
 const { pluralDays, formatDate } = require("../utils/ideaFormat");
 const { IdeaMailEvent } = require("../constants/ideaConstants");
 
@@ -144,7 +145,7 @@ const IDEA_MAIL_EVENTS = Object.freeze({
 });
 
 const ACTION_REQUIRED_NOTE =
-    "Action required: please open this idea in Goal Tracker to review it and approve or reject it. " +
+    `Action required: please open this idea in ${PORTAL_NAME} to review it and approve or reject it. ` +
     "Approval can only be done in the app.";
 
 const INFORMATION_NOTE = "This email is for your information only. No action is needed.";

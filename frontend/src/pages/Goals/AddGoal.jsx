@@ -353,7 +353,6 @@ const AddGoal = () => {
       JointAccountabilities: selectedJointAccountabilities.map(
         (accountability) => ({
           UserID: Number(accountability.UserID),
-          ContributionNote: accountability.ContributionNote,
         }),
       ),
     };

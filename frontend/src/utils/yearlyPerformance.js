@@ -27,12 +27,12 @@ const formatWeightPercent = (value) =>
   `${Number(Number(value || 0).toFixed(2))}%`;
 
 export const QUARTER_SCORE_FORMULA =
-  "(Achieved + Brought Forward + Brought Forward Overdue + Overdue Achieved) ÷ Allocated";
+  "(Achieved + Brought Forward + Brought Forward Overdue + Overdue Achieved) ÷ (Allocated + weightage of earlier goals still pending at the start of the quarter) × 100";
 
 export const QUARTER_SCORE_TITLE = `Quarter Score = ${QUARTER_SCORE_FORMULA} for this quarter.`;
 
 export const YEAR_SCORE_FORMULA =
-  "(Achieved + Brought Forward + Brought Forward Overdue + Overdue Achieved) ÷ Allocated, totalled over the quarters that have started";
+  "(Achieved + Brought Forward + Brought Forward Overdue + Overdue Achieved, totalled across Q1–Q4) ÷ 400 × 100";
 
 // Kept for existing imports (Team Reports column titles).
 export const QUARTER_COMPLETION_TITLE = QUARTER_SCORE_TITLE;

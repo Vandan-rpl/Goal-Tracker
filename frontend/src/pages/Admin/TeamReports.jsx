@@ -24,7 +24,7 @@ import {
 
 // Manager/HOD/Business Head view of Reports & Analytics, limited to their
 // active direct reports (for a Business Head, active employees under them).
-// Every quarter and Quarter Average figure comes from the server's Final
+// Every Quarter Score and Year Score figure comes from the server's Final
 // Evaluation calculation (GET analytics/team-performance).
 
 const FUTURE_FILL = "#D1D5DB";
@@ -114,8 +114,8 @@ const TeamView = ({ members, fiscalYear, onSelect }) => {
   const chartMembers = useMemo(
     () =>
       members
-        .filter((member) => member.QuarterAveragePercentage != null)
-        .sort(compareMembers((member) => member.QuarterAveragePercentage, "asc")),
+        .filter((member) => member.YearScorePercentage != null)
+        .sort(compareMembers((member) => member.YearScorePercentage, "asc")),
     [members],
   );
   const unscoredCount = members.length - chartMembers.length;
@@ -137,9 +137,9 @@ const TeamView = ({ members, fiscalYear, onSelect }) => {
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-bold text-gray-800">Quarter Average by team member</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          {fiscalYearLabel(fiscalYear)}, started quarters only. Select a member to see their quarters.
+        <h2 className="text-lg font-bold text-gray-800">Year Score by team member</h2>
+        <p className="text-sm text-gray-500 mt-1" title={YEAR_SCORE_FORMULA}>
+          {fiscalYearLabel(fiscalYear)}. Year Score = {YEAR_SCORE_FORMULA}. Select a member to see their quarters.
         </p>
       </div>
 
@@ -169,8 +169,8 @@ const TeamView = ({ members, fiscalYear, onSelect }) => {
                 />
                 <Tooltip formatter={(value) => formatScorePercent(value)} />
                 <Bar
-                  dataKey="QuarterAveragePercentage"
-                  name="Quarter Average"
+                  dataKey="YearScorePercentage"
+                  name="Year Score"
                   fill="#2c3e82"
                   radius={[0, 4, 4, 0]}
                   cursor="pointer"

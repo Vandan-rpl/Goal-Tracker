@@ -2,6 +2,7 @@ const { poolPromise } = require("../config/db");
 const goalModel = require("../models/goalModel");
 const { sendEmail } = require("./notifyService");
 const logger = require("../utils/logger");
+const { PORTAL_NAME } = require("../constants/portalConstants");
 const { getFiscalQuarterBoundsFromLabel } = require("../utils/fiscalQuarter");
 const { GoalMailEvent } = require("../constants/goalConstants");
 
@@ -63,19 +64,19 @@ const GOAL_MAIL_EVENTS = Object.freeze({
     ],
   },
   [GoalMailEvent.CFO_REVIEWED]: {
-    purpose: "Goal reviewed by Business Head",
+    purpose: "Goal reviewed by CFO",
     actionRequired: false,
-    message: () => "Your goal has been reviewed by the Business Head.",
+    message: () => "Your goal has been reviewed by the CFO.",
     details: (goal, context) => [
       ["Rating", `${context.rating}/5`],
       ["Comment", noComment(context.comment, "No comment provided")],
     ],
   },
   [GoalMailEvent.CFO_REVIEWED_APPROVER]: {
-    purpose: "Goal reviewed by Business Head",
+    purpose: "Goal reviewed by CFO",
     actionRequired: false,
     message: (goal) =>
-      `The goal of ${goal.OwnerName}, which you approved, has now been reviewed by the Business Head.`,
+      `The goal of ${goal.OwnerName}, which you approved, has now been reviewed by the CFO.`,
     details: (goal, context) => [
       ["Rating", `${context.rating}/5`],
       ["Comment", noComment(context.comment, "No comment provided")],
@@ -131,10 +132,18 @@ const GOAL_MAIL_EVENTS = Object.freeze({
     link: (context) => `/goals/final-evaluation/${context.userId}`,
     linkText: "View Evaluation",
   },
+  [GoalMailEvent.DUE_REMINDER]: {
+    purpose: "Goal end date approaching",
+    actionRequired: false,
+    message: (goal, context) =>
+      `This is a reminder that your goal ends in ${context.daysLeft} day${context.daysLeft === 1 ? "" : "s"}. ` +
+      `Please make sure it is completed and updated in ${PORTAL_NAME} before the end date.`,
+    details: (goal, context) => [["End date", context.endDate]],
+  },
 });
 
 const ACTION_REQUIRED_NOTE =
-  "Action required: please open this goal in Goal Tracker to review it and approve or reject it. " +
+  `Action required: please open this goal in ${PORTAL_NAME} to review it and approve or reject it. ` +
   "Approval can only be done in the app.";
 
 const INFORMATION_NOTE = "This email is for your information only. No action is needed.";

@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const { sql } = require('../config/db');
 const { getIO } = require('../sockets/io');
+const { PORTAL_NAME } = require('../constants/portalConstants');
 
 // Single shared transporter, reusing the same env vars every controller was
 // each configuring separately (EMAIL_HOST / EMAIL_PORT / EMAIL_USER / EMAIL_PASS).
@@ -17,7 +18,11 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-const MAIL_FROM = process.env.EMAIL_USER || '"GOAL TRACKER" <no-reply@pms.com>';
+// Sender shown in the inbox as the portal name, from the EMAIL_USER address.
+const MAIL_FROM = {
+    name: PORTAL_NAME,
+    address: process.env.EMAIL_USER || 'no-reply@pms.com'
+};
 
 /**
  * sendEmail

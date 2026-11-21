@@ -508,15 +508,6 @@ const GoalSheetRow = ({
                     </option>
                   ))}
                 </select>
-                <input
-                  className={`${worksheetControlClass} min-w-0 flex-1 border-l-[#e4e9f0]`}
-                  aria-label={`Goal ${goalNumber} joint employee ${jaIndex + 1} contribution`}
-                  type="text"
-                  name="ContributionNote"
-                  placeholder="Contribution"
-                  value={ja.ContributionNote}
-                  onChange={(e) => handleJointAccountabilityChange(ja.key, e)}
-                />
                 <button
                   type="button"
                   className={worksheetLineRemoveClass}
@@ -551,13 +542,6 @@ const GoalSheetRow = ({
                   aria-label={`Goal ${goalNumber} joint employee ${jaIndex + 1}`}
                   type="text"
                   value={getJointEmployeeName(ja)}
-                  readOnly
-                />
-                <input
-                  className={`${worksheetControlClass} min-w-0 flex-1 border-l-[#e4e9f0]`}
-                  aria-label={`Goal ${goalNumber} joint employee ${jaIndex + 1} contribution`}
-                  type="text"
-                  value={ja.ContributionNote}
                   readOnly
                 />
               </div>

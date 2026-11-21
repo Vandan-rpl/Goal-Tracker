@@ -42,13 +42,13 @@ const logTaskMailMode = () => {
 // " - Project: X" on project task subjects, "" on personal tasks.
 const projectSuffix = (task) => (task.ProjectName ? ` - Project: ${task.ProjectName}` : "");
 
-// Who acted: "Business Head", or a Manager by name (project tasks).
+// Who acted: "CFO", or a Manager by name (project tasks).
 const actorLabel = (role, name) =>
-    String(role || "").toUpperCase() === "MANAGER" ? `${name || "your Manager"} (Manager)` : "Business Head";
+    String(role || "").toUpperCase() === "MANAGER" ? `${name || "your Manager"} (Manager)` : "CFO";
 
-// The same at the start of a sentence: "The Business Head" / "Name (Manager)".
+// The same at the start of a sentence: "The CFO" / "Name (Manager)".
 const actorSentence = (role, name) =>
-    String(role || "").toUpperCase() === "MANAGER" ? actorLabel(role, name) : "The Business Head";
+    String(role || "").toUpperCase() === "MANAGER" ? actorLabel(role, name) : "The CFO";
 
 // Project tasks call the remarks "Manager / CFO Remarks".
 const remarksLabel = (task) => (task.ProjectName ? "Manager / CFO Remarks" : "CFO's Remarks");
@@ -63,7 +63,7 @@ const TASK_MAIL_EVENTS = Object.freeze({
         subject: (task) => `New task assigned to you by ${actorLabel(task.AssignedByRole, task.AssignedByName)}${projectSuffix(task)}`,
         message: (task) => (task.ProjectName
             ? `${actorSentence(task.AssignedByRole, task.AssignedByName)} has assigned a new task to you in the project "${task.ProjectName}".`
-            : "The Business Head has assigned a new task to you."),
+            : "The CFO has assigned a new task to you."),
         details: (task) => [
             ["Project", task.ProjectName],
             ["Task Name", task.TaskName],

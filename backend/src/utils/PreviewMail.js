@@ -69,6 +69,8 @@ const sampleContext = {
     weightedScore: 3.8,
     status: "Completed",
     userId: 7,
+    daysLeft: 5,               // goal due reminder (DUE_REMINDER)
+    endDate: "26 Nov 2026",
 };
 
 const sampleGoals = {

@@ -12,10 +12,8 @@ import {
 } from '../../utils/yearlyPerformance';
 import { getGoalStatusLabel } from "../../utils/goalStatus";
 
-// Final Evaluation shows the categories and Year Score, not the Quarter Score.
-const FINAL_EVALUATION_COLUMNS = EVALUATION_COLUMNS.filter(
-  (column) => column.label !== 'Quarter Score',
-);
+// Final Evaluation shows the categories, the Quarter Score and the Year Score.
+const FINAL_EVALUATION_COLUMNS = EVALUATION_COLUMNS;
 
 // Simple hand-rolled SVG gauge — no charting library needed, keeps this
 // page consistent with the rest of the (plain Tailwind, zero-extra-deps)

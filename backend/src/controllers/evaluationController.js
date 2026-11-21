@@ -11,6 +11,7 @@ const {
 const {
     isAllocatedGoal,
     isCompletedWithin,
+    completionMarkedDate,
     evaluationCategory,
     isOverdueGoal
 } = require('../constants/goalQuarterRules');
@@ -190,15 +191,21 @@ const getGoalsWithRatings = async (pool, userId) => {
 //   Brought Forward         (E > S, S < C <= E)
 //   Brought Forward Overdue (E > S, C > E)
 //   Overdue Achieved        (E = S, C > S)
-// Allocated is unchanged: approved goals whose start quarter is this quarter.
-// Quarter Score = (sum of the four) / Allocated, uncapped.
+// Allocated: approved goals whose start quarter is this quarter.
+// Brought Forward Allocated / Overdue Allocated (server only, not shown):
+// with D = the quarter's first day, approved goals that started before D
+// (any fiscal year) and were not completed before D (completion approved and
+// marked before D). End Date on or after D -> Brought Forward Allocated,
+// before D -> Overdue Allocated. A goal pending at the start of several
+// quarters counts in each of them.
+// Quarter Score = (sum of the four) / (Allocated + Brought Forward Allocated
+// + Overdue Allocated), uncapped.
 const getYearlyPerformance = async (pool, userId, fiscalYear) => {
     const fiscalQuarters = [1, 2, 3, 4].map((quarterNumber) =>
         getFiscalQuarterBoundsFromLabel(`Q${quarterNumber}-${fiscalYear}`),
     );
     const quarterSummaryRequest = pool.request()
         .input('UserID', sql.Int, userId)
-        .input('FiscalYearStart', sql.Date, fiscalQuarters[0].startKey)
         .input('Today', sql.Date, formatLocalDateKey(new Date()));
     fiscalQuarters.forEach((quarter, index) => {
         quarterSummaryRequest
@@ -224,7 +231,8 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
                ISNULL(categories.BroughtForward, 0) AS CategoryBroughtForward,
                ISNULL(categories.BroughtForwardOverdue, 0) AS CategoryBroughtForwardOverdue,
                ISNULL(categories.OverdueAchieved, 0) AS CategoryOverdueAchieved,
-               ISNULL(categories.InYearTotal, 0) AS InYearCategoryTotal,
+               ISNULL(pending.BroughtForwardAllocated, 0) AS BroughtForwardAllocated,
+               ISNULL(pending.OverdueAllocated, 0) AS OverdueAllocated,
                ISNULL(overdue.OverdueCount, 0) AS OverdueCount
         FROM FiscalQuarters q
         OUTER APPLY (
@@ -240,10 +248,7 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
             SELECT SUM(CASE WHEN c.Category = 'Achieved' THEN c.Weightage ELSE 0 END) AS Achieved,
                    SUM(CASE WHEN c.Category = 'BroughtForward' THEN c.Weightage ELSE 0 END) AS BroughtForward,
                    SUM(CASE WHEN c.Category = 'BroughtForwardOverdue' THEN c.Weightage ELSE 0 END) AS BroughtForwardOverdue,
-                   SUM(CASE WHEN c.Category = 'OverdueAchieved' THEN c.Weightage ELSE 0 END) AS OverdueAchieved,
-                   -- Only goals whose start quarter is in this fiscal year;
-                   -- used by the Year Score so it never counts last year's goals.
-                   SUM(CASE WHEN g.QuarterEndDate >= @FiscalYearStart THEN c.Weightage ELSE 0 END) AS InYearTotal
+                   SUM(CASE WHEN c.Category = 'OverdueAchieved' THEN c.Weightage ELSE 0 END) AS OverdueAchieved
             FROM dbo.Goals g
             CROSS APPLY (
                 SELECT ${evaluationCategory('g', 'q.StartDate')} AS Category,
@@ -252,6 +257,23 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
             WHERE g.UserID = @UserID
               AND ${isCompletedWithin('g', 'q.StartDate', 'q.EndDate')}
         ) categories
+        OUTER APPLY (
+            -- Goals pending at the start of this quarter (D = q.StartDate).
+            SELECT SUM(CASE WHEN p.Bucket = 'BroughtForward' THEN p.Weightage ELSE 0 END) AS BroughtForwardAllocated,
+                   SUM(CASE WHEN p.Bucket = 'Overdue' THEN p.Weightage ELSE 0 END) AS OverdueAllocated
+            FROM dbo.Goals g
+            CROSS APPLY (
+                SELECT CASE WHEN g.Timeline >= q.StartDate THEN 'BroughtForward' ELSE 'Overdue' END AS Bucket,
+                       COALESCE(g.Weightage, 0) AS Weightage
+            ) p
+            WHERE g.UserID = @UserID
+              AND ${isAllocatedGoal('g')}
+              AND g.StartDate < q.StartDate
+              AND NOT (
+                  g.GoalStatus = 'Completed'
+                  AND ${completionMarkedDate('g')} < q.StartDate
+              )
+        ) pending
         OUTER APPLY (
             SELECT COUNT(*) AS OverdueCount
             FROM dbo.Goals g
@@ -268,15 +290,23 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
     const round2 = (value) => Math.round(Number(value || 0) * 100) / 100;
 
     const quarters = quarterSummaryResult.recordset.map((row) => {
+        // Brought Forward / Overdue Allocated are used only for the Quarter
+        // Score; they are not sent to the client.
+        const { BroughtForwardAllocated, OverdueAllocated, ...displayRow } = row;
         const bounds = fiscalQuarters.find((quarter) => quarter.label === row.SummaryQuarter);
         const categoryTotal =
             Number(row.CategoryAchieved || 0) +
             Number(row.CategoryBroughtForward || 0) +
             Number(row.CategoryBroughtForwardOverdue || 0) +
             Number(row.CategoryOverdueAchieved || 0);
-        const quarterScore = calculateQuarterScore(row.SummaryAllocated, categoryTotal);
+        const quarterScore = calculateQuarterScore(
+            Number(row.SummaryAllocated || 0) +
+                Number(BroughtForwardAllocated || 0) +
+                Number(OverdueAllocated || 0),
+            categoryTotal,
+        );
         return {
-            ...row,
+            ...displayRow,
             Quarter: row.SummaryQuarter.split('-')[0],
             SummaryAllocated: round2(row.SummaryAllocated),
             CategoryAchieved: round2(row.CategoryAchieved),
@@ -284,7 +314,6 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
             CategoryBroughtForwardOverdue: round2(row.CategoryBroughtForwardOverdue),
             CategoryOverdueAchieved: round2(row.CategoryOverdueAchieved),
             CategoryTotal: round2(categoryTotal),
-            InYearCategoryTotal: round2(row.InYearCategoryTotal),
             QuarterScorePercentage: quarterScore,
             // Kept for Reports & Analytics: same value as the Quarter Score.
             QuarterCompletionPercentage: quarterScore,
@@ -296,57 +325,32 @@ const getYearlyPerformance = async (pool, userId, fiscalYear) => {
         FiscalYear: fiscalYear,
         Quarters: quarters,
         YearScorePercentage: calculateYearScore(quarters),
-        QuarterAveragePercentage: calculateQuarterAverage(quarters),
         ToDateLabel: getToDateLabel(quarters)
     };
 };
 
 // Quarter Score % = (Achieved + Brought Forward + Brought Forward Overdue +
-// Overdue Achieved) / Allocated x 100 for that quarter. All four are counted
-// in the quarter the user marked the goal complete. Not capped: it can pass
-// 100% when earlier quarters' goals are completed in this quarter. Null (no
-// score, not 0%) when nothing is allocated; such quarters are left out of the
-// Quarter Average. Rounded to 2 decimal places.
-const calculateQuarterScore = (allocated, categoryTotal) => {
-    const allocatedValue = Number(allocated || 0);
-    if (allocatedValue <= 0) return null;
-    return Math.round((Number(categoryTotal || 0) / allocatedValue) * 100 * 100) / 100;
-};
-
-// Quarter Average % = mean of the Quarter Score % of the quarters that have
-// started, skipping quarters with nothing allocated (Quarter Score "-").
-// Display only (Reports & Analytics). Returns null when no started quarter
-// has a score. Rounded to 2 decimal places.
-const calculateQuarterAverage = (quarters) => {
-    const scores = quarters
-        .filter((quarter) => !quarter.isFuture && quarter.QuarterScorePercentage != null)
-        .map((quarter) => Number(quarter.QuarterScorePercentage));
-
-    if (scores.length === 0) return null;
-    const total = scores.reduce((sum, value) => sum + value, 0);
-    return Math.round((total / scores.length) * 100) / 100;
+// Overdue Achieved) / (Allocated + Brought Forward Allocated + Overdue
+// Allocated) x 100 for that quarter. All four are counted in the quarter the
+// user marked the goal complete. Not capped. Null (shown as "-", not 0%) when
+// the denominator is 0. Rounded to 2 decimal places.
+const calculateQuarterScore = (denominator, categoryTotal) => {
+    const denominatorValue = Number(denominator || 0);
+    if (denominatorValue <= 0) return null;
+    return Math.round((Number(categoryTotal || 0) / denominatorValue) * 100 * 100) / 100;
 };
 
 // Year Score % = (Achieved + Brought Forward + Brought Forward Overdue +
-// Overdue Achieved, totalled) / total Allocated x 100, over the quarters of
-// one fiscal year that have started. Not an average of quarter scores: a
-// quarter with nothing allocated adds 0 to both totals, and quarters that
-// have not started are left out (the full-year score is final after Q4).
-// Categories count only goals whose start quarter is in the same fiscal
-// year. Returns null when nothing is allocated. Rounded to 2 decimal places.
+// Overdue Achieved, totalled across Q1-Q4 of the fiscal year) / 400 x 100.
+// Always divided by 400, however many quarters have goals or have started.
+// Not an average of quarter scores. Not capped. Rounded to 2 decimal places.
+const YEAR_SCORE_DENOMINATOR = 400;
 const calculateYearScore = (quarters) => {
-    const totals = quarters
-        .filter((quarter) => !quarter.isFuture)
-        .reduce(
-            (sum, quarter) => ({
-                allocated: sum.allocated + Number(quarter.SummaryAllocated || 0),
-                achieved: sum.achieved + Number(quarter.InYearCategoryTotal || 0)
-            }),
-            { allocated: 0, achieved: 0 },
-        );
-
-    if (totals.allocated <= 0) return null;
-    return Math.round((totals.achieved / totals.allocated) * 100 * 100) / 100;
+    const achieved = quarters.reduce(
+        (sum, quarter) => sum + Number(quarter.CategoryTotal || 0),
+        0,
+    );
+    return Math.round((achieved / YEAR_SCORE_DENOMINATOR) * 100 * 100) / 100;
 };
 
 // Which quarters have started, e.g. "Q1–Q3 to date" or "Full year".

@@ -308,7 +308,7 @@ const getFiscalYearOptions = async (pool, userIds, currentFiscalYear) => {
  * direct report (for a Business Head, per active employee under them),
  * narrowed to departmentId when given.
  * With employeeId (must be an active direct report): that employee's
- * quarter rows. Every quarter and Quarter Average figure comes from
+ * quarter rows. Every Quarter Score and Year Score figure comes from
  * getYearlyPerformance, the calculation behind the Final Evaluation page.
  */
 const getTeamPerformance = async (req, res) => {
@@ -425,7 +425,7 @@ const getTeamPerformance = async (req, res) => {
                 })),
                 CompletedCount: started.reduce((sum, quarter) => sum + Number(quarter.CompletedCount || 0), 0),
                 CountedGoalCount: started.reduce((sum, quarter) => sum + Number(quarter.CountedGoalCount || 0), 0),
-                QuarterAveragePercentage: performance.QuarterAveragePercentage
+                YearScorePercentage: performance.YearScorePercentage
             };
         });
 
