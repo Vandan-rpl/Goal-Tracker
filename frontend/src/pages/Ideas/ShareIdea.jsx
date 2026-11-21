@@ -14,6 +14,7 @@ import {
   updateIdeaDraft,
 } from "../../services/ideaService";
 import { IDEAS_HOME_PATH } from "../../utils/ideasMenu";
+import { getIdeaStatusLabel } from "../../utils/ideaStatus";
 
 const TITLE_MAX = 150;
 const DESCRIPTION_MAX = 2000;
@@ -173,7 +174,7 @@ const ShareIdea = () => {
         if (!idea.CanEdit) {
           toast.error(
             idea.Status !== "Draft"
-              ? `${idea.IdeaNumber} is ${idea.Status} and can no longer be edited.`
+              ? `${idea.IdeaNumber} is ${getIdeaStatusLabel(idea.Status)} and can no longer be edited.`
               : "You can only edit your own draft ideas.",
           );
           navigate(IDEAS_HOME_PATH, { replace: true });

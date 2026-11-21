@@ -18,8 +18,8 @@ import { getIdeaApiError, getIdeaDashboard } from "../../services/ideaService";
 import { formatIdeaDate } from "../../utils/ideaStatus";
 
 const STATUS_COLORS = {
-  "Pending with Reporting Manager": C.amber,
-  "Pending Final Approval": "#1f8a9d",
+  "HOD/Manager approval pending": C.amber,
+  "Final approval pending": "#1f8a9d",
   "In Implementation": C.navy,
   Overdue: C.red,
   Implemented: C.green,
@@ -92,8 +92,8 @@ const IdeaDashboard = () => {
             gridClassName="grid-cols-2 md:grid-cols-4 xl:grid-cols-8"
             cards={[
               { label: "Total Ideas", value: summary.total, accent: "text-[#2c3e82]" },
-              { label: "Pending with Reporting Manager", value: summary.pendingManager, accent: "text-[#d08a1c]" },
-              { label: "Pending Final Approval", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
+              { label: "HOD/Manager approval pending", value: summary.pendingManager, accent: "text-[#d08a1c]" },
+              { label: "Final approval pending", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
               { label: "In Implementation", value: summary.inImplementation, accent: "text-[#2c3e82]" },
               { label: "Implemented", value: summary.implemented, accent: "text-[#1f9d6b]" },
               { label: "Rejected", value: summary.rejected, accent: "text-[#b3403f]" },
@@ -141,7 +141,9 @@ const IdeaDashboard = () => {
                       <td className={`${cellClass} whitespace-nowrap`}>{formatIdeaDate(idea.SubmittedDate)}</td>
                       <td className={`${cellClass} whitespace-nowrap`}>{formatIdeaDate(idea.TargetDate)}</td>
                       <td className={cellClass}>
-                        <IdeaStatusBadge status={idea.Status} overdue={idea.IsOverdue} pendingRequest={idea.PendingRequestType} />
+                        {/* One status per idea, as in the Status Breakdown:
+                            an idea past its target date shows as Overdue only. */}
+                        <IdeaStatusBadge status={idea.IsOverdue ? "Overdue" : idea.Status} />
                       </td>
                     </tr>
                   ))}

@@ -167,7 +167,7 @@ router.get(
 /**
  * Track Idea (users with direct reports, CFO / Admin; only ideas they may
  * see, never Drafts). Filled-in filters must all match.
- * GET /api/v1/ideas/track?ideaNumber=&submittedDate=&initiatedBy=&page=&pageSize=
+ * GET /api/v1/ideas/track?ideaNumber=&ideaName=&submittedDate=&initiatedBy=&page=&pageSize=
  */
 router.get(
     "/track",

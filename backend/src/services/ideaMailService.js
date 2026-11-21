@@ -4,7 +4,7 @@ const { sendEmail } = require("./notifyService");
 const logger = require("../utils/logger");
 const { PORTAL_NAME } = require("../constants/portalConstants");
 const { pluralDays, formatDate } = require("../utils/ideaFormat");
-const { IdeaMailEvent } = require("../constants/ideaConstants");
+const { IdeaMailEvent, getIdeaStatusLabel } = require("../constants/ideaConstants");
 
 /**
  * ============================================================
@@ -102,7 +102,7 @@ const IDEA_MAIL_EVENTS = Object.freeze({
         purpose: "Closure rejected",
         actionRequired: false,
         message: (idea) =>
-            `Your request to close this idea has been rejected by your reporting manager, ${idea.LeadName}. The idea stays ${idea.Status}.`,
+            `Your request to close this idea has been rejected by your reporting manager, ${idea.LeadName}. The idea stays ${getIdeaStatusLabel(idea.Status)}.`,
         details: (idea, context) => [["Rejection remark", context.remark]],
     },
     [IdeaMailEvent.EXTENSION_REQUESTED]: {

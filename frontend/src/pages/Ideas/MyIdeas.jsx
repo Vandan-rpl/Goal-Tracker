@@ -9,7 +9,7 @@ import IdeaStatusBadge from "../../components/IdeaStatusBadge/IdeaStatusBadge";
 import IdeaCountBoxes from "../../components/IdeaCountBoxes/IdeaCountBoxes";
 import TablePagination from "../../components/TablePagination/TablePagination";
 import { getIdeaApiError, getIdeaPurposes, getMyIdeas } from "../../services/ideaService";
-import { IDEA_STATUSES, formatIdeaDate } from "../../utils/ideaStatus";
+import { IDEA_STATUSES, formatIdeaDate, getIdeaStatusLabel } from "../../utils/ideaStatus";
 
 const PAGE_SIZE = 10;
 const COLUMN_COUNT = 7;
@@ -19,7 +19,7 @@ const COUNT_BOXES = [
   { label: "Total", status: "" },
   { label: "Drafts", status: "Draft" },
   { label: "Submitted", status: "Submitted" },
-  { label: "Pending Final Approval", status: "Pending Final Approval" },
+  { label: "Final approval pending", status: "Pending Final Approval" },
   { label: "Active", status: "Active" },
   { label: "In Implementation", status: "In Implementation" },
   { label: "Implemented", status: "Implemented" },
@@ -214,7 +214,7 @@ const MyIdeas = () => {
               <option value="">All Statuses</option>
               {IDEA_STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {getIdeaStatusLabel(s)}
                 </option>
               ))}
             </select>

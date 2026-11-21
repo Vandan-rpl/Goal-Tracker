@@ -29,6 +29,13 @@ const IdeaStatus = Object.freeze({
 
 const IDEA_STATUSES = Object.freeze(Object.values(IdeaStatus));
 
+// Display wording for stored statuses whose name differs on screen (same as
+// the frontend utils/ideaStatus.js). The stored value is unchanged.
+const IDEA_STATUS_LABELS = Object.freeze({
+  [IdeaStatus.PENDING_FINAL_APPROVAL]: "Final approval pending",
+});
+const getIdeaStatusLabel = (status) => IDEA_STATUS_LABELS[status] || status;
+
 // Overdue = status is one of these AND TargetDate is before today (dates
 // only). Used by every API that returns an overdue flag.
 const IDEA_OVERDUE_STATUSES = Object.freeze([
@@ -229,6 +236,7 @@ module.exports = {
   IDEA_PURPOSES,
   IdeaStatus,
   IDEA_STATUSES,
+  getIdeaStatusLabel,
   IDEA_OVERDUE_STATUSES,
   IdeaAction,
   IdeaRequestType,

@@ -49,7 +49,7 @@ const PortalBrand = ({ className = "", compact = false }) => (
     <GatiWordmark
       className={`${compact ? "mt-3 text-4xl tracking-[0.18em] pl-[0.18em]" : "mt-4 text-5xl tracking-[0.2em] pl-[0.2em]"} [&>span]:bg-linear-to-b [&>span]:from-[#ff3348] [&>span]:to-[#a30b1e]`}
     />
-    <p className={`${compact ? "mt-1.5 text-sm" : "mt-2 text-base"} font-bold text-slate-800`}>{PORTAL_TITLE}</p>
+    <p className={`${compact ? "mt-1.5 text-sm" : "mt-2 text-base"} font-bold text-[#e8102a]`}>{PORTAL_TITLE}</p>
 
     <div className={`${compact ? "mt-3 gap-1" : "mt-4 gap-1.5"} grid grid-cols-4`}>
       {PORTAL_PILLARS.map((word) => (

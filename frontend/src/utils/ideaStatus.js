@@ -17,7 +17,18 @@ const IDEA_STATUS_CLASSES = {
   "In Implementation": "bg-orange-100 text-orange-800",
   Implemented: "bg-emerald-100 text-emerald-800",
   Rejected: "bg-red-100 text-red-800",
+  // Display-only label (not a stored status): an In Implementation idea past
+  // its target date, shown as its single status on the dashboard.
+  Overdue: "bg-red-100 text-red-800",
 };
+
+// Display wording for stored statuses whose name differs on screen. The
+// stored value (used for filters and the API) is unchanged.
+const IDEA_STATUS_LABELS = {
+  "Pending Final Approval": "Final approval pending",
+};
+
+export const getIdeaStatusLabel = (status) => IDEA_STATUS_LABELS[status] || status;
 
 // Tailwind classes for a status label (rounded-full pill like the goal tables).
 export const getIdeaStatusClasses = (status) =>

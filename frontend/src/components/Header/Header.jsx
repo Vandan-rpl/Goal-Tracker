@@ -200,7 +200,7 @@ const Header = () => {
             letterClassName="bg-clip-text text-transparent bg-linear-to-b from-[#ff3348] to-[#a30b1e]"
           />
           <div className="ml-3 hidden lg:block leading-tight">
-            <p className="text-[13px] font-bold text-slate-800">{PORTAL_TITLE}</p>
+            <p className="text-[13px] font-bold text-[#e8102a]">{PORTAL_TITLE}</p>
             <p className="mt-0.5 text-[11px] text-slate-500 whitespace-nowrap">
               {PORTAL_PILLARS.map((word, i) => (
                 <React.Fragment key={word}>

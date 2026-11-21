@@ -8,6 +8,7 @@ const { parseReportQuery, getBusinessHeadTeam, buildReport } = require("../utils
 const {
     IDEA_PURPOSES,
     IdeaStatus,
+    getIdeaStatusLabel,
     IDEA_STATUSES,
     IdeaAction,
     IdeaActor,
@@ -150,7 +151,7 @@ const getOwnDraft = async (db, ideaId, userId, lock = false) => {
 
     if (idea.Status !== IdeaStatus.DRAFT) {
         throw new AppError(
-            `This idea is already ${idea.Status} and can no longer be changed.`,
+            `This idea is already ${getIdeaStatusLabel(idea.Status)} and can no longer be changed.`,
             StatusCodes.CONFLICT
         );
     }
@@ -995,8 +996,8 @@ const assertCanTrackIdeas = async (user) => {
 };
 
 /**
- * Validate the Track Idea query: ideaNumber, submittedDate (YYYY-MM-DD),
- * initiatedBy, page, pageSize. At least one filter is required; blank ones
+ * Validate the Track Idea query: ideaNumber, ideaName (part of the title),
+ * submittedDate (YYYY-MM-DD), initiatedBy, page, pageSize. At least one filter is required; blank ones
  * are ignored. Throws 400 with every problem listed.
  */
 const parseTrackIdeaQuery = (query = {}) => {
@@ -1015,6 +1016,7 @@ const parseTrackIdeaQuery = (query = {}) => {
 
     const filters = {
         ideaNumber: text(query.ideaNumber),
+        ideaName: text(query.ideaName),
         submittedDate: text(query.submittedDate),
         initiatedBy: positiveInt(text(query.initiatedBy), "Initiated by"),
     };
@@ -1023,12 +1025,22 @@ const parseTrackIdeaQuery = (query = {}) => {
         errors.push(`Idea number cannot exceed ${TRACK_IDEA_NUMBER_MAX_LENGTH} characters.`);
     }
 
+    if (filters.ideaName.length > IDEA_TITLE_MAX_LENGTH) {
+        errors.push(`Idea name cannot exceed ${IDEA_TITLE_MAX_LENGTH} characters.`);
+    }
+
     if (filters.submittedDate && !isValidDateKey(filters.submittedDate)) {
         errors.push("Idea date must be a date in YYYY-MM-DD format.");
     }
 
-    if (!filters.ideaNumber && !filters.submittedDate && !filters.initiatedBy && errors.length === 0) {
-        errors.push("Enter an idea number, an idea date or an employee to search for.");
+    if (
+        !filters.ideaNumber &&
+        !filters.ideaName &&
+        !filters.submittedDate &&
+        !filters.initiatedBy &&
+        errors.length === 0
+    ) {
+        errors.push("Enter an idea number, an idea name, an idea date or an employee to search for.");
     }
 
     const page = positiveInt(query.page, "Page") || 1;
@@ -1119,8 +1131,8 @@ const getDashboard = async (user) => {
 
     const count = (...groups) => ideas.filter((idea) => groups.includes(idea.DashboardStatus)).length;
 
-    const pendingManager = count("Pending with Reporting Manager");
-    const pendingFinal = count("Pending Final Approval");
+    const pendingManager = count("HOD/Manager approval pending");
+    const pendingFinal = count("Final approval pending");
     const inImplementation = count("In Implementation");
     const closurePending = count("Closure Pending");
     const overdue = count("Overdue");
@@ -1142,8 +1154,8 @@ const getDashboard = async (user) => {
         },
         // Rejected ideas are only a card, not part of this table.
         statusBreakdown: [
-            { label: "Pending with Reporting Manager", count: pendingManager },
-            { label: "Pending Final Approval", count: pendingFinal },
+            { label: "HOD/Manager approval pending", count: pendingManager },
+            { label: "Final approval pending", count: pendingFinal },
             { label: "In Implementation", count: inImplementation + closurePending },
             { label: "Overdue", count: overdue },
             { label: "Implemented", count: implemented },
@@ -1164,8 +1176,8 @@ const getDashboard = async (user) => {
 // Reports & Analytics: the CFO (Business Head) only, like the Goal
 // Tracker's Business Head report.
 const IDEA_REPORT_STATUSES = [
-    "Pending with Reporting Manager",
-    "Pending Final Approval",
+    "HOD/Manager approval pending",
+    "Final approval pending",
     "In Implementation", "Overdue", "Implemented", "Rejected"];
 
 // Ideas that got final approval (implementation % is out of these).
@@ -1207,8 +1219,8 @@ const getReport = async (user, query) => {
         ...report,
         Summary: {
             total: ideas.length,
-            pendingManager: counts["Pending with Reporting Manager"],
-            pendingFinal: counts["Pending Final Approval"],
+            pendingManager: counts["HOD/Manager approval pending"],
+            pendingFinal: counts["Final approval pending"],
             // Every idea in implementation now, overdue ones included.
             inImplementation: (counts["In Implementation"] || 0) + (counts.Overdue || 0),
             overdue: counts.Overdue,

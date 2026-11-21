@@ -27,14 +27,16 @@ const TrackIdea = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const urlIdeaNumber = searchParams.get("ideaNumber") || "";
+  const urlIdeaName = searchParams.get("ideaName") || "";
   const urlSubmittedDate = searchParams.get("submittedDate") || "";
   const urlInitiatedBy = searchParams.get("initiatedBy") || "";
   const urlPage = Math.max(1, Number(searchParams.get("page")) || 1);
-  const hasSearch = Boolean(urlIdeaNumber || urlSubmittedDate || urlInitiatedBy);
+  const hasSearch = Boolean(urlIdeaNumber || urlIdeaName || urlSubmittedDate || urlInitiatedBy);
   const searchKey = hasSearch ? searchParams.toString() : "";
 
   // The form, starting from the search in the URL.
   const [ideaNumber, setIdeaNumber] = useState(urlIdeaNumber);
+  const [ideaName, setIdeaName] = useState(urlIdeaName);
   const [submittedDate, setSubmittedDate] = useState(urlSubmittedDate);
   const [initiatedBy, setInitiatedBy] = useState(Number(urlInitiatedBy) || null);
 
@@ -70,6 +72,7 @@ const TrackIdea = () => {
 
     trackIdeas({
       ideaNumber: urlIdeaNumber || undefined,
+      ideaName: urlIdeaName || undefined,
       submittedDate: urlSubmittedDate || undefined,
       initiatedBy: urlInitiatedBy || undefined,
       page: urlPage,
@@ -87,7 +90,7 @@ const TrackIdea = () => {
     return () => {
       ignore = true;
     };
-  }, [searchKey, urlIdeaNumber, urlSubmittedDate, urlInitiatedBy, urlPage]);
+  }, [searchKey, urlIdeaNumber, urlIdeaName, urlSubmittedDate, urlInitiatedBy, urlPage]);
 
   const loading = hasSearch && response.key !== searchKey;
   const result = hasSearch && !loading ? response.data : null;
@@ -97,18 +100,21 @@ const TrackIdea = () => {
     () =>
       (initiators || []).map((user) => ({
         value: user.UserID,
-        label: user.EmployeeCode ? `${user.FullName} (${user.EmployeeCode})` : user.FullName,
+        label: user.FullName,
+        // Second line in the list; still searchable.
+        description: user.EmployeeCode || undefined,
       })),
     [initiators],
   );
 
-  const canSearch = Boolean(ideaNumber.trim() || submittedDate || initiatedBy);
+  const canSearch = Boolean(ideaNumber.trim() || ideaName.trim() || submittedDate || initiatedBy);
   const canClear = canSearch || hasSearch;
 
   // Only the filled-in fields go in the URL.
   const searchParamsFor = (page) => {
     const params = { page: String(page) };
     if (ideaNumber.trim()) params.ideaNumber = ideaNumber.trim();
+    if (ideaName.trim()) params.ideaName = ideaName.trim();
     if (submittedDate) params.submittedDate = submittedDate;
     if (initiatedBy) params.initiatedBy = String(initiatedBy);
     return params;
@@ -121,6 +127,7 @@ const TrackIdea = () => {
 
   const clearSearch = () => {
     setIdeaNumber("");
+    setIdeaName("");
     setSubmittedDate("");
     setInitiatedBy(null);
     setSearchParams({}, { replace: true });
@@ -144,7 +151,7 @@ const TrackIdea = () => {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h1 className="text-2xl font-bold text-gray-900">Track Idea</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Find an idea by its number, the date it was submitted, or who submitted it, and see where it is
+            Find an idea by its number, its name, the date it was submitted, or who submitted it, and see where it is
             in the approval process. Fill in one or more fields.
           </p>
         </div>
@@ -165,6 +172,21 @@ const TrackIdea = () => {
               onChange={(e) => setIdeaNumber(e.target.value)}
               placeholder="e.g. 0012"
               maxLength={50}
+              className={inputClass}
+            />
+          </div>
+
+          <div className="flex-1">
+            <label htmlFor="track-idea-name" className={labelClass}>
+              Idea Name
+            </label>
+            <input
+              id="track-idea-name"
+              type="search"
+              value={ideaName}
+              onChange={(e) => setIdeaName(e.target.value)}
+              placeholder="Any part of the title"
+              maxLength={200}
               className={inputClass}
             />
           </div>
@@ -194,6 +216,7 @@ const TrackIdea = () => {
               placeholder="Search by name or employee code"
               loading={initiators === null}
               noOptionsText={initiatorOptions.length === 0 ? "No employees available" : "No matches found"}
+              inputClassName="rounded-xl border-gray-200 focus:ring-2 focus:ring-indigo-500"
             />
             {initiatorsError && <p className="text-red-600 text-xs mt-1 font-medium">{initiatorsError}</p>}
           </div>

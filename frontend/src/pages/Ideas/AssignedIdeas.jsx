@@ -10,7 +10,7 @@ import IdeaCountBoxes from "../../components/IdeaCountBoxes/IdeaCountBoxes";
 import TablePagination from "../../components/TablePagination/TablePagination";
 import IdeaDaysLeft from "../../components/IdeaDaysLeft/IdeaDaysLeft";
 import { getAssignedIdeas, getIdeaApiError, getIdeaPurposes } from "../../services/ideaService";
-import { IDEA_STATUSES, formatIdeaDate } from "../../utils/ideaStatus";
+import { IDEA_STATUSES, formatIdeaDate, getIdeaStatusLabel } from "../../utils/ideaStatus";
 
 const PAGE_SIZE = 10;
 const COLUMN_COUNT = 9;
@@ -28,7 +28,7 @@ const FLAG_FILTERS = {
 
 const COUNT_BOXES = [
   { key: PENDING_KEY, label: "Pending with Me" },
-  { key: "Pending Final Approval", label: "Pending Final Approval" },
+  { key: "Pending Final Approval", label: "Final approval pending" },
   { key: "Active", label: "Active" },
   { key: "In Implementation", label: "In Implementation" },
   { key: OVERDUE_KEY, label: "Overdue", tone: "danger" },
@@ -185,7 +185,7 @@ const AssignedIdeas = () => {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header Section */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <h1 className="text-2xl font-bold text-gray-900">Assigned to Me</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Ideas Review &amp; Approval</h1>
           <p className="text-sm text-gray-500 mt-1">
             Ideas where you are the reporting manager or the final approver. Ideas waiting for your
             decision are listed first.
@@ -231,7 +231,7 @@ const AssignedIdeas = () => {
                 <option value="">All Statuses</option>
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {getIdeaStatusLabel(s)}
                   </option>
                 ))}
               </select>

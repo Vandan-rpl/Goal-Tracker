@@ -11,6 +11,12 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
  *     onChange={setLeadId}            // receives the option value, or null on clear
  *     placeholder="Search by name or department"
  *   />
+ *
+ * Optional:
+ *   option.description  smaller grey second line in the list (also searched,
+ *                       and shown after the label once selected)
+ *   inputClassName      replaces the input's look (border, radius, focus) so
+ *                       it can match the page's other fields
  */
 export default function SearchableSelect({
   id,
@@ -22,6 +28,7 @@ export default function SearchableSelect({
   loading = false,
   hasError = false,
   noOptionsText = "No matches found",
+  inputClassName,
   ...ariaProps
 }) {
   const generatedId = useId();
@@ -40,9 +47,14 @@ export default function SearchableSelect({
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     return term
-      ? options.filter((option) => option.label.toLowerCase().includes(term))
+      ? options.filter((option) =>
+          `${option.label} ${option.description || ""}`.toLowerCase().includes(term),
+        )
       : options;
   }, [options, query]);
+
+  const displayLabel = (option) =>
+    option ? (option.description ? `${option.label} (${option.description})` : option.label) : "";
 
   const close = () => {
     setOpen(false);
@@ -110,8 +122,8 @@ export default function SearchableSelect({
         aria-activedescendant={open && filtered[highlight] ? `${listboxId}-${highlight}` : undefined}
         autoComplete="off"
         disabled={disabled}
-        placeholder={loading ? "Loading..." : selected ? selected.label : placeholder}
-        value={open ? query : selected?.label || ""}
+        placeholder={loading ? "Loading..." : selected ? displayLabel(selected) : placeholder}
+        value={open ? query : displayLabel(selected)}
         onFocus={openList}
         onClick={() => !open && openList()}
         onChange={(event) => {
@@ -120,9 +132,9 @@ export default function SearchableSelect({
           if (!open) setOpen(true);
         }}
         onKeyDown={handleKeyDown}
-        className={`w-full pl-3 pr-14 py-2 bg-white border rounded-lg text-slate-900 focus:outline-none focus:border-slate-800 transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
-          hasError ? "border-red-500" : "border-slate-300"
-        }`}
+        className={`w-full pl-3 pr-14 py-2 bg-white border text-slate-900 focus:outline-none transition disabled:bg-slate-100 disabled:text-slate-500 text-sm ${
+          inputClassName || "rounded-lg focus:border-slate-800"
+        } ${hasError ? "border-red-500" : inputClassName ? "" : "border-slate-300"}`}
         {...ariaProps}
       />
 
@@ -171,7 +183,16 @@ export default function SearchableSelect({
                   index === highlight ? "bg-indigo-50 text-indigo-900" : "text-slate-700"
                 } ${option.value === value ? "font-semibold" : ""}`}
               >
-                {option.label}
+                {option.description ? (
+                  <>
+                    <span className="block truncate">{option.label}</span>
+                    <span className="block truncate text-xs font-normal text-slate-500">
+                      {option.description}
+                    </span>
+                  </>
+                ) : (
+                  option.label
+                )}
               </li>
             ))
           )}

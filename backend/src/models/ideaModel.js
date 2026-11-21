@@ -877,6 +877,12 @@ const buildTrackIdeaWhere = (filters) => {
         params.push(["IdeaNumber", sql.NVarChar(110), likeContains(filters.ideaNumber)]);
     }
 
+    // Idea name (title): any part of it, ignoring case.
+    if (filters.ideaName) {
+        conditions.push("UPPER(i.Title) LIKE UPPER(@IdeaName)");
+        params.push(["IdeaName", sql.NVarChar(450), likeContains(filters.ideaName)]);
+    }
+
     // Any time on that calendar day; a range so an index on SubmittedDate
     // can be used.
     if (filters.submittedDate) {
@@ -904,7 +910,7 @@ const buildTrackIdeaWhere = (filters) => {
  *
  * @param {object} options
  * @param {{ viewerId: number, viewAll: boolean }} options.viewer
- * @param {{ ideaNumber?: string, submittedDate?: string, initiatedBy?: number }} options.filters
+ * @param {{ ideaNumber?: string, ideaName?: string, submittedDate?: string, initiatedBy?: number }} options.filters
  *   - at least one is required (checked in the service)
  * @param {number} options.page     - 1-based
  * @param {number} options.pageSize
@@ -1261,8 +1267,8 @@ const getIdeaMailData = async (db, ideaId) => {
  * out (ideas where the user is only the Reporting Manager or final approver
  * are not included). Each idea gets one DashboardStatus so the groups never
  * overlap:
- *   Pending with Reporting Manager   Submitted
- *   Pending Final Approval           Pending Final Approval
+ *   HOD/Manager approval pending     Submitted
+ *   Final approval pending           Pending Final Approval
  *   Rejected          Rejected
  *   Implemented       Implemented
  *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
@@ -1286,8 +1292,8 @@ const listDashboardIdeas = async (db, userId) => {
                 ${IS_OVERDUE} AS IsOverdue,
                 pendingRequest.PendingRequestType,
                 CASE
-                    WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'Pending with Reporting Manager'
-                    WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Pending Final Approval'
+                    WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'HOD/Manager approval pending'
+                    WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Final approval pending'
                     WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
                     WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Implemented'
                     WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
@@ -1309,8 +1315,8 @@ const listDashboardIdeas = async (db, userId) => {
  * owner, any year; utils/moduleReport filters and counts them. FiscalYear
  * is the fiscal year the idea was submitted in. ReportStatus groups (never
  * overlapping):
- *   Pending with Reporting Manager   Submitted
- *   Pending Final Approval           Pending Final Approval
+ *   HOD/Manager approval pending     Submitted
+ *   Final approval pending           Pending Final Approval
  *   Rejected          Rejected
  *   Implemented       Implemented
  *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
@@ -1338,8 +1344,8 @@ const listReportIdeas = async (db) => {
             ${fullName("lead")} AS ReportingManagerName,
             ${sqlFiscalYear(submittedOn)} AS FiscalYear,
             CASE
-                WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'Pending with Reporting Manager'
-                WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Pending Final Approval'
+                WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'HOD/Manager approval pending'
+                WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Final approval pending'
                 WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
                 WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Implemented'
                 WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'

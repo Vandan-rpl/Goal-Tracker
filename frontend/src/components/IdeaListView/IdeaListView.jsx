@@ -10,7 +10,7 @@ import IdeaCountBoxes from "../IdeaCountBoxes/IdeaCountBoxes";
 import IdeaDaysLeft from "../IdeaDaysLeft/IdeaDaysLeft";
 import TablePagination from "../TablePagination/TablePagination";
 import { getIdeaApiError } from "../../services/ideaService";
-import { IDEA_STATUSES, formatIdeaDate } from "../../utils/ideaStatus";
+import { IDEA_STATUSES, formatIdeaDate, getIdeaStatusLabel } from "../../utils/ideaStatus";
 import DateInput from "../DateInput/DateInput";
 
 const PAGE_SIZE = 20;
@@ -21,7 +21,7 @@ const STATUS_OPTIONS = IDEA_STATUSES.filter((status) => status !== "Draft");
 
 const COUNT_BOXES = [
   { key: "Submitted", label: "Submitted" },
-  { key: "Pending Final Approval", label: "Pending Final Approval" },
+  { key: "Pending Final Approval", label: "Final approval pending" },
   { key: "Active", label: "Active" },
   { key: "In Implementation", label: "In Implementation" },
   { key: "Overdue", label: "Overdue", tone: "danger" },
@@ -268,7 +268,7 @@ export default function IdeaListView({ title, description, fetchIdeas, fetchFilt
                 <option value="">All Statuses</option>
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {getIdeaStatusLabel(s)}
                   </option>
                 ))}
               </select>

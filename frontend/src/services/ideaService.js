@@ -87,8 +87,8 @@ export const getAllIdeaFilterOptions = async () => {
     return response.data.data;
 };
 
-// Track Idea: search the ideas the user may see (ideaNumber, submittedDate,
-// initiatedBy: filled-in ones must all match; page, pageSize). Returns
+// Track Idea: search the ideas the user may see (ideaNumber, ideaName,
+// submittedDate, initiatedBy: filled-in ones must all match; page, pageSize). Returns
 // { items, total, page, pageSize, totalPages }.
 export const trackIdeas = async (params) => {
     const response = await api.get('/ideas/track', { params });
