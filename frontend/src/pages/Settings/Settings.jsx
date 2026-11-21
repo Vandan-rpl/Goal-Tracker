@@ -35,62 +35,63 @@ const PersonPicker = ({ label, emptyLabel, people, value, assignedId, editing, o
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-          {current ? (
-            <>
-              <div className="mt-1 text-sm font-semibold text-slate-900">{fullName(current)}</div>
-              <div className="text-xs text-slate-500">
-                {[current.Designation, current.DepartmentName, current.IsActive ? null : "inactive"]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </div>
-            </>
-          ) : (
-            <div className="mt-1 text-sm text-slate-500">{emptyLabel}</div>
-          )}
-        </div>
-        {!editing && (
-          <button
-            type="button"
-            onClick={onEdit}
-            disabled={disabled}
-            className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Change
-          </button>
-        )}
-      </div>
+    // <div className="rounded-xl border border-slate-200 p-4">
+    //   <div className="flex items-start justify-between gap-3">
+    //     <div>
+    //       <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+    //       {current ? (
+    //         <>
+    //           <div className="mt-1 text-sm font-semibold text-slate-900">{fullName(current)}</div>
+    //           <div className="text-xs text-slate-500">
+    //             {[current.Designation, current.DepartmentName, current.IsActive ? null : "inactive"]
+    //               .filter(Boolean)
+    //               .join(" · ")}
+    //           </div>
+    //         </>
+    //       ) : (
+    //         <div className="mt-1 text-sm text-slate-500">{emptyLabel}</div>
+    //       )}
+    //     </div>
+    //     {!editing && (
+    //       <button
+    //         type="button"
+    //         onClick={onEdit}
+    //         disabled={disabled}
+    //         className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+    //       >
+    //         Change
+    //       </button>
+    //     )}
+    //   </div>
 
-      {editing && (
-        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-          <select
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            disabled={disabled}
-            aria-label={`New ${label}`}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
-          >
-            <option value="">{emptyLabel}</option>
-            {options.map((person) => (
-              <option key={person.UserID} value={toId(person.UserID)}>
-                {personLabel(person)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={disabled}
-            className="text-sm text-slate-500 hover:text-slate-700"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-    </div>
+    //   {editing && (
+    //     <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+    //       <select
+    //         value={value}
+    //         onChange={(event) => onChange(event.target.value)}
+    //         disabled={disabled}
+    //         aria-label={`New ${label}`}
+    //         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+    //       >
+    //         <option value="">{emptyLabel}</option>
+    //         {options.map((person) => (
+    //           <option key={person.UserID} value={toId(person.UserID)}>
+    //             {personLabel(person)}
+    //           </option>
+    //         ))}
+    //       </select>
+    //       <button
+    //         type="button"
+    //         onClick={onCancel}
+    //         disabled={disabled}
+    //         className="text-sm text-slate-500 hover:text-slate-700"
+    //       >
+    //         Cancel
+    //       </button>
+    //     </div>
+    //   )}
+    // </div>
+    <></>
   );
 };
 
@@ -210,7 +211,8 @@ const Settings = () => {
 
         {/* Main Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          {/* Reporting Manager & HOD section (hidden; kept for later) */}
+          {/* <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-6 border-b border-slate-100">
               <h2 className="text-lg font-semibold text-slate-900">Reporting Manager &amp; HOD</h2>
               <p className="text-xs text-slate-500 mt-1">Your current Reporting Manager and HOD. Click Change to pick someone else.</p>
@@ -225,7 +227,7 @@ const Settings = () => {
                 </button>
               )}
             </form>
-          </section>
+          </section> */}
 
           {/* Account Settings Section */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">

@@ -186,11 +186,13 @@ function getNextFiscalQuarter(fromQuarterEndDate) {
 }
 
 // Go-live opening. GOAL_ENTRY_GO_LIVE_OPENING=true in the backend .env opens
-// goal entry for Q1-Q3 of the current fiscal year outside the normal windows,
-// and exempts goals in those quarters from the approval windows. Q4 keeps its
-// normal window. Set it to false (or remove it) to return to the date-based
-// windows only. This is the only place the switch is read.
-const GO_LIVE_OPEN_QUARTER_NUMBERS = [1, 2, 3];
+// goal entry for all four quarters (Q1-Q4) of the current fiscal year outside
+// the normal windows, and exempts goals in those quarters from the approval
+// windows. One-time go-live exception: Q4 was added on 2026-11-21 after its
+// normal entry window had closed. Set the switch to false (or remove it) after
+// go-live to return to the date-based windows only. This is the only place the
+// switch is read.
+const GO_LIVE_OPEN_QUARTER_NUMBERS = [1, 2, 3, 4];
 
 const isGoLiveOpeningEnabled = () =>
   String(process.env.GOAL_ENTRY_GO_LIVE_OPENING || "").trim().toLowerCase() ===
