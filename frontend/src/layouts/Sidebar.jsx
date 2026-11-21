@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { Link, useLocation } from "react-router-dom";
+import { selectSidebarCollapsed, toggleSidebar } from "../redux/slices/sidebarSlice";
 import useAuth from "../hooks/useAuth";
 import IdeasSidebarMenu from "./IdeasSidebarMenu";
 import TasksSidebarMenu from "./TasksSidebarMenu";
@@ -24,12 +27,64 @@ const Sidebar = () => {
 
   const isAdmin = role === "ADMIN";
 
+  // Collapse: the menu button (shown while the pointer is over the sidebar)
+  // pins it expanded or collapsed (remembered in localStorage by
+  // sidebarSlice). Hovering a collapsed sidebar expands it over the page
+  // without moving the page; it collapses again when the pointer leaves.
+  const dispatch = useDispatch();
+  const collapsed = useSelector(selectSidebarCollapsed);
+  const [hovered, setHovered] = useState(false);
+  // After the button collapses the sidebar, don't hover-expand it again
+  // until the pointer has left once, so the click visibly collapses it.
+  const [hoverSuppressed, setHoverSuppressed] = useState(false);
+  const expanded = !collapsed || (hovered && !hoverSuppressed);
+
+  const handleToggle = () => {
+    if (!collapsed) setHoverSuppressed(true);
+    dispatch(toggleSidebar());
+  };
+
+  const handleMouseLeave = () => {
+    setHovered(false);
+    setHoverSuppressed(false);
+  };
 
   return (
-    <aside className="w-64 bg-[#2c3e82] border-r border-white/10 flex flex-col h-full select-none font-sans">
-      
+    // The wrapper keeps the page's layout width (pinned state); the sidebar
+    // inside can be wider while hover-expanded and then overlays the page.
+    <div
+      className={`relative shrink-0 h-full transition-[width] duration-200 ${collapsed ? "w-18" : "w-64"}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={handleMouseLeave}
+    >
+    <aside
+      className={`absolute inset-y-0 left-0 z-40 bg-[#2c3e82] border-r border-white/10 flex flex-col h-full select-none font-sans overflow-hidden transition-[width] duration-200 ${
+        expanded
+          ? `w-64 ${collapsed ? "shadow-2xl shadow-black/30" : ""}`
+          : // Icon-only: hide link labels and section headings.
+            "w-18 [&_nav_a]:justify-center [&_nav_a]:text-[0px] [&_nav_a_svg]:mr-0 [&_nav_p]:hidden"
+      }`}
+    >
+
+      {/* Menu button: visible while the pointer is over the sidebar. */}
+      <div className={`flex px-3 pt-3 ${expanded ? "justify-end" : "justify-center"}`}>
+        <button
+          type="button"
+          onClick={handleToggle}
+          aria-label={collapsed ? "Keep sidebar expanded" : "Collapse sidebar"}
+          title={collapsed ? "Keep sidebar expanded" : "Collapse sidebar"}
+          className={`flex h-8 w-8 items-center justify-center rounded-lg text-indigo-100 transition-opacity duration-150 hover:bg-white/10 hover:text-white cursor-pointer ${
+            hovered ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
       {/* Navigation Items */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 px-3 pt-1 pb-4 space-y-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
 
         {/* The Admin only sees the Administration links, on every page. */}
         {!isAdmin && isIdeasModule ? (
@@ -227,10 +282,11 @@ const Sidebar = () => {
 
       {/* Profile card with Logout */}
       <div className="p-3 border-t border-white/10 bg-black/10">
-        <ProfileMenu />
+        <ProfileMenu compact={!expanded} />
       </div>
 
     </aside>
+    </div>
   );
 }
 

@@ -33,8 +33,10 @@ const initialsOf = (name) =>
 /**
  * Profile card at the bottom of the sidebar: avatar, name and designation
  * (click for Profile / Settings) with the Logout button inside the card.
+ * `compact` (collapsed sidebar) shows only the avatar, which opens the same
+ * menu.
  */
-const ProfileMenu = () => {
+const ProfileMenu = ({ compact = false }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -60,13 +62,17 @@ const ProfileMenu = () => {
   };
 
   return (
-    <div className="rounded-xl border border-white/15 bg-white/10 p-2">
+    <div className={compact ? "flex justify-center" : "rounded-xl border border-white/15 bg-white/10 p-2"}>
       <button
         type="button"
         onClick={(event) => setAnchorEl(event.currentTarget)}
         aria-haspopup="menu"
         aria-expanded={Boolean(anchorEl)}
-        className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-colors hover:bg-white/10 cursor-pointer"
+        aria-label={compact ? displayName : undefined}
+        title={compact ? displayName : undefined}
+        className={`flex items-center rounded-lg text-left transition-colors hover:bg-white/10 cursor-pointer ${
+          compact ? "p-1" : "w-full gap-3 p-1.5"
+        }`}
       >
         <Avatar
           src={user?.profileImage || ""}
@@ -82,12 +88,17 @@ const ProfileMenu = () => {
         >
           {!user?.profileImage && initialsOf(displayName)}
         </Avatar>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-white">{displayName}</span>
-        </span>
-        <UnfoldMoreIcon sx={{ fontSize: 18, color: "rgba(199, 210, 254, 0.8)" }} />
+        {!compact && (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-white">{displayName}</span>
+            </span>
+            <UnfoldMoreIcon sx={{ fontSize: 18, color: "rgba(199, 210, 254, 0.8)" }} />
+          </>
+        )}
       </button>
 
+      {!compact && (
       <button
         type="button"
         onClick={handleLogout}
@@ -98,6 +109,7 @@ const ProfileMenu = () => {
         </svg>
         Logout
       </button>
+      )}
 
       {/* Opens upward, above the card. */}
       <Menu

@@ -32,6 +32,7 @@ const formatWindowDate = (date) =>
   `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
 const {
   isAllocatedGoal,
+  isBroughtForwardGoal,
   ownAchievedWeightage,
   isBroughtForwardAchieved,
   completionMarkedDate,
@@ -891,7 +892,35 @@ const getQuarterGoalDetails = async (req, res) => {
         evaluationResult.recordset.filter(
           (row) => row.EvaluationCategory === category,
         );
-      const categoryOf = (category) => {
+      // Total per carried-in category: weightage of goals from an earlier
+      // start quarter that were still open when this quarter began (not
+      // marked complete and approved before it), whether or not they were
+      // completed in this quarter. Achieved is the part of this total
+      // completed in this quarter.
+      const totalsResult = await pool
+        .request()
+        .input("UserID", sql.Int, targetUserId)
+        .input("QStart", sql.Date, quarterBounds.startKey)
+        .query(`
+          SELECT
+            SUM(CASE WHEN ${isBroughtForwardGoal("g")} AND g.Timeline >= @QStart
+                     THEN g.Weightage ELSE 0 END) AS BroughtForwardTotal,
+            SUM(CASE WHEN ${isBroughtForwardGoal("g")} AND g.Timeline < @QStart
+                     THEN g.Weightage ELSE 0 END) AS BroughtForwardOverdueTotal,
+            SUM(CASE WHEN ${isBroughtForwardGoal("g")} THEN 0
+                     ELSE g.Weightage END) AS OverdueAchievedTotal
+          FROM dbo.Goals g
+          WHERE g.UserID = @UserID
+            AND ${isAllocatedGoal("g")}
+            AND g.QuarterEndDate < @QStart
+            AND NOT (
+              g.GoalStatus = 'Completed'
+              AND ${completionMarkedDate("g")} < @QStart
+            )
+        `);
+      const totals = totalsResult.recordset[0] || {};
+
+      const categoryOf = (category, total) => {
         const rows = rowsIn(category);
         return {
           goals: rows.map(toGoal),
@@ -899,13 +928,20 @@ const getQuarterGoalDetails = async (req, res) => {
             rows,
             (row) => row.AchievedWeightage ?? row.Weightage,
           ),
+          ...(total === undefined ? {} : { total: roundPercent(total) }),
         };
       };
       evaluation = {
         achieved: categoryOf("Achieved"),
-        broughtForward: categoryOf("BroughtForward"),
-        broughtForwardOverdue: categoryOf("BroughtForwardOverdue"),
-        overdueAchieved: categoryOf("OverdueAchieved"),
+        broughtForward: categoryOf("BroughtForward", totals.BroughtForwardTotal),
+        broughtForwardOverdue: categoryOf(
+          "BroughtForwardOverdue",
+          totals.BroughtForwardOverdueTotal,
+        ),
+        overdueAchieved: categoryOf(
+          "OverdueAchieved",
+          totals.OverdueAchievedTotal,
+        ),
         overdue: {
           goals: rowsIn("Overdue").map(toGoal),
           weightage: sumBy(rowsIn("Overdue"), (row) => row.Weightage),

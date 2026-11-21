@@ -180,8 +180,18 @@ export default function QuarterGoalDetails({ employeeId, quarter, achievementRul
             title={`${title} (completed in this quarter)`}
             section="category"
             goals={evaluation[key].goals}
-            footer={`${title} ${formatPercent(evaluation[key].weightage)}`}
-            emptyMessage={empty}
+            footer={
+              evaluation[key].total === undefined
+                ? `${title} ${formatPercent(evaluation[key].weightage)}`
+                : `${title} total ${formatPercent(evaluation[key].total)} · Achieved ${formatPercent(
+                    evaluation[key].weightage,
+                  )}`
+            }
+            emptyMessage={
+              evaluation[key].total
+                ? `${empty} · ${title} total ${formatPercent(evaluation[key].total)} · Achieved 0%`
+                : empty
+            }
             onOpenGoal={openGoal}
           />
         ))}
