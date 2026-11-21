@@ -51,7 +51,7 @@ const AdminPage = () => {
                         <input type="file" hidden accept=".xlsx, .xls, .csv" onChange={(e) => setFile(e.target.files[0])} />
                     </Button>
 
-                    <Button type="submit" variant="contained" disabled={loading} size="large" sx={{ backgroundColor: '#1565c0', py: '12px', fontWeight: 'bold', borderRadius: '8px' }}>
+                    <Button type="submit" variant="contained" disabled={loading} size="large" sx={{ backgroundColor: '#1f2c61', py: '12px', fontWeight: 'bold', borderRadius: '8px' }}>
                         {loading ? 'Processing Spreadsheet...' : 'Upload & Provision Employees'}
                     </Button>
                 </Box>

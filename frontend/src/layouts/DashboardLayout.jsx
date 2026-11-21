@@ -1,6 +1,5 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { Toolbar } from '@mui/material';
 import Sidebar from './Sidebar';
 import Header from '../components/Header/Header';
 import useSocket from '../hooks/useSocket';
@@ -13,20 +12,12 @@ const DashboardLayout = () => {
   useSocket();
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/*
-          NOTE: this used to be a plain inline <header> div with no
-          notification bell at all. Swapped in the real <Header /> component
-          (src/components/Header/Header.jsx), which already had the
-          notifications bell, badge, and profile menu built — it just
-          wasn't rendered anywhere in the app. Header uses a fixed MUI
-          AppBar, so a spacer <Toolbar /> below it pushes page content down
-          by the same height instead of the AppBar overlapping it.
-        */}
-        <Header />
-        <Toolbar />
+    // Full-width header on top (portal branding, module switch, bell,
+    // profile); the sidebar and the page sit below it.
+    <div className="flex flex-col h-screen bg-gray-100">
+      <Header />
+      <div className="flex-1 flex min-h-0">
+        <Sidebar />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
           <Outlet />
         </main>

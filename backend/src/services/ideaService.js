@@ -1107,9 +1107,11 @@ const getMyIdeas = async (user, status) => {
  * Drafts). The cards, breakdown tables and charts are all counted here from
  * the same rows as the ideas list, so they always agree. See
  * ideaModel.listDashboardIdeas for the DashboardStatus groups.
- *   Approved ideas = Active + Overdue + Awaiting Completion Approval +
- *                    Completed (everything that got final approval)
- *   Completion %   = Completed / Approved (0 when none)
+ *   In Implementation = every idea in implementation now (In
+ *                       Implementation + Overdue + Closure Pending); final
+ *                       approval moves an idea straight there
+ *   Approved ideas    = In Implementation + Implemented
+ *   Implementation %  = Implemented / Approved (0 when none)
  */
 const getDashboard = async (user) => {
     const pool = await poolPromise;
@@ -1117,40 +1119,43 @@ const getDashboard = async (user) => {
 
     const count = (...groups) => ideas.filter((idea) => groups.includes(idea.DashboardStatus)).length;
 
-    const pendingApproval = count("Pending Approval");
-    const active = count("Active");
-    const awaitingCompletion = count("Awaiting Completion Approval");
+    const pendingManager = count("Pending with Reporting Manager");
+    const pendingFinal = count("Pending Final Approval");
+    const inImplementation = count("In Implementation");
+    const closurePending = count("Closure Pending");
     const overdue = count("Overdue");
-    const completed = count("Completed");
+    const implemented = count("Implemented");
     const rejected = count("Rejected");
-    const approved = active + awaitingCompletion + overdue + completed;
+    const approved = inImplementation + closurePending + overdue + implemented;
 
     return {
         summary: {
             total: ideas.length,
-            pendingApproval,
-            active,
-            completed,
+            pendingManager,
+            pendingFinal,
+            inImplementation: approved - implemented,
+            implemented,
             rejected,
             overdue,
             approved,
-            completionPercent: approved === 0 ? 0 : Math.round((completed / approved) * 100),
+            implementationPercent: approved === 0 ? 0 : Math.round((implemented / approved) * 100),
         },
         // Rejected ideas are only a card, not part of this table.
         statusBreakdown: [
-            { label: "Pending Approval", count: pendingApproval },
-            { label: "In Progress", count: active + awaitingCompletion },
+            { label: "Pending with Reporting Manager", count: pendingManager },
+            { label: "Pending Final Approval", count: pendingFinal },
+            { label: "In Implementation", count: inImplementation + closurePending },
             { label: "Overdue", count: overdue },
-            { label: "Completed", count: completed },
+            { label: "Implemented", count: implemented },
         ],
         // Every predefined purpose, 0 when the user has none.
         purposeBreakdown: IDEA_PURPOSES.map((purpose) => ({
             label: purpose,
             count: ideas.filter((idea) => idea.Purpose === purpose).length,
         })),
-        completionSnapshot: [
-            { label: "Completed", count: completed },
-            { label: "Remaining", count: approved - completed },
+        implementationSnapshot: [
+            { label: "Implemented", count: implemented },
+            { label: "Remaining", count: approved - implemented },
         ],
         ideas,
     };
@@ -1158,16 +1163,19 @@ const getDashboard = async (user) => {
 
 // Reports & Analytics: the CFO (Business Head) only, like the Goal
 // Tracker's Business Head report.
-const IDEA_REPORT_STATUSES = ["Pending Approval", "In Progress", "Overdue", "Completed", "Rejected"];
+const IDEA_REPORT_STATUSES = [
+    "Pending with Reporting Manager",
+    "Pending Final Approval",
+    "In Implementation", "Overdue", "Implemented", "Rejected"];
 
-// Ideas that got final approval (completion % is out of these).
+// Ideas that got final approval (implementation % is out of these).
 const approvedIdeaCount = (counts) =>
-    (counts["In Progress"] || 0) + (counts.Overdue || 0) + (counts.Completed || 0);
+    (counts["In Implementation"] || 0) + (counts.Overdue || 0) + (counts.Implemented || 0);
 
 /**
  * CFO Reports & Analytics for ideas (see utils/moduleReport for the team /
  * organisation views and filters). Ideas are counted in the fiscal year
- * they were submitted. Completion % = Completed / approved ideas, the same
+ * they were submitted. Implementation % = Implemented / approved ideas, the same
  * rule as the user dashboard.
  */
 const getReport = async (user, query) => {
@@ -1189,7 +1197,7 @@ const getReport = async (user, query) => {
         statuses: IDEA_REPORT_STATUSES,
         categoryField: "Purpose",
         categories: IDEA_PURPOSES,
-        completedStatus: "Completed",
+        completedStatus: "Implemented",
         completionBase: approvedIdeaCount,
     });
 
@@ -1199,13 +1207,15 @@ const getReport = async (user, query) => {
         ...report,
         Summary: {
             total: ideas.length,
-            pendingApproval: counts["Pending Approval"],
-            inProgress: counts["In Progress"],
+            pendingManager: counts["Pending with Reporting Manager"],
+            pendingFinal: counts["Pending Final Approval"],
+            // Every idea in implementation now, overdue ones included.
+            inImplementation: (counts["In Implementation"] || 0) + (counts.Overdue || 0),
             overdue: counts.Overdue,
-            completed: counts.Completed,
+            implemented: counts.Implemented,
             rejected: counts.Rejected,
             approved: approvedIdeaCount(counts),
-            completionPercent: report.CompletionPercent,
+            implementationPercent: report.CompletionPercent,
         },
     };
 };

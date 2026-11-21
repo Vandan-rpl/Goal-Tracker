@@ -8,7 +8,7 @@ border:none;
 
 border-radius:8px;
 
-background:#2563eb;
+background:#2c3e82;
 
 color:white;
 
@@ -22,6 +22,6 @@ transition:.3s;
 
 .btn-primary:hover{
 
-background:#1d4ed8;
+background:#1f2c61;
 
 }

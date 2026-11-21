@@ -15,7 +15,7 @@ const NotFound = () => {
             alignItems="center"
             minHeight="100vh"
         >
-            <SearchOffIcon sx={{ fontSize: 100, color: "#2196f3" }} />
+            <SearchOffIcon sx={{ fontSize: 100, color: "#2c3e82" }} />
 
             <Typography variant="h2" fontWeight="bold" mt={2}>
                 404

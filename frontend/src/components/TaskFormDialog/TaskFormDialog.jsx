@@ -299,7 +299,7 @@ export default function TaskFormDialog({ task = null, onClose, onSaved }) {
           </div>
 
           {!isNew && task.CFORemarks && (
-            <div className="border border-[#cbd4e2] bg-[#f8faff] p-3">
+            <div className="border border-[#cbd4e2] bg-[#f2f3f8] p-3">
               <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#30415f]">{task?.ProjectID ? PROJECT_REMARKS_LABEL : "CFO's Remarks"}</p>
               <p className="whitespace-pre-wrap text-sm text-slate-800">{task.CFORemarks}</p>
               {task.CFORemarksDate && (

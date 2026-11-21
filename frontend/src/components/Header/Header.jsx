@@ -20,8 +20,6 @@ import {
   useTheme,
 } from "@mui/material";
 
-import MenuIcon from "@mui/icons-material/Menu";
-import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import NotificationsOutlinedIcon from "@mui/icons-material/NotificationsOutlined";
 import TrackChangesOutlinedIcon from "@mui/icons-material/TrackChangesOutlined";
 import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
@@ -42,11 +40,12 @@ import { TASKS_DASHBOARD_PATH, isTasksPath } from "../../utils/tasksMenu";
 import { isAdminUser } from "../../utils/adminHome";
 import useAuth from "../../hooks/useAuth";
 
-import ProfileMenu from "../ProfileMenu/ProfileMenu";
+import { GatiWordmark, PORTAL_PILLARS, PORTAL_TITLE } from "../PortalBrand/PortalBrand";
+import rubaminLogo from "../../assets/images/rubamin-logo.png";
 import CircleIcon from "@mui/icons-material/Circle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 
-const Header = ({ drawerWidth = 260 }) => {
+const Header = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,7 +54,6 @@ const Header = ({ drawerWidth = 260 }) => {
 
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const { collapsed } = useSelector((state) => state.sidebar);
 
   // The Admin only manages the app: no module switch.
   const { user: authUser } = useAuth();
@@ -183,35 +181,37 @@ const Header = ({ drawerWidth = 260 }) => {
 
   return (
     <AppBar
-      position="fixed"
+      position="static"
       color="inherit"
       elevation={0}
       sx={{
-        width: {
-          md: `calc(100% - ${collapsed ? 72 : drawerWidth}px)`,
-        },
-        ml: {
-          md: `${collapsed ? 72 : drawerWidth}px`,
-        },
         borderBottom: `1px solid ${theme.palette.divider}`,
         backgroundColor: theme.palette.background.paper,
+        boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
         zIndex: theme.zIndex.drawer + 1,
-        transition: theme.transitions.create(["width", "margin"], {
-          easing: theme.transitions.easing.easeInOut,
-          duration: theme.transitions.duration.standard,
-        }),
       }}
     >
       <Toolbar>
-        {/* Sidebar Toggle */}
-        <IconButton
-          edge="start"
-          color="inherit"
-          // onClick={handleMenuClick}
-          sx={{ mr: 2 }}
-        >
-          {collapsed ? <MenuIcon /> : <MenuOpenIcon />}
-        </IconButton>
+        {/* Left: GATI wordmark and portal name. Same flex-basis as the right
+            side so the module switch stays centred in the header. */}
+        <Box sx={{ display: "flex", alignItems: "center", flex: "1 1 0", minWidth: 0 }}>
+          <GatiWordmark
+            className="text-[30px] tracking-[0.12em] drop-shadow-[0_2px_6px_rgba(232,16,42,0.25)]"
+            letterClassName="bg-clip-text text-transparent bg-linear-to-b from-[#ff3348] to-[#a30b1e]"
+          />
+          <div className="ml-3 hidden lg:block leading-tight">
+            <p className="text-[13px] font-bold text-slate-800">{PORTAL_TITLE}</p>
+            <p className="mt-0.5 text-[11px] text-slate-500 whitespace-nowrap">
+              {PORTAL_PILLARS.map((word, i) => (
+                <React.Fragment key={word}>
+                  {i > 0 && " · "}
+                  <span className="font-bold text-[#e8102a]">{word[0]}</span>
+                  {word.slice(1)}
+                </React.Fragment>
+              ))}
+            </p>
+          </div>
+        </Box>
 
         {/* Greeting */}
         {/* <Box sx={{ flexGrow: 1 }}>
@@ -226,8 +226,9 @@ const Header = ({ drawerWidth = 260 }) => {
           </Typography>
         </Box> */}
 
-        {/* Module Switch */}
-        <Box sx={{ flexGrow: 1 }}>
+        {/* Centre: module switch, a compact pill track. The active module is
+            a filled chip in the brand navy (#2c3e82). */}
+        <Box sx={{ flexShrink: 0, display: "flex", justifyContent: "center", mx: 2 }}>
           {showModuleSwitch && (
           <ToggleButtonGroup
             value={activeModule}
@@ -235,21 +236,39 @@ const Header = ({ drawerWidth = 260 }) => {
             onChange={handleModuleChange}
             size="small"
             sx={{
+              p: "3px",
+              gap: "2px",
+              borderRadius: "999px",
+              backgroundColor: "#f1f5f9",
+              border: "1px solid #e2e8f0",
+              "& .MuiToggleButtonGroup-grouped": {
+                border: "0 !important",
+                borderRadius: "999px !important",
+                m: 0,
+              },
               "& .MuiToggleButton-root": {
-                px: 2,
-                gap: 1,
+                px: 1.5,
+                py: 0.4,
+                gap: 0.75,
+                lineHeight: 1.4,
                 textTransform: "none",
                 fontWeight: 600,
-                fontSize: "13px",
+                fontSize: "12px",
+                color: "#64748b",
+                transition: "all 0.2s ease",
+                "& .MuiSvgIcon-root": { fontSize: 15 },
+                "&:hover": { backgroundColor: "#e2e8f0", color: "#0f172a" },
               },
               "& .MuiToggleButton-root.Mui-selected": {
-                backgroundColor: "#4f46e5",
+                backgroundColor: "#2c3e82",
                 color: "#ffffff",
-                "&:hover": { backgroundColor: "#4338ca" },
+                boxShadow: "0 2px 6px rgba(44, 62, 130, 0.35)",
+                "& .MuiSvgIcon-root": { color: "#ffffff" },
+                "&:hover": { backgroundColor: "#1f2c61" },
               },
             }}
           >
-            <ToggleButton value="goals">
+          <ToggleButton value="goals">
               <TrackChangesOutlinedIcon fontSize="small" />
               Goal Tracker
             </ToggleButton>
@@ -272,7 +291,8 @@ const Header = ({ drawerWidth = 260 }) => {
           )}
         </Box>
 
-        <Stack direction="row" spacing={1} alignItems="center">
+        {/* Right: notifications and the Rubamin logo. */}
+        <Stack direction="row" spacing={1} sx={{ flex: "1 1 0", minWidth: 0, alignItems: "center", justifyContent: "flex-end" }}>
           {/* Theme Toggle (Placeholder) */}
           {/* <Tooltip title="Theme">
             <IconButton color="inherit">
@@ -341,9 +361,9 @@ const Header = ({ drawerWidth = 260 }) => {
                   style={{
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#1d4ed8",
-                    backgroundColor: "#eff6ff",
-                    border: "1px solid #bfdbfe",
+                    color: "#1f2c61",
+                    backgroundColor: "#f2f3f8",
+                    border: "1px solid #ccd1e1",
                     padding: "2px 8px",
                     borderRadius: "12px",
                   }}
@@ -393,7 +413,7 @@ const Header = ({ drawerWidth = 260 }) => {
                     borderRadius: "50%",
                     marginTop: "5px",
                     flexShrink: 0,
-                    backgroundColor: item.IsRead ? "transparent" : "#2563eb",
+                    backgroundColor: item.IsRead ? "transparent" : "#2c3e82",
                   }}
                 />
 
@@ -461,7 +481,7 @@ const Header = ({ drawerWidth = 260 }) => {
               }}
             >
               <span
-                style={{ fontSize: "12px", fontWeight: 600, color: "#2563eb" }}
+                style={{ fontSize: "12px", fontWeight: 600, color: "#2c3e82" }}
               >
                 View all notifications &rarr;
               </span>
@@ -476,8 +496,12 @@ const Header = ({ drawerWidth = 260 }) => {
             }}
           />
 
-          {/* Profile */}
-          <ProfileMenu />
+          <img
+            src={rubaminLogo}
+            alt="Rubamin"
+            className="h-7 w-auto object-contain"
+            draggable="false"
+          />
         </Stack>
       </Toolbar>
     </AppBar>

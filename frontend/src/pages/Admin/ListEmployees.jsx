@@ -13,6 +13,15 @@ const ListEmployees = () => {
   const [departments, setDepartments] = useState([]);
   const [allEmployees, setAllEmployees] = useState([]);
   const [saving, setSaving] = useState(false);
+  // Banner tone: success | warning | error.
+  const [messageTone, setMessageTone] = useState('success');
+  // { userId, action } while a row's Activate / Resend Credentials runs.
+  const [rowBusy, setRowBusy] = useState(null);
+
+  const showMessage = (text, tone = 'success') => {
+    setMessage(text);
+    setMessageTone(tone);
+  };
 
   // Fetch employees list on component load
   useEffect(() => {
@@ -72,7 +81,7 @@ const ListEmployees = () => {
         BusinessHeadID: formData.BusinessHeadID || null,
       });
       if (!res.data.success) throw new Error(res.data.message);
-      setMessage(res.data.message || 'Employee updated successfully.');
+      showMessage(res.data.message || 'Employee updated successfully.');
       closeEditor();
       fetchEmployees();
     } catch (err) {
@@ -86,12 +95,59 @@ const ListEmployees = () => {
     try {
       const res = await api.delete(`/admin/employees/${editingEmployee.UserID}`);
       if (!res.data.success) throw new Error(res.data.message);
-      setMessage(res.data.message || 'Employee deleted successfully.');
+      showMessage(res.data.message || 'Employee deleted successfully.');
       closeEditor();
       fetchEmployees();
     } catch (err) {
       alert(err.response?.data?.message || err.message || 'Failed to delete employee.');
     } finally { setSaving(false); }
+  };
+
+  const fullNameOf = (emp) => `${emp.FirstName || ''} ${emp.LastName || ''}`.trim() || emp.Username;
+
+  // Activate one inactive user. Someone who has never logged in gets a new
+  // temporary password and the login email (same as Activate All Users).
+  const activateEmployee = async (emp) => {
+    const neverLoggedIn = Boolean(emp.DefaultPasswordFlag);
+    const note = !neverLoggedIn
+      ? 'They have logged in before, so they keep their current password (no email).'
+      : emp.Email
+        ? `A new temporary password will be emailed to ${emp.Email}.`
+        : 'They have no email address, so no login details can be sent.';
+    if (!window.confirm(`Activate ${fullNameOf(emp)}?\n\n${note}`)) return;
+
+    setRowBusy({ userId: emp.UserID, action: 'activate' });
+    try {
+      const res = await api.post(`/admin/employees/${emp.UserID}/activate`);
+      showMessage(res.data.message || 'User activated.', res.data.warning ? 'warning' : 'success');
+      fetchEmployees();
+    } catch (err) {
+      showMessage(err.response?.data?.message || 'Failed to activate the user.', 'error');
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
+  // New temporary password + login email; the old password stops working.
+  const resendCredentials = async (emp) => {
+    if (!emp.Email) {
+      showMessage(`${fullNameOf(emp)} has no email address. Add one (Edit) before resending credentials.`, 'error');
+      return;
+    }
+    if (!window.confirm(
+      `Resend credentials to ${fullNameOf(emp)} (${emp.Email})?\n\nA new temporary password will be emailed and their current password will stop working.`,
+    )) return;
+
+    setRowBusy({ userId: emp.UserID, action: 'resend' });
+    try {
+      const res = await api.post(`/admin/employees/${emp.UserID}/resend-credentials`);
+      showMessage(res.data.message || 'Credentials sent.');
+      fetchEmployees();
+    } catch (err) {
+      showMessage(err.response?.data?.message || 'Failed to resend credentials.', 'error');
+    } finally {
+      setRowBusy(null);
+    }
   };
 
   // Filter employees based on search query (Name, Email, or Employee Code)
@@ -140,11 +196,31 @@ const ListEmployees = () => {
       <div className="p-6">
         {/* Success Alert Banner */}
         {message && (
-          <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200/60 text-emerald-800 flex items-center gap-3">
-            <svg className="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-sm font-medium">{message}</p>
+          <div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 ${
+            messageTone === 'error'
+              ? 'bg-rose-50 border-rose-200/60 text-rose-800'
+              : messageTone === 'warning'
+                ? 'bg-amber-50 border-amber-200/60 text-amber-800'
+                : 'bg-emerald-50 border-emerald-200/60 text-emerald-800'
+          }`}>
+            {messageTone === 'success' ? (
+              <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            )}
+            <p className="text-sm font-medium flex-1">{message}</p>
+            <button
+              type="button"
+              onClick={() => setMessage('')}
+              aria-label="Dismiss"
+              className="text-current opacity-60 hover:opacity-100 cursor-pointer"
+            >
+              ✕
+            </button>
           </div>
         )}
 
@@ -227,10 +303,41 @@ const ListEmployees = () => {
                           <span className={`w-1.5 h-1.5 rounded-full ${emp.IsActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                           {emp.IsActive ? 'Active' : 'Inactive'}
                         </span>
+                        {Boolean(emp.DefaultPasswordFlag) && (
+                          <div className="mt-1 text-[11px] text-slate-400 whitespace-nowrap">Not logged in yet</div>
+                        )}
                       </td>
 
-                      {/* Action Button */}
+                      {/* Action Buttons */}
                       <td className="py-3.5 px-4 text-right">
+                        <div className="inline-flex flex-wrap justify-end gap-2">
+                        {!emp.IsActive ? (
+                          <button
+                            type="button"
+                            onClick={() => activateEmployee(emp)}
+                            disabled={Boolean(rowBusy)}
+                            title="Activate this user (sends login details if they have never logged in)"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm hover:bg-emerald-100 disabled:opacity-50 transition-all cursor-pointer whitespace-nowrap"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />
+                            </svg>
+                            {rowBusy?.userId === emp.UserID && rowBusy.action === 'activate' ? 'Activating...' : 'Activate'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => resendCredentials(emp)}
+                            disabled={Boolean(rowBusy)}
+                            title="Email a new temporary password"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm hover:bg-indigo-100 disabled:opacity-50 transition-all cursor-pointer whitespace-nowrap"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            {rowBusy?.userId === emp.UserID && rowBusy.action === 'resend' ? 'Sending...' : 'Resend Credentials'}
+                          </button>
+                        )}
                         <button
                           onClick={() => openEditor(emp)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all cursor-pointer"
@@ -240,6 +347,7 @@ const ListEmployees = () => {
                           </svg>
                           Edit
                         </button>
+                        </div>
                       </td>
                     </tr>
                   ))

@@ -218,6 +218,7 @@ const getAllEmployees = async (req, res) => {
                 u.LastName, 
                 u.Role, 
                 u.IsActive, 
+                u.DefaultPasswordFlag,
                 u.MobileNo,
                 u.DepartmentID,
                 u.Designation,
@@ -1081,6 +1082,46 @@ const activateAllUsers = async (req, res) => {
 };
 
 /**
+ * Activate one user (Admin only), from List Employees. A user who has never
+ * logged in gets a new temporary password and the login email at once.
+ * POST /admin/employees/:userId/activate
+ */
+const ACTIVATE_USER_MESSAGES = {
+  sent: (email) => `User activated. Login details have been sent to ${email}.`,
+  notNeeded: () =>
+    "User activated. They have logged in before, so they keep their current password and no email was sent. Use Resend Credentials if they need a new one.",
+  noEmail: () =>
+    "User activated, but they have no email address, so no login details were sent. Add an email, then use Resend Credentials.",
+  failed: () => "User activated, but the login email could not be sent. Please use Resend Credentials.",
+};
+
+const activateUser = async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid employee ID." });
+  }
+
+  try {
+    const result = await userActivationService.activateUser(req.user, userId);
+    if (result.status === "notFound") {
+      return res.status(404).json({ success: false, message: "Employee not found." });
+    }
+    if (result.status === "alreadyActive") {
+      return res.status(400).json({ success: false, message: "This user is already active." });
+    }
+    return res.json({
+      success: true,
+      message: ACTIVATE_USER_MESSAGES[result.mail](result.email),
+      warning: result.mail === "failed" || result.mail === "noEmail",
+      data: { mail: result.mail },
+    });
+  } catch (error) {
+    console.error("Activate User Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to activate the user. No changes were saved." });
+  }
+};
+
+/**
  * Progress of a bulk upload's welcome emails (Admin only).
  * GET /admin/welcome-mail-batches/:batchId
  */
@@ -1098,6 +1139,7 @@ const getWelcomeMailBatch = (req, res) => {
 module.exports = {
   getActivationSummary,
   activateAllUsers,
+  activateUser,
   resendCredentials,
   getWelcomeMailBatch,
   importEmployees,

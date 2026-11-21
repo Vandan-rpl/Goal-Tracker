@@ -18,14 +18,15 @@ import { getIdeaApiError, getIdeaDashboard } from "../../services/ideaService";
 import { formatIdeaDate } from "../../utils/ideaStatus";
 
 const STATUS_COLORS = {
-  "Pending Approval": C.amber,
-  "In Progress": C.navy,
+  "Pending with Reporting Manager": C.amber,
+  "Pending Final Approval": "#1f8a9d",
+  "In Implementation": C.navy,
   Overdue: C.red,
-  Completed: C.green,
+  Implemented: C.green,
 };
 
 const SNAPSHOT_COLORS = {
-  Completed: C.green,
+  Implemented: C.green,
   Remaining: C.slate,
 };
 
@@ -79,7 +80,7 @@ const IdeaDashboard = () => {
       badge="DASHBOARD"
       title="My Dashboard"
       description="Ideas you have submitted. Drafts are not included."
-      footer="Completion % = Completed / ideas that got final approval. In Progress = Active ideas plus ideas waiting for the Reporting Manager to approve completion. An Active or In Implementation idea past its target date counts as Overdue only. Rejected ideas are shown only in the Rejected card."
+      footer="Final approval moves an idea straight to In Implementation. The In Implementation card counts every idea being implemented, overdue ones included; in the Status Breakdown an idea past its target date counts as Overdue only. Implementation % = Implemented / (In Implementation + Implemented). Rejected ideas are shown only in the Rejected card."
     >
       <DashboardError message={error} />
 
@@ -88,15 +89,16 @@ const IdeaDashboard = () => {
       ) : summary && (
         <div className="space-y-6">
           <SummaryCards
-            gridClassName="grid-cols-2 md:grid-cols-4 xl:grid-cols-7"
+            gridClassName="grid-cols-2 md:grid-cols-4 xl:grid-cols-8"
             cards={[
               { label: "Total Ideas", value: summary.total, accent: "text-[#2c3e82]" },
-              { label: "Pending Approval", value: summary.pendingApproval, accent: "text-[#d08a1c]" },
-              { label: "Approved Ideas", value: summary.approved, accent: "text-[#2c3e82]" },
-              { label: "Completed", value: summary.completed, accent: "text-[#1f9d6b]" },
+              { label: "Pending with Reporting Manager", value: summary.pendingManager, accent: "text-[#d08a1c]" },
+              { label: "Pending Final Approval", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
+              { label: "In Implementation", value: summary.inImplementation, accent: "text-[#2c3e82]" },
+              { label: "Implemented", value: summary.implemented, accent: "text-[#1f9d6b]" },
               { label: "Rejected", value: summary.rejected, accent: "text-[#b3403f]" },
               { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
-              { label: "Completion %", value: `${summary.completionPercent}%`, accent: "text-[#2c3e82]" },
+              { label: "Implementation %", value: `${summary.implementationPercent}%`, accent: "text-[#2c3e82]" },
             ]}
           />
 
@@ -116,7 +118,7 @@ const IdeaDashboard = () => {
                   barName: "Ideas",
                   yAxisWidth: 170,
                 }}
-                snapshot={{ title: "Completion Snapshot", rows: data.completionSnapshot, colors: SNAPSHOT_COLORS }}
+                snapshot={{ title: "Implementation Snapshot", rows: data.implementationSnapshot, colors: SNAPSHOT_COLORS }}
               />
 
               <DashboardListTable title="All Ideas">

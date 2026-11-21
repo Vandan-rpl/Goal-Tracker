@@ -222,7 +222,7 @@ const buildReport = ({
             count: filteredRows.filter((row) => row[categoryField] === label).length,
         })),
         CompletionSnapshot: [
-            { label: "Completed", count: completed },
+            { label: completedStatus, count: completed },
             { label: "Remaining", count: Math.max(0, completionTotal - completed) },
         ],
         CompletionPercent: completionTotal === 0 ? 0 : Math.round((completed / completionTotal) * 100),

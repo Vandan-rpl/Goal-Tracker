@@ -171,7 +171,7 @@ const TeamView = ({ members, fiscalYear, onSelect }) => {
                 <Bar
                   dataKey="QuarterAveragePercentage"
                   name="Quarter Average"
-                  fill="#4F46E5"
+                  fill="#2c3e82"
                   radius={[0, 4, 4, 0]}
                   cursor="pointer"
                   onClick={(entry) => onSelect(entry.UserID)}
@@ -305,9 +305,9 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
               }
             />
             <Legend />
-            <Bar dataKey="allocated" name="Allocated" fill="#6366F1" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="allocated" name="Allocated" fill="#526198" radius={[4, 4, 0, 0]}>
               {chartData.map((entry) => (
-                <Cell key={entry.quarter} fill={entry.isFuture ? FUTURE_FILL : "#6366F1"} />
+                <Cell key={entry.quarter} fill={entry.isFuture ? FUTURE_FILL : "#526198"} />
               ))}
             </Bar>
             <Bar

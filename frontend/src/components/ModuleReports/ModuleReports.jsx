@@ -38,13 +38,11 @@ const TABS = [
   { key: "organisation", label: "Organisation overview" },
 ];
 
-const SNAPSHOT_COLORS = { Completed: C.green, Remaining: C.slate };
-
 const fiscalYearLabel = formatFiscalYearLabel;
 
 // Table of count rows (team members or departments): name, total, one
 // column per status, completion %. onSelect makes rows clickable.
-const CountsTable = ({ title, nameLabel, rows, statuses, statusColors, showDepartment, onSelect }) => (
+const CountsTable = ({ title, nameLabel, rows, statuses, statusColors, completionLabel, showDepartment, onSelect }) => (
   <DashboardListTable title={title} minWidthClass="min-w-180">
     <thead>
       <tr>
@@ -59,7 +57,7 @@ const CountsTable = ({ title, nameLabel, rows, statuses, statusColors, showDepar
             </span>
           </th>
         ))}
-        <th className={`${headClass} text-right`}>Completion %</th>
+        <th className={`${headClass} text-right`}>{completionLabel} %</th>
       </tr>
     </thead>
     <tbody>
@@ -137,6 +135,10 @@ const StackedStatusChart = ({ title, rows, statuses, statusColors, onSelect }) =
  *   itemColumns           [{ label, render(item), className }] for one member's list
  *   itemKey               id column of an item
  *   footer                note under the sheet
+ *   completion            { label, status }: wording of the "% / Snapshot"
+ *                         headings and the done status (Tasks: Completion /
+ *                         Completed, Ideas: Implementation / Implemented)
+ *   summaryGridClassName  columns of the summary cards
  */
 const ModuleReports = ({
   noun,
@@ -149,7 +151,10 @@ const ModuleReports = ({
   itemColumns,
   itemKey,
   footer,
+  completion = { label: "Completion", status: "Completed" },
+  summaryGridClassName = "grid-cols-2 md:grid-cols-4 xl:grid-cols-7",
 }) => {
+  const snapshotColors = { [completion.status]: C.green, Remaining: C.slate };
   const Plural = nounPlural.charAt(0).toUpperCase() + nounPlural.slice(1);
   const [scope, setScope] = useState("team");
   // null = the server's current fiscal year.
@@ -326,7 +331,7 @@ const ModuleReports = ({
             )}
 
             <SummaryCards
-              gridClassName="grid-cols-2 md:grid-cols-4 xl:grid-cols-7"
+              gridClassName={summaryGridClassName}
               cards={summaryCards(report.Summary)}
             />
 
@@ -345,9 +350,9 @@ const ModuleReports = ({
                   yAxisWidth: category.yAxisWidth,
                 }}
                 snapshot={{
-                  title: "Completion Snapshot",
+                  title: `${completion.label} Snapshot`,
                   rows: report.CompletionSnapshot,
-                  colors: SNAPSHOT_COLORS,
+                  colors: snapshotColors,
                 }}
               />
             ) : (
@@ -375,6 +380,7 @@ const ModuleReports = ({
                     rows={memberRows}
                     statuses={statuses}
                     statusColors={statusColors}
+                    completionLabel={completion.label}
                     showDepartment
                     onSelect={selectEmployee}
                   />
@@ -401,6 +407,7 @@ const ModuleReports = ({
                   rows={departmentRows}
                   statuses={statuses}
                   statusColors={statusColors}
+                  completionLabel={completion.label}
                 />
               </>
             )}

@@ -1,26 +1,18 @@
-import React from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import IdeasSidebarMenu from "./IdeasSidebarMenu";
 import TasksSidebarMenu from "./TasksSidebarMenu";
+import ProfileMenu from "../components/ProfileMenu/ProfileMenu";
 import { isIdeasPath } from "../utils/ideasMenu";
 import { isTasksPath } from "../utils/tasksMenu";
-import rubaminLogo from "../assets/images/rubamin-logo.png";
-import { GatiWordmark, PORTAL_PILLARS, PORTAL_TITLE } from "../components/PortalBrand/PortalBrand";
 
 const Sidebar = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-  const isActive = (path) => location.pathname === path;
+  const { user } = useAuth();
 
   // On /ideas and /tasks pages that module's menu replaces the Goal Tracker
   // links below.
   const { pathname } = useLocation();
+  const isActive = (path) => pathname === path;
   const isIdeasModule = isIdeasPath(pathname);
   const isTasksModule = isTasksPath(pathname);
 
@@ -34,27 +26,8 @@ const Sidebar = () => {
 
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800/80 flex flex-col h-screen select-none font-sans">
+    <aside className="w-64 bg-[#2c3e82] border-r border-white/10 flex flex-col h-full select-none font-sans">
       
-      {/* Brand Header: static GATI branding (not links). The wordmark
-          waves; the pillar line spells out the acronym. */}
-      <div className="px-5 pt-[22px] pb-[18px] border-b border-slate-800/80 text-left">
-        <GatiWordmark
-          className="text-[22px] font-bold! tracking-[0.14em] drop-shadow-[0_0_8px_rgba(255,92,114,0.45)]"
-          letterClassName="bg-clip-text text-transparent bg-linear-to-b from-[#ff8a98] to-[#FF5C72]"
-        />
-        <p className="mt-0.5 text-xs text-[#9AA1BF]">{PORTAL_TITLE}</p>
-        <p className="mt-3 pt-2.5 border-t border-dashed border-[#262B47] text-[11px] leading-[1.4] text-[#8F96B3] whitespace-nowrap">
-          {PORTAL_PILLARS.map((word, i) => (
-            <React.Fragment key={word}>
-              {i > 0 && " · "}
-              <span className="font-bold text-[#FF5C72]">{word[0]}</span>
-              {word.slice(1)}
-            </React.Fragment>
-          ))}
-        </p>
-      </div>
-
       {/* Navigation Items */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
 
@@ -68,12 +41,15 @@ const Sidebar = () => {
         {!isAdmin && (
         <>
         {/* Core Links */}
+        <p className="px-3.5 pb-1 text-[11px] font-bold text-indigo-200/80 uppercase tracking-wider">
+          For Users
+        </p>
         <Link
           to="/dashboard"
           className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
             isActive("/dashboard")
-              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-              : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+              ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+              : "text-indigo-100 hover:bg-white/10 hover:text-white"
           }`}
         >
           <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,8 +62,8 @@ const Sidebar = () => {
           to="/goals"
           className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
             isActive("/goals")
-              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-              : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+              ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+              : "text-indigo-100 hover:bg-white/10 hover:text-white"
           }`}
         >
           <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,8 +76,8 @@ const Sidebar = () => {
           to="/goals/joint"
           className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
             isActive("/goals/joint")
-              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-              : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+              ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+              : "text-indigo-100 hover:bg-white/10 hover:text-white"
           }`}
         >
           <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,8 +88,8 @@ const Sidebar = () => {
 
         {/* Management Section */}
         {isManagerOrHOD && (
-          <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-1">
-            <p className="px-3.5 pb-1 text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
+          <div className="pt-4 mt-3 border-t border-white/10 space-y-1">
+            <p className="px-3.5 pb-1 text-[11px] font-bold text-indigo-200/80 uppercase tracking-wider">
               {role === "BUSINESSHEAD" ? "CFO View" : "For HOD/Reporting Manager"}
             </p>
 
@@ -121,8 +97,8 @@ const Sidebar = () => {
               to="/manager/team-management"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/manager/team-management")
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                  ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                  : "text-indigo-100 hover:bg-white/10 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,8 +112,8 @@ const Sidebar = () => {
                 to="/cfo/all-goals"
                 className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                   isActive("/cfo/all-goals")
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                    ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                    : "text-indigo-100 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,8 +127,8 @@ const Sidebar = () => {
               to="/admin/reports"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/admin/reports")
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                  ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                  : "text-indigo-100 hover:bg-white/10 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,7 +145,7 @@ const Sidebar = () => {
         {/* Administration Section */}
         {isAdmin && (
           <div className="space-y-1">
-            <p className="px-3.5 pb-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <p className="px-3.5 pb-1 text-[11px] font-bold text-indigo-200/80 uppercase tracking-wider">
               Administration
             </p>
 
@@ -177,8 +153,8 @@ const Sidebar = () => {
               to="/admin/employees-list"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/admin/employees-list")
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                  ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                  : "text-indigo-100 hover:bg-white/10 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -191,8 +167,8 @@ const Sidebar = () => {
               to="/admin/add-employees"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/admin/add-employees")
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                  ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                  : "text-indigo-100 hover:bg-white/10 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,8 +181,8 @@ const Sidebar = () => {
               to="/admin/import-employees"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/admin/import-employees")
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                  ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                  : "text-indigo-100 hover:bg-white/10 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,8 +195,8 @@ const Sidebar = () => {
               to="/admin/upload-excel"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/admin/upload-excel")
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                  ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                  : "text-indigo-100 hover:bg-white/10 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,8 +209,8 @@ const Sidebar = () => {
               to="/admin/reports"
               className={`flex items-center px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                 isActive("/admin/reports")
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                  ? "bg-white text-[#2c3e82] shadow-lg shadow-black/20 font-semibold"
+                  : "text-indigo-100 hover:bg-white/10 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5 mr-3 text-current opacity-80 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -249,39 +225,9 @@ const Sidebar = () => {
 
       </nav>
 
-      {/* Footer Profile & Logout */}
-      <div className="p-4 border-t border-slate-800/80 
-        bg-slate-950/  40">
-        {/* {user && (
-          <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-800/40 border border-slate-800">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center font-bold text-xs uppercase flex-shrink-0">
-              {user.username?.[0] || "U"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Signed in as</p>
-              <p className="text-xs font-semibold text-slate-200 truncate">{user.username || "User"}</p>
-            </div>
-          </div>
-        )} */}
-
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 rounded-xl transition-all duration-200 font-medium text-xs cursor-pointer gap-2"
-        >
-          <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logout
-        </button>
-
-        <div className="mt-3.5 inline-flex rounded-md bg-white px-2 py-1">
-          <img
-            src={rubaminLogo}
-            alt="Rubamin"
-            className="h-[18px] w-auto object-contain"
-            draggable="false"
-          />
-        </div>
+      {/* Profile card with Logout */}
+      <div className="p-3 border-t border-white/10 bg-black/10">
+        <ProfileMenu />
       </div>
 
     </aside>

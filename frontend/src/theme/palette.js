@@ -3,7 +3,7 @@
  * Goal Tracker Management System — Color Palette
  * ============================================================
  * Design system pass (redesign, not a rebuild): replaces the previous
- * generic "MUI blue" (#1976D2) palette with a deliberate enterprise
+ * generic "MUI blue" (#2c3e82) palette with a deliberate enterprise
  * HR/performance-management palette.
  *
  * Rationale:

@@ -3,6 +3,46 @@
 @tailwind components; */
 @tailwind utilities;
 
+/* Brand blue: every Tailwind blue, indigo and sky class renders in the
+ * Rubamin navy #2c3e82 (the 600 shade; lighter/darker shades are tints
+ * and shades of it), so existing bg-indigo-600 / text-blue-500 / etc.
+ * markup follows the brand without touching each component. */
+@theme {
+  --color-blue-50: #f2f3f8;
+  --color-blue-100: #e6e8f0;
+  --color-blue-200: #ccd1e1;
+  --color-blue-300: #a6aeca;
+  --color-blue-400: #7c87b2;
+  --color-blue-500: #526198;
+  --color-blue-600: #2c3e82;
+  --color-blue-700: #1f2c61;
+  --color-blue-800: #1b2651;
+  --color-blue-900: #151e3e;
+  --color-blue-950: #0f152c;
+  --color-indigo-50: #f2f3f8;
+  --color-indigo-100: #e6e8f0;
+  --color-indigo-200: #ccd1e1;
+  --color-indigo-300: #a6aeca;
+  --color-indigo-400: #7c87b2;
+  --color-indigo-500: #526198;
+  --color-indigo-600: #2c3e82;
+  --color-indigo-700: #1f2c61;
+  --color-indigo-800: #1b2651;
+  --color-indigo-900: #151e3e;
+  --color-indigo-950: #0f152c;
+  --color-sky-50: #f2f3f8;
+  --color-sky-100: #e6e8f0;
+  --color-sky-200: #ccd1e1;
+  --color-sky-300: #a6aeca;
+  --color-sky-400: #7c87b2;
+  --color-sky-500: #526198;
+  --color-sky-600: #2c3e82;
+  --color-sky-700: #1f2c61;
+  --color-sky-800: #1b2651;
+  --color-sky-900: #151e3e;
+  --color-sky-950: #0f152c;
+}
+
 /**
  * ============================================================
  * Design tokens (CSS custom properties)

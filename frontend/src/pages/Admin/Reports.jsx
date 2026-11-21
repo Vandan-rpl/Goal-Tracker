@@ -148,7 +148,7 @@ const OrganisationReports = ({ hiddenDepartments = [] }) => {
               <Bar
                 dataKey="totalGoals"
                 name="Total Goals"
-                fill="#6366F1"
+                fill="#526198"
                 radius={[4, 4, 0, 0]}
               />
               <Bar

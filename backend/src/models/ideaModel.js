@@ -1261,13 +1261,13 @@ const getIdeaMailData = async (db, ideaId) => {
  * out (ideas where the user is only the Reporting Manager or final approver
  * are not included). Each idea gets one DashboardStatus so the groups never
  * overlap:
- *   Pending Approval  Submitted / Pending Final Approval
+ *   Pending with Reporting Manager   Submitted
+ *   Pending Final Approval           Pending Final Approval
  *   Rejected          Rejected
- *   Completed         Implemented
+ *   Implemented       Implemented
  *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
- *   Awaiting Completion Approval
- *                     not overdue, with a pending close request
- *   Active            any other Active / In Implementation idea
+ *   Closure Pending   not overdue, with a pending close request
+ *   In Implementation any other Active / In Implementation idea
  * Newest first, like My Ideas.
  */
 const listDashboardIdeas = async (db, userId) => {
@@ -1286,12 +1286,13 @@ const listDashboardIdeas = async (db, userId) => {
                 ${IS_OVERDUE} AS IsOverdue,
                 pendingRequest.PendingRequestType,
                 CASE
-                    WHEN i.Status IN (${sqlList([IdeaStatus.SUBMITTED, IdeaStatus.PENDING_FINAL_APPROVAL])}) THEN N'Pending Approval'
+                    WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'Pending with Reporting Manager'
+                    WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Pending Final Approval'
                     WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
-                    WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Completed'
+                    WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Implemented'
                     WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
-                    WHEN pendingRequest.PendingRequestType = N'${IdeaRequestType.CLOSE}' THEN N'Awaiting Completion Approval'
-                    ELSE N'Active'
+                    WHEN pendingRequest.PendingRequestType = N'${IdeaRequestType.CLOSE}' THEN N'Closure Pending'
+                    ELSE N'In Implementation'
                 END AS DashboardStatus
             FROM dbo.Ideas i
             ${PENDING_REQUEST_APPLY}
@@ -1308,11 +1309,12 @@ const listDashboardIdeas = async (db, userId) => {
  * owner, any year; utils/moduleReport filters and counts them. FiscalYear
  * is the fiscal year the idea was submitted in. ReportStatus groups (never
  * overlapping):
- *   Pending Approval  Submitted / Pending Final Approval
+ *   Pending with Reporting Manager   Submitted
+ *   Pending Final Approval           Pending Final Approval
  *   Rejected          Rejected
- *   Completed         Implemented
+ *   Implemented       Implemented
  *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
- *   In Progress       any other Active / In Implementation idea
+ *   In Implementation any other Active / In Implementation idea
  */
 const listReportIdeas = async (db) => {
 
@@ -1336,11 +1338,12 @@ const listReportIdeas = async (db) => {
             ${fullName("lead")} AS ReportingManagerName,
             ${sqlFiscalYear(submittedOn)} AS FiscalYear,
             CASE
-                WHEN i.Status IN (${sqlList([IdeaStatus.SUBMITTED, IdeaStatus.PENDING_FINAL_APPROVAL])}) THEN N'Pending Approval'
+                WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'Pending with Reporting Manager'
+                WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Pending Final Approval'
                 WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
-                WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Completed'
+                WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Implemented'
                 WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
-                ELSE N'In Progress'
+                ELSE N'In Implementation'
             END AS ReportStatus
         FROM dbo.Ideas i
         INNER JOIN dbo.Users submitter

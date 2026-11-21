@@ -27,6 +27,9 @@ router.post('/employees/import', verifyToken, verifyRole([Roles.ADMIN]), employe
 router.get('/employees/activation-summary', verifyToken, verifyRole([Roles.ADMIN]), adminController.getActivationSummary);
 router.post('/employees/activate-all', verifyToken, verifyRole([Roles.ADMIN]), adminController.activateAllUsers);
 
+// Activate one inactive user; never-logged-in users get the login email (Admin only)
+router.post('/employees/:userId/activate', verifyToken, verifyRole([Roles.ADMIN]), adminController.activateUser);
+
 router.put('/employees/:userId', verifyToken, verifyRole([Roles.ADMIN]), adminController.updateEmployee);
 
 // New temporary password + welcome email (Admin only)

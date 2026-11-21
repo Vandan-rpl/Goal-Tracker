@@ -32,7 +32,7 @@ const ScoreGauge = ({ score }) => {
   const color =
     score == null ? '#9CA3AF' /* gray-400 */ :
     score >= 4 ? '#059669' /* emerald-600 */ :
-    score >= 3 ? '#4F46E5' /* indigo-600 */ :
+    score >= 3 ? '#2c3e82' /* indigo-600 */ :
     score >= 2 ? '#D97706' /* amber-600 */ : '#DC2626' /* red-600 */;
 
   return (

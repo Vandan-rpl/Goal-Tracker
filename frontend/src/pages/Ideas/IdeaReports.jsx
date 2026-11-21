@@ -6,10 +6,11 @@ import { getIdeaApiError, getIdeaReport } from "../../services/ideaService";
 import { formatIdeaDate } from "../../utils/ideaStatus";
 
 const STATUS_COLORS = {
-  "Pending Approval": C.amber,
-  "In Progress": C.navy,
+  "Pending with Reporting Manager": C.amber,
+  "Pending Final Approval": "#1f8a9d",
+  "In Implementation": C.navy,
   Overdue: C.red,
-  Completed: C.green,
+  Implemented: C.green,
   Rejected: "#8a5a9d",
 };
 
@@ -27,12 +28,13 @@ const PURPOSE_COLORS = Object.fromEntries(
 
 const summaryCards = (summary) => [
   { label: "Total Ideas", value: summary.total, accent: "text-[#2c3e82]" },
-  { label: "Pending Approval", value: summary.pendingApproval, accent: "text-[#d08a1c]" },
-  { label: "Approved Ideas", value: summary.approved, accent: "text-[#2c3e82]" },
-  { label: "Completed", value: summary.completed, accent: "text-[#1f9d6b]" },
+  { label: "Pending with Reporting Manager", value: summary.pendingManager, accent: "text-[#d08a1c]" },
+  { label: "Pending Final Approval", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
+  { label: "In Implementation", value: summary.inImplementation, accent: "text-[#2c3e82]" },
+  { label: "Implemented", value: summary.implemented, accent: "text-[#1f9d6b]" },
   { label: "Rejected", value: summary.rejected, accent: "text-[#b3403f]" },
   { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
-  { label: "Completion %", value: `${summary.completionPercent}%`, accent: "text-[#2c3e82]" },
+  { label: "Implementation %", value: `${summary.implementationPercent}%`, accent: "text-[#2c3e82]" },
 ];
 
 const ITEM_COLUMNS = [
@@ -71,7 +73,9 @@ const IdeaReports = () => (
     summaryCards={summaryCards}
     itemColumns={ITEM_COLUMNS}
     itemKey="IdeaID"
-    footer="Ideas are counted in the fiscal year they were submitted; Drafts are left out. In Progress = approved and being implemented, not overdue. Completion % = Completed ÷ approved ideas (In Progress + Overdue + Completed)."
+    completion={{ label: "Implementation", status: "Implemented" }}
+    summaryGridClassName="grid-cols-2 md:grid-cols-4 xl:grid-cols-8"
+    footer="Ideas are counted in the fiscal year they were submitted; Drafts are left out. Final approval moves an idea straight to In Implementation. The In Implementation card counts every idea being implemented, overdue ones included; in the tables and charts an idea past its target date counts as Overdue only. Implementation % = Implemented ÷ (In Implementation + Overdue + Implemented)."
   />
 );
 

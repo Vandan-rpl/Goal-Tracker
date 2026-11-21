@@ -1,81 +1,50 @@
-import React, { useMemo, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useState } from "react";
+import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
-import {
-  Avatar,
-  Box,
-  Divider,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Typography,
-} from "@mui/material";
+import { Avatar, Divider, ListItemIcon, ListItemText, Menu, MenuItem } from "@mui/material";
 
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
+
+import { logout as logoutRedux } from "../../redux/slices/authSlice";
+import useAuth from "../../hooks/useAuth";
+
+const ROLE_LABELS = {
+  BUSINESSHEAD: "CFO",
+  HOD: "HOD",
+  MANAGER: "Manager",
+  ADMIN: "Administrator",
+  EMPLOYEE: "Employee",
+};
+
+const initialsOf = (name) =>
+  !name || name === "User"
+    ? "U"
+    : name
+        .split(" ")
+        .filter(Boolean)
+        .map((word) => word.charAt(0))
+        .join("")
+        .substring(0, 2)
+        .toUpperCase();
 
 /**
- * Update this import according to your authSlice.
- * Example:
- * import { logout } from "../../redux/slices/authSlice";
+ * Profile card at the bottom of the sidebar: avatar, name and designation
+ * (click for Profile / Settings) with the Logout button inside the card.
  */
-import { logout } from "../../redux/slices/authSlice";
-
 const ProfileMenu = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
-  const { user } = useSelector((state) => state.auth);
-
-  const currentUser = user || (() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "null");
-    } catch {
-      return null;
-    }
-  })();
-
-  const displayName = useMemo(() => {
-    if (!currentUser) return "User";
-
-    return (
-      currentUser.fullName ||
-      currentUser.FullName ||
-      [currentUser.firstName || currentUser.FirstName, currentUser.lastName || currentUser.LastName]
-        .filter(Boolean)
-        .join(" ") ||
-      currentUser.username ||
-      currentUser.Username ||
-      "User"
-    );
-  }, [currentUser]);
-
+  const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
 
-  const open = Boolean(anchorEl);
+  const displayName = user?.fullName || user?.FullName || "User";
+  const role = String(user?.role || user?.Role || "").toUpperCase();
+  const email = user?.email || user?.Email || "";
 
-  const initials = useMemo(() => {
-    if (!displayName || displayName === "User") return "U";
-
-    return displayName
-      .split(" ")
-      .map((word) => word.charAt(0))
-      .join("")
-      .substring(0, 2)
-      .toUpperCase();
-  }, [displayName]);
-
-  const handleOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+  const handleClose = () => setAnchorEl(null);
 
   const handleNavigate = (path) => {
     handleClose();
@@ -84,154 +53,80 @@ const ProfileMenu = () => {
 
   const handleLogout = () => {
     handleClose();
-
-    dispatch(logout());
-
-    localStorage.removeItem("token");
+    logout();
+    dispatch(logoutRedux());
     sessionStorage.removeItem("token");
-
-    navigate("/login", {
-      replace: true,
-    });
+    navigate("/login", { replace: true });
   };
 
   return (
-    <>
-      <IconButton
-        onClick={handleOpen}
-        size="small"
-        color="inherit"
+    <div className="rounded-xl border border-white/15 bg-white/10 p-2">
+      <button
+        type="button"
+        onClick={(event) => setAnchorEl(event.currentTarget)}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(anchorEl)}
+        className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-colors hover:bg-white/10 cursor-pointer"
       >
         <Avatar
-          src={currentUser?.profileImage || ""}
+          src={user?.profileImage || ""}
           alt={displayName}
           sx={{
-            width: 40,
-            height: 40,
-            bgcolor: "primary.main",
-            fontWeight: 600,
+            width: 36,
+            height: 36,
+            fontSize: 13,
+            fontWeight: 700,
+            bgcolor: "#ffffff",
+            color: "#2c3e82",
           }}
         >
-          {!currentUser?.profileImage && initials}
+          {!user?.profileImage && initialsOf(displayName)}
         </Avatar>
-      </IconButton>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-white">{displayName}</span>
+        </span>
+        <UnfoldMoreIcon sx={{ fontSize: 18, color: "rgba(199, 210, 254, 0.8)" }} />
+      </button>
 
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:border-rose-500 hover:bg-rose-500 cursor-pointer"
+      >
+        <svg className="h-4 w-4 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        Logout
+      </button>
+
+      {/* Opens upward, above the card. */}
       <Menu
         anchorEl={anchorEl}
-        open={open}
+        open={Boolean(anchorEl)}
         onClose={handleClose}
-        keepMounted
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "right",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "right",
-        }}
-        PaperProps={{
-          sx: {
-            width: 300,
-            mt: 1,
-            borderRadius: 2,
-          },
-        }}
+        anchorOrigin={{ vertical: "top", horizontal: "left" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+        slotProps={{ paper: { sx: { width: 240, mb: 1, borderRadius: 2 } } }}
       >
-        {/* User Information */}
-        <Box
-          sx={{
-            px: 2,
-            py: 2,
-          }}
-        >
-          <Typography
-            variant="subtitle1"
-            fontWeight={600}
-          >
-            {displayName}
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-          >
-            {currentUser?.designation || ""}
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-          >
-            {currentUser?.department || ""}
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-          >
-            {currentUser?.email || ""}
-          </Typography>
-        </Box>
-
+        <div className="px-4 py-2.5">
+          <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+          {email && <p className="mt-0.5 truncate text-xs text-slate-500">{email}</p>}
+        </div>
         <Divider />
-
-        {/* Profile */}
-        <MenuItem
-          onClick={() =>
-            handleNavigate("/profile")
-          }
-        >
+        <MenuItem onClick={() => handleNavigate("/profile")}>
           <ListItemIcon>
-            <PersonOutlineOutlinedIcon
-              fontSize="small"
-            />
+            <PersonOutlineOutlinedIcon fontSize="small" />
           </ListItemIcon>
-
-          <ListItemText>
-            Profile
-          </ListItemText>
+          <ListItemText>Profile</ListItemText>
         </MenuItem>
-
-        {/* Settings */}
-        <MenuItem
-          onClick={() =>
-            handleNavigate("/setting")
-          }
-        >
+        <MenuItem onClick={() => handleNavigate("/setting")}>
           <ListItemIcon>
-            <SettingsOutlinedIcon
-              fontSize="small"
-            />
+            <SettingsOutlinedIcon fontSize="small" />
           </ListItemIcon>
-
-          <ListItemText>
-            Settings
-          </ListItemText>
-        </MenuItem>
-
-        <Divider />
-
-        {/* Logout */}
-        <MenuItem
-          onClick={handleLogout}
-        >
-          <ListItemIcon>
-            <LogoutOutlinedIcon
-              color="error"
-              fontSize="small"
-            />
-          </ListItemIcon>
-
-          <ListItemText
-            primaryTypographyProps={{
-              color: "error",
-            }}
-          >
-            Logout
-          </ListItemText>
+          <ListItemText>Settings</ListItemText>
         </MenuItem>
       </Menu>
-    </>
+    </div>
   );
 };
 

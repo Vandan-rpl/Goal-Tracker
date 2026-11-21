@@ -89,7 +89,7 @@ export default function IdeaFinalApproverSettings() {
     // No overflow-hidden here: it would clip the user dropdown below the search box.
     <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs lg:col-span-2">
       <div className="p-6 border-b border-slate-100 flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-[#1976d2]/10 text-[#1976d2]">
+        <div className="p-2.5 rounded-xl bg-[#2c3e82]/10 text-[#2c3e82]">
           <Lightbulb className="w-5 h-5" />
         </div>
         <div>
@@ -119,7 +119,7 @@ export default function IdeaFinalApproverSettings() {
             type="button"
             onClick={handleAdd}
             disabled={!selectedUserId || loading || saving}
-            className="shrink-0 rounded-lg bg-[#1976d2] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-[#2c3e82] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving && !removeTarget ? "Adding…" : "Add final approver"}
           </button>

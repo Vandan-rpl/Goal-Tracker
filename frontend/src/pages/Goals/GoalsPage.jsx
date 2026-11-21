@@ -39,7 +39,7 @@ const GoalsPage = () => {
         { headerName: 'Quarter', field: 'Quarter', flex: 1, sortable: true },
         { headerName: 'Weightage (%)', field: 'Weightage', flex: 1, sortable: true },
         { headerName: 'Progress (%)', field: 'Progress', flex: 1, sortable: true },
-        { headerName: 'Status', field: 'Status', flex: 1, cellStyle: params => ({ fontWeight: 'bold', color: params.value === 'Completed' ? '#2e7d32' : '#1565c0' }) }
+        { headerName: 'Status', field: 'Status', flex: 1, cellStyle: params => ({ fontWeight: 'bold', color: params.value === 'Completed' ? '#2e7d32' : '#1f2c61' }) }
     ];
 
     const handleCreateGoal = async (submitFlag) => {
@@ -59,7 +59,7 @@ const GoalsPage = () => {
                     <Typography variant="h4" fontWeight="bold" color="#1e293b">Goals Management</Typography>
                     <Typography variant="body2" color="textSecondary">Create, manage, and track individual key performance indicators.</Typography>
                 </Box>
-                <Button variant="contained" startIcon={<Add />} onClick={() => setOpenDialog(true)} sx={{ backgroundColor: '#1565c0', fontWeight: 'bold', borderRadius: '8px' }}>
+                <Button variant="contained" startIcon={<Add />} onClick={() => setOpenDialog(true)} sx={{ backgroundColor: '#1f2c61', fontWeight: 'bold', borderRadius: '8px' }}>
                     Add Goal
                 </Button>
             </Box>
@@ -92,7 +92,7 @@ const GoalsPage = () => {
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
                     <Button onClick={() => handleCreateGoal(false)} variant="outlined" color="primary">Save as Draft</Button>
-                    <Button onClick={() => handleCreateGoal(true)} variant="contained" sx={{ backgroundColor: '#1565c0' }}>Submit for Approval</Button>
+                    <Button onClick={() => handleCreateGoal(true)} variant="contained" sx={{ backgroundColor: '#1f2c61' }}>Submit for Approval</Button>
                 </DialogActions>
             </Dialog>
         </Box>

@@ -61,23 +61,19 @@ const getActivationSummary = async () => {
 };
 
 /**
- * Activate every inactive user and queue the welcome emails.
- * Returns { activated, mailsQueued, batchId, noEmailAddress }.
+ * Activate the given (inactive) users in one transaction. Those who have
+ * never logged in and have an email get a new temporary password (same
+ * steps as Resend Credentials: lockout cleared, the replaced hash into
+ * PasswordHistory). Returns the activated ids and the users to email.
  */
-const activateAllUsers = async (admin) => {
-  const pool = await poolPromise;
-  const candidates = await listInactiveUsers(pool);
-  if (!candidates.length) {
-    return { activated: 0, mailsQueued: 0, batchId: null, noEmailAddress: 0 };
-  }
-
+const activateUsers = async (candidates) => {
   // Hash before the transaction so it stays short.
   const toMail = candidates.filter((u) => isNeverLoggedIn(u) && hasEmail(u));
   const credentials = new Map(
     await Promise.all(toMail.map(async (u) => [u.UserID, await issueTemporaryPassword()])),
   );
 
-  const { activatedIds, mailed } = await withTransaction(async (transaction) => {
+  return withTransaction(async (transaction) => {
     // Only users still inactive now.
     const activated = await transaction
       .request()
@@ -90,8 +86,6 @@ const activateAllUsers = async (admin) => {
       `);
     const ids = new Set(activated.recordset.map((r) => r.UserID));
 
-    // New temporary password (same steps as Resend Credentials): lockout
-    // cleared, the replaced hash into PasswordHistory.
     const mailedUsers = [];
     for (const user of toMail) {
       if (!ids.has(user.UserID)) continue;
@@ -120,6 +114,20 @@ const activateAllUsers = async (admin) => {
 
     return { activatedIds: ids, mailed: mailedUsers };
   });
+};
+
+/**
+ * Activate every inactive user and queue the welcome emails.
+ * Returns { activated, mailsQueued, batchId, noEmailAddress }.
+ */
+const activateAllUsers = async (admin) => {
+  const pool = await poolPromise;
+  const candidates = await listInactiveUsers(pool);
+  if (!candidates.length) {
+    return { activated: 0, mailsQueued: 0, batchId: null, noEmailAddress: 0 };
+  }
+
+  const { activatedIds, mailed } = await activateUsers(candidates);
 
   // After the commit; sent in the background (30 per minute).
   let batchId = null;
@@ -144,7 +152,48 @@ const activateAllUsers = async (admin) => {
   };
 };
 
+/**
+ * Activate one user (List Employees). Same rules as Activate All; the login
+ * email is sent at once so the Admin sees whether it went out.
+ * Returns { status, mail, email }: status "notFound" | "alreadyActive" |
+ * "activated"; mail "sent" | "failed" | "noEmail" | "notNeeded".
+ */
+const activateUser = async (admin, userId) => {
+  const pool = await poolPromise;
+  const found = await pool
+    .request()
+    .input("UserID", sql.Int, userId)
+    .query(`
+      SELECT UserID, EmployeeCode, Username, FirstName, LastName, Email, Role, DefaultPasswordFlag, IsActive
+      FROM dbo.Users
+      WHERE UserID = @UserID
+    `);
+  const user = found.recordset[0];
+  if (!user) return { status: "notFound" };
+  if (user.IsActive) return { status: "alreadyActive" };
+
+  const { activatedIds, mailed } = await activateUsers([user]);
+  if (!activatedIds.has(user.UserID)) return { status: "alreadyActive" };
+
+  let mail = "notNeeded";
+  if (mailed.length) {
+    try {
+      await welcomeMailQueue.sendNow({ ...mailed[0], source: "activate-user" });
+      mail = "sent";
+    } catch {
+      // Already logged by the queue (without the password).
+      mail = "failed";
+    }
+  } else if (isNeverLoggedIn(user) && !hasEmail(user)) {
+    mail = "noEmail";
+  }
+
+  logger.info(`[ACTIVATE USER] By admin userId=${admin.userId} (${admin.username}) for userId=${userId}: mail=${mail}`);
+  return { status: "activated", mail, email: user.Email || null };
+};
+
 module.exports = {
   getActivationSummary,
   activateAllUsers,
+  activateUser,
 };
