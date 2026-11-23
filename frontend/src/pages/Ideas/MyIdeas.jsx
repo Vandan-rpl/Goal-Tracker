@@ -20,7 +20,6 @@ const COUNT_BOXES = [
   { label: "Drafts", status: "Draft" },
   { label: "Submitted", status: "Submitted" },
   { label: "Final approval pending", status: "Pending Final Approval" },
-  { label: "Active", status: "Active" },
   { label: "In Implementation", status: "In Implementation" },
   { label: "Implemented", status: "Implemented" },
   { label: "Rejected", status: "Rejected" },

@@ -1,9 +1,10 @@
-// Innovation Ideas statuses, in workflow order (same values as the backend).
+// Innovation Ideas statuses offered in filters, in workflow order. "Active"
+// (legacy: final-approved before approval went straight to In Implementation)
+// is still a valid backend status but is no longer offered as a filter.
 export const IDEA_STATUSES = [
   "Draft",
   "Submitted",
   "Pending Final Approval",
-  "Active",
   "In Implementation",
   "Implemented",
   "Rejected",

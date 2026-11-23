@@ -82,6 +82,9 @@ export const IDEAS_MENU = [
     label: "All Ideas",
     path: "/ideas/all",
     access: IDEAS_ACCESS.VIEW_ALL,
+    // Hidden for the CFO for now: Reports & Analytics covers the same
+    // ideas. Remove this line to show All Ideas to the CFO again.
+    hiddenForRoles: ["BUSINESSHEAD"],
     section: "Organization",
     icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10",
   },
@@ -99,6 +102,7 @@ export const canViewAllIdeas = (role = "") =>
   VIEW_ALL_ROLES.includes(String(role).toUpperCase());
 
 export const canAccessIdeasItem = (item, { role, hasReportees, isFinalApprover }) => {
+  if (item.hiddenForRoles?.includes(String(role).toUpperCase())) return false;
   if (item.access === IDEAS_ACCESS.REVIEWER) {
     return (
       REVIEWER_ROLES.includes(String(role).toUpperCase()) ||

@@ -480,9 +480,6 @@ const getEmployeeDashboardSummary = (goals, now = new Date()) => {
     };
   });
 
-  const rejectedGoals = goals
-    .filter((goal) => statusOf(goal) === "rejected")
-    .map((goal) => ({ ...goal, AttentionReason: "Rejected" }));
   const overdueGoals = goals
     .filter((goal) => {
       const timeline = parseDate(goal.Timeline);
@@ -496,20 +493,7 @@ const getEmployeeDashboardSummary = (goals, now = new Date()) => {
       );
     })
     .map((goal) => ({ ...goal, AttentionReason: "Overdue" }));
-  const draftGoals = goals
-    .filter((goal) => {
-      const timeline = parseDate(goal.Timeline);
-      return (
-        statusOf(goal) === "draft" &&
-        (!timeline || timeline >= today)
-      );
-    })
-    .map((goal) => ({ ...goal, AttentionReason: "Draft" }));
-  const needsAttention = [
-    ...rejectedGoals,
-    ...overdueGoals,
-    ...draftGoals,
-  ].slice(0, 5);
+  const needsAttention = overdueGoals.slice(0, 5);
 
   const upcomingDeadlines = goals
     .map((goal) => {
