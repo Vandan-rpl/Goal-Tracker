@@ -438,16 +438,19 @@ function LeadActionDialog({ actionKey, idea, onClose, onCompleted }) {
             </label>
             <input
               id="lead-action-days"
-              type="number"
+              type="text"
               inputMode="numeric"
-              min={DAYS_MIN}
-              max={DAYS_MAX}
-              step={1}
+              autoComplete="off"
+              maxLength={String(DAYS_MAX).length}
               autoFocus={!action.finalApprover}
               disabled={busy}
               value={days}
               onChange={(e) => {
-                setDays(e.target.value);
+                // Digits only, never above DAYS_MAX: a keystroke that would
+                // make it larger (e.g. 3650) is ignored.
+                const next = e.target.value.replace(/\D/g, "");
+                if (next !== "" && Number(next) > DAYS_MAX) return;
+                setDays(next);
                 setFieldErrors((prev) => ({ ...prev, days: undefined }));
               }}
               placeholder={`${DAYS_MIN}–${DAYS_MAX}`}

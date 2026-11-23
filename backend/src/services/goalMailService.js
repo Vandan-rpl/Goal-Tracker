@@ -4,7 +4,7 @@ const { sendEmail } = require("./notifyService");
 const logger = require("../utils/logger");
 const { PORTAL_NAME } = require("../constants/portalConstants");
 const { getFiscalQuarterBoundsFromLabel } = require("../utils/fiscalQuarter");
-const { GoalMailEvent } = require("../constants/goalConstants");
+const { GoalMailEvent, GoalWindow } = require("../constants/goalConstants");
 
 /**
  * ============================================================
@@ -39,6 +39,30 @@ const logGoalMailMode = () => {
     logger.info("[GOAL MAIL] Redirect is OFF: goal emails go to the real recipients.");
   }
 };
+
+// Window reminder text per window (context.window).
+const GOAL_WINDOW_TEXT = Object.freeze({
+  [GoalWindow.ADD_GOAL]: {
+    name: "Add Goal window",
+    action: "add and submit your goals",
+    link: "/goals/add",
+    linkText: "Add Goals",
+  },
+  [GoalWindow.MANAGER_HOD_APPROVAL]: {
+    name: "Manager/HOD goal approval window",
+    action: "review and approve or reject the goals your team members have submitted",
+    link: "/manager/team-management",
+    linkText: "Review Team Goals",
+  },
+  [GoalWindow.CFO_APPROVAL]: {
+    name: "CFO goal approval window",
+    action: "give final approval to the goals waiting for you",
+    link: "/manager/team-management",
+    linkText: "Review Goals",
+  },
+});
+
+const windowText = (context) => GOAL_WINDOW_TEXT[context.window] || GOAL_WINDOW_TEXT[GoalWindow.ADD_GOAL];
 
 const noComment = (value, fallback) => (value && String(value).trim()) || fallback;
 
@@ -147,6 +171,30 @@ const GOAL_MAIL_EVENTS = Object.freeze({
     link: (context) => `/goals/final-evaluation/${context.userId}`,
     linkText: "View Evaluation",
   },
+  // Sent by jobs/goalWindowReminderJob.js the day before a goal window opens
+  // and 2 days before it closes. context: { window, stage ("opening" |
+  // "closing"), startDate, endDate (display text), targetQuarter }.
+  [GoalMailEvent.WINDOW_REMINDER]: {
+    needsGoal: false,
+    purpose: "Reminder",
+    actionRequired: false,
+    subjectTitle: (context) =>
+      `${windowText(context).name} ${context.stage === "closing" ? `closes on ${context.endDate}` : `opens on ${context.startDate}`}`,
+    message: (goal, context) =>
+      context.stage === "closing"
+        ? `The ${windowText(context).name} closes in 2 days, on ${context.endDate}. ` +
+          `Please ${windowText(context).action} in ${PORTAL_NAME} before it closes.`
+        : `The ${windowText(context).name} opens tomorrow, ${context.startDate}, and stays open until ${context.endDate}. ` +
+          `Please ${windowText(context).action} in ${PORTAL_NAME} during this window.`,
+    details: (goal, context) => [
+      ["Window", `${context.startDate} to ${context.endDate}`],
+      ["Goals for", context.targetQuarter ? formatQuarter(context.targetQuarter) : ""],
+    ],
+    note: (context) =>
+      `${PORTAL_NAME} allows this only from ${context.startDate} to ${context.endDate}.`,
+    link: (context) => windowText(context).link,
+    linkText: (context) => windowText(context).linkText,
+  },
   [GoalMailEvent.DUE_REMINDER]: {
     purpose: "Goal end date approaching",
     actionRequired: false,
@@ -219,7 +267,9 @@ const buildHtml = (definition, goal, context, recipient, testRecipient) => {
                     </tr>`)
     .join("");
 
-  const note = definition.actionRequired
+  const note = definition.note
+    ? `<p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>${escapeHtml(definition.note(context))}</strong></p>`
+    : definition.actionRequired
     ? `<p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>${escapeHtml(ACTION_REQUIRED_NOTE)}</strong></p>`
     : `<p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">${escapeHtml(INFORMATION_NOTE)}</p>`;
 
@@ -228,7 +278,9 @@ const buildHtml = (definition, goal, context, recipient, testRecipient) => {
     : "";
 
   const link = goal ? appLink(`/goals/view/${goal.GoalID}`) : appLink(definition.link(context));
-  const linkText = definition.linkText || "View Goal";
+  const linkText =
+    (typeof definition.linkText === "function" ? definition.linkText(context) : definition.linkText) ||
+    "View Goal";
 
   return `
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">

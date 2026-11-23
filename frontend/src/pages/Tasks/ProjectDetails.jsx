@@ -38,7 +38,7 @@ const apiErrorText = (err, fallback) => {
  * One project.
  *   Creator       - (canManage: the Manager who created it, or the Business
  *                   Head on a Business Head project) edit name / description,
- *                   add / remove members (a Manager: their reportees), and
+ *                   add / remove members (any active user), and
  *                   the task sheet in assign mode: every task of the project
  *                   (removed members' tasks too), new rows assigned to one
  *                   member, older "All members" tasks shown with

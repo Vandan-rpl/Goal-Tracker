@@ -95,6 +95,18 @@ router.get("/all/employees", verifyTaskUser, taskController.getEmployeeTaskSumma
 router.get("/employees", verifyTaskUser, taskController.getAssignableEmployees);
 
 /**
+ * Projects the logged-in user is an active member of (My Tasks)
+ * GET /api/v1/tasks/my-projects
+ */
+router.get("/my-projects", verifyTaskUser, taskController.getMyProjects);
+
+/**
+ * Projects an employee is an active member of (Business Head, Assign Task)
+ * GET /api/v1/tasks/employees/:userId/projects
+ */
+router.get("/employees/:userId/projects", verifyTaskUser, taskController.getEmployeeProjects);
+
+/**
  * Assign Task (Business Head)
  * POST /api/v1/tasks/assign
  */
@@ -102,7 +114,7 @@ router.post("/assign", verifyTaskUser, taskController.assignTask);
 
 /**
  * Tasks the Business Head assigned in a month (Assign Task page)
- * GET /api/v1/tasks/assign/month?month=YYYY-MM
+ * GET /api/v1/tasks/assign/month?fromMonth=YYYY-MM&toMonth=YYYY-MM (or ?month=YYYY-MM)
  */
 router.get("/assign/month", verifyTaskUser, taskController.getAssignedByMonth);
 

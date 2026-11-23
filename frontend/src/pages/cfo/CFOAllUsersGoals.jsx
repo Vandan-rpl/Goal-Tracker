@@ -168,7 +168,7 @@ const CFOAllUsersGoals = () => {
       >
         {approvalWindow.isOpen
           ? "Your approvals are open through "
-          : "Your approvals are open only on quarter days 16-30. This quarter's window is "}
+          : "Your approvals are open only from day 16 to the end of the last month of each quarter. This quarter's window is "}
         {formatDisplayDate(approvalWindow.startDate)} through{" "}
         {formatDisplayDate(approvalWindow.endDate)}.
       </div>

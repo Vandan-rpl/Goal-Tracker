@@ -327,12 +327,14 @@ const notifyGoalHierarchy = async (
 
   if (superiorIds.length === 0) return [];
 
-  const notifiedEmails = [];
+  // In-app only: approvers are emailed by the window reminder job
+  // (jobs/goalWindowReminderJob.js), not on every submission.
+  const notifiedIds = [];
 
   for (const superiorId of superiorIds) {
     const superior = await getUserContact(pool, superiorId);
 
-    if (!superior || !superior.Email) continue;
+    if (!superior) continue;
 
     await notifyUser(pool, {
       userId: superiorId,
@@ -344,15 +346,10 @@ const notifyGoalHierarchy = async (
       createdBy: userId,
     });
 
-    // Awaited so the response can say how many approvers were emailed.
-    const mail = await sendGoalMail(GoalMailEvent.SUBMITTED, {
-      goalId: Number(newGoalID),
-      recipientId: superiorId,
-    });
-    if (mail.sent) notifiedEmails.push(superior.Email.trim());
+    notifiedIds.push(superiorId);
   }
 
-  return notifiedEmails;
+  return notifiedIds;
 };
 
 // 1. Get All Goals
@@ -1484,7 +1481,7 @@ const getTargetGoalQuarterBounds = () =>
   );
 
 const getGoalCreationWindowClosedMessage = (goalCreationWindow) =>
-  `Goal creation is available only during the first 7 days of each quarter. The current window was ${formatWindowDate(goalCreationWindow.startDate)} through ${formatWindowDate(goalCreationWindow.endDate)}.`;
+  `Goal creation is available only on days 1-7 of the last month of each quarter. This quarter's window is ${formatWindowDate(goalCreationWindow.startDate)} through ${formatWindowDate(goalCreationWindow.endDate)}.`;
 
 const toEntryQuarterSummary = (bounds) => ({
   quarter: bounds.label,
@@ -1788,7 +1785,7 @@ const createGoal = async (req, res) => {
 
     await transaction.commit();
 
-    const notifiedEmails = await notifyGoalHierarchy(
+    const notifiedApprovers = await notifyGoalHierarchy(
       userId,
       newGoalID,
       GoalTitle,
@@ -1796,8 +1793,8 @@ const createGoal = async (req, res) => {
     );
 
     const responseMessage =
-      notifiedEmails.length > 0
-        ? `Your goal is submitted and email has been sent to ${notifiedEmails.length} approver(s) in your reporting hierarchy.`
+      notifiedApprovers.length > 0
+        ? `Your goal is submitted and ${notifiedApprovers.length} approver(s) in your reporting hierarchy have been notified.`
         : "Goal created successfully.";
 
     return res.status(201).json({
@@ -2282,10 +2279,10 @@ const updateGoal = async (req, res) => {
     // A draft becomes visible to approvers only after it is submitted.
     // Creating a submitted goal already sends this notification; this
     // covers the equivalent Draft -> Submitted transition during editing.
-    let notifiedEmails = [];
+    let notifiedApprovers = [];
     if (currentStatus !== "Submitted" && newStatus === "Submitted") {
       try {
-        notifiedEmails = await notifyGoalHierarchy(
+        notifiedApprovers = await notifyGoalHierarchy(
           existingGoal.UserID,
           id,
           finalGoalTitle,
@@ -2305,8 +2302,8 @@ const updateGoal = async (req, res) => {
       success: true,
       message:
         newStatus === "Submitted" && currentStatus !== "Submitted"
-          ? notifiedEmails.length > 0
-            ? `Goal submitted and email has been sent to ${notifiedEmails.length} approver(s) in your reporting hierarchy.`
+          ? notifiedApprovers.length > 0
+            ? `Goal submitted and ${notifiedApprovers.length} approver(s) in your reporting hierarchy have been notified.`
             : "Goal submitted successfully."
           : "Goal updated successfully.",
     });
@@ -2858,13 +2855,13 @@ const saveGoalSheet = async (req, res) => {
     if (GoalStatus === "Submitted") {
       for (const savedGoal of savedGoals) {
         try {
-          const notifiedEmails = await notifyGoalHierarchy(
+          const notifiedApprovers = await notifyGoalHierarchy(
             userId,
             savedGoal.GoalID,
             savedGoal.GoalTitle,
             GoalStatus,
           );
-          if (notifiedEmails.length > 0) notifiedGoals += 1;
+          if (notifiedApprovers.length > 0) notifiedGoals += 1;
         } catch (notificationError) {
           // The goals are already submitted; a notification outage should
           // not report the request as failed.
@@ -3294,8 +3291,8 @@ const changeGoalStatus = async (req, res) => {
         return res.status(403).json({
           success: false,
           message: isFinalApproval
-            ? `CFO approval is available only on quarter days 16-30. The current window is ${formatWindowDate(approvalWindow.startDate)} through ${formatWindowDate(approvalWindow.endDate)}.`
-            : `Manager/HOD approval is available only on quarter days 8-25. The current window is ${formatWindowDate(approvalWindow.startDate)} through ${formatWindowDate(approvalWindow.endDate)}.`,
+            ? `CFO approval is available only from day 16 to the end of the last month of each quarter. This quarter's window is ${formatWindowDate(approvalWindow.startDate)} through ${formatWindowDate(approvalWindow.endDate)}.`
+            : `Manager/HOD approval is available only on days 8-15 of the last month of each quarter. This quarter's window is ${formatWindowDate(approvalWindow.startDate)} through ${formatWindowDate(approvalWindow.endDate)}.`,
         });
       }
     }
@@ -3351,10 +3348,6 @@ const changeGoalStatus = async (req, res) => {
             createdBy: userId,
           });
 
-          sendGoalMail(
-            isApproved ? GoalMailEvent.APPROVED : GoalMailEvent.REJECTED,
-            { goalId: Number(id), recipientId: employee.UserID },
-          );
         }
       } catch (notifyErr) {
         console.error(
@@ -4360,12 +4353,15 @@ const getPendingCompletionRequests = async (req, res) => {
 // 'YYYY-MM-DD' -> 'DD/MM/YYYY' for messages shown to the user.
 const formatDisplayDateKey = (dateKey) => dateKey.split("-").reverse().join("/");
 
-// The goal-entry window that is open now, or else the next one to open (the
-// next quarter's days 1-7), with the quarter its goals are added for: the
-// quarter after the window's own.
+// The goal-entry window that is open now, or else the next one to open (this
+// quarter's, days 1-7 of its last month, if still ahead; otherwise the next
+// quarter's), with the quarter its goals are added for: the quarter after
+// the window's own.
 const getRelevantGoalCreationWindow = (now = new Date()) => {
   const currentWindow = getGoalCreationWindow(now);
-  const window = currentWindow.isOpen
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const window = currentWindow.isOpen || currentWindow.startDate > today
     ? currentWindow
     : getGoalCreationWindow(
         getQuarterStartDate(

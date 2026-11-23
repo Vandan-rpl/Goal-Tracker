@@ -5,12 +5,12 @@ import TaskWorkbookFrame, {
   taskFilterControlClass as selectClass,
   taskFilterLabelClass as filterLabelClass,
 } from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
-import { getMyTasks, getTaskApiError, markTasksSeen } from "../../services/taskService";
+import { getMyProjects, getMyTasks, getTaskApiError, markTasksSeen } from "../../services/taskService";
 import { taskUnseenCountReceived } from "../../redux/slices/taskSlice";
 import { TASK_PRIORITIES, TASK_SOURCES, TASK_STATUSES } from "../../utils/taskStatus";
 import DateInput from "../../components/DateInput/DateInput";
 
-const EMPTY_FILTERS = { status: "", priority: "", dueFrom: "", dueTo: "", source: "" };
+const EMPTY_FILTERS = { status: "", priority: "", dueFrom: "", dueTo: "", source: "", project: "" };
 
 // The sheet groups rows by employee; My Tasks has one group, the user.
 const ME = { UserID: "me", FullName: "Me" };
@@ -33,6 +33,23 @@ const MyTasks = () => {
   // Rows that were unseen when loaded; they stay highlighted as New on this
   // visit even after being marked seen.
   const [newTaskIds, setNewTaskIds] = useState(() => new Set());
+  // Projects I am a member of, for the Project column (null while loading).
+  const [myProjects, setMyProjects] = useState(null);
+
+  useEffect(() => {
+    let ignore = false;
+    getMyProjects()
+      .then((list) => {
+        if (!ignore) setMyProjects(list || []);
+      })
+      .catch(() => {
+        // The column then just offers no projects; tasks still work.
+        if (!ignore) setMyProjects([]);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
@@ -128,6 +145,23 @@ const MyTasks = () => {
             />
           </div>
           <div>
+            <label htmlFor="my-task-project" className={filterLabelClass}>Project</label>
+            <select
+              id="my-task-project"
+              value={filters.project}
+              onChange={(e) => changeFilter("project", e.target.value)}
+              disabled={!myProjects?.length}
+              className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              <option value="">
+                {myProjects === null ? "Loading projects..." : myProjects.length ? "All Projects" : "No projects"}
+              </option>
+              {(myProjects || []).map((p) => (
+                <option key={p.ProjectID} value={String(p.ProjectID)}>{p.ProjectName}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label htmlFor="my-task-source" className={filterLabelClass}>Source</label>
             <select id="my-task-source" value={filters.source} onChange={(e) => changeFilter("source", e.target.value)} className={selectClass}>
               <option value="">Self-added and Assigned</option>
@@ -161,6 +195,7 @@ const MyTasks = () => {
           showGroupHeaders={false}
           newTaskIds={newTaskIds}
           onSaved={reload}
+          ownProjects={myProjects}
         />
       )}
     </TaskWorkbookFrame>

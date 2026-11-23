@@ -250,8 +250,8 @@ const ViewGoal = () => {
     if (!isApprovalWindowOpen) {
       alert(
         canCfoApprove
-          ? "CFO approvals are available only on quarter days 16-30."
-          : "Manager/HOD approvals are available only on quarter days 8-25.",
+          ? "CFO approvals are available only from day 16 to the end of the last month of each quarter."
+          : "Manager/HOD approvals are available only on days 8-15 of the last month of each quarter.",
       );
       return;
     }
@@ -439,10 +439,10 @@ const ViewGoal = () => {
             {canCfoApprove
               ? approvalWindow.isOpen
                 ? "CFO approval and goal editing are open through "
-                : "CFO approval and goal editing are available only on quarter days 16-30. This quarter's window is "
+                : "CFO approval and goal editing are available only from day 16 to the end of the last month of each quarter. This quarter's window is "
               : approvalWindow.isOpen
                 ? "Manager/HOD approval and goal editing are open through "
-                : "Manager/HOD approval and goal editing are available only on quarter days 8-25. This quarter's window is "}
+                : "Manager/HOD approval and goal editing are available only on days 8-15 of the last month of each quarter. This quarter's window is "}
             {formatDisplayDate(approvalWindow.startDate)} through{" "}
             {formatDisplayDate(approvalWindow.endDate)}.
           </div>

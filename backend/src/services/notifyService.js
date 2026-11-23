@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 const { sql } = require('../config/db');
 const { getIO } = require('../sockets/io');
-const { PORTAL_NAME } = require('../constants/portalConstants');
+const { PORTAL_NAME, MAIL_SUBJECT_PREFIX } = require('../constants/portalConstants');
 
 // Single shared transporter, reusing the same env vars every controller was
 // each configuring separately (EMAIL_HOST / EMAIL_PORT / EMAIL_USER / EMAIL_PASS).
@@ -25,13 +25,29 @@ const MAIL_FROM = {
 };
 
 /**
+ * Every email subject starts with the portal name:
+ * "GATI:Employee Excellence Portal - ...". A test-mode "[TEST] " stays in
+ * front; a subject that already starts with the prefix is left as it is.
+ */
+const TEST_PREFIX = '[TEST] ';
+const withPortalPrefix = (subject) => {
+    const value = String(subject || '').trim();
+    const isTest = value.startsWith(TEST_PREFIX);
+    const rest = isTest ? value.slice(TEST_PREFIX.length) : value;
+    const prefixed = rest.toUpperCase().startsWith(MAIL_SUBJECT_PREFIX.toUpperCase())
+        ? rest
+        : `${MAIL_SUBJECT_PREFIX} - ${rest}`;
+    return `${isTest ? TEST_PREFIX : ''}${prefixed}`;
+};
+
+/**
  * sendEmail
  * ------------------------------------------------------------------
  * Email only (no in-app notification), through the same transporter and
  * sender as notifyUser. Throws on failure; the caller decides how to log it.
  */
 const sendEmail = async ({ to, subject, html }) =>
-    transporter.sendMail({ from: MAIL_FROM, to, subject, html });
+    transporter.sendMail({ from: MAIL_FROM, to, subject: withPortalPrefix(subject), html });
 
 /**
  * notifyUser
@@ -142,7 +158,7 @@ const notifyUser = async (pool, {
             await transporter.sendMail({
                 from: MAIL_FROM,
                 to: emailTo,
-                subject: emailSubject || title,
+                subject: withPortalPrefix(emailSubject || title),
                 html: emailHtml || `<p>${message}</p>`
             });
             result.emailSent = true;
@@ -154,4 +170,4 @@ const notifyUser = async (pool, {
     return result;
 };
 
-module.exports = { notifyUser, sendEmail };
+module.exports = { withPortalPrefix, notifyUser, sendEmail };

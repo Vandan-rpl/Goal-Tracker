@@ -1,7 +1,39 @@
 const { poolPromise, sql } = require("../config/db");
 const { notifyUser } = require("../services/notifyService");
-const { sendGoalMail } = require("../services/goalMailService");
-const { GoalMailEvent } = require("../constants/goalConstants");
+
+// Goals waiting for approval (submitted, not yet finally approved). Drives
+// the dot on Goal Review & Approval.
+const PENDING_REVIEW_STATUSES = ["Submitted", "Manager Approved", "HOD Approved"];
+
+// Pending: active users with a goal waiting for approval.
+// Up: every manager above them (Reporting Manager or HOD, walked up the tree,
+// the same links the page expands), so the dot shows on each of them.
+const PENDING_CTE = `
+  WITH Pending AS (
+    SELECT DISTINCT g.UserID
+    FROM dbo.Goals g
+    INNER JOIN dbo.Users pu ON pu.UserID = g.UserID AND pu.IsActive = 1
+    WHERE g.GoalStatus IN (${PENDING_REVIEW_STATUSES.map((s) => `'${s}'`).join(", ")})
+  ),
+  Up AS (
+    SELECT m.ManagerID, 1 AS Depth
+    FROM Pending p
+    INNER JOIN dbo.Users pu ON pu.UserID = p.UserID
+    CROSS APPLY (VALUES (pu.ReportingManagerID), (pu.HODID)) m(ManagerID)
+    WHERE m.ManagerID IS NOT NULL AND m.ManagerID <> p.UserID
+    UNION ALL
+    SELECT m.ManagerID, up.Depth + 1
+    FROM Up up
+    INNER JOIN dbo.Users mu ON mu.UserID = up.ManagerID
+    CROSS APPLY (VALUES (mu.ReportingManagerID), (mu.HODID)) m(ManagerID)
+    WHERE m.ManagerID IS NOT NULL AND m.ManagerID <> up.ManagerID AND up.Depth < 15
+  )
+`;
+
+const PENDING_COLUMNS = `
+  CASE WHEN u.UserID IN (SELECT UserID FROM Pending) THEN 1 ELSE 0 END AS HasPendingGoals,
+  CASE WHEN u.UserID IN (SELECT ManagerID FROM Up) THEN 1 ELSE 0 END AS TeamHasPendingGoals,
+`;
 
 const getTeamMembers = async (req, res) => {
   try {
@@ -29,8 +61,9 @@ const getTeamMembers = async (req, res) => {
 
     let query = "";
     if (isBusinessHeadRootView) {
-      query = `
+      query = `${PENDING_CTE}
                 SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
+                ${PENDING_COLUMNS}
                 (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals,
                 CASE WHEN EXISTS (
                     SELECT 1 FROM dbo.Users sub
@@ -48,8 +81,9 @@ const getTeamMembers = async (req, res) => {
                   )
             `;
     } else {
-      query = `
+      query = `${PENDING_CTE}
                 SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
+                ${PENDING_COLUMNS}
                 (SELECT COUNT(*) FROM dbo.Goals g WHERE g.UserID = u.UserID AND g.GoalStatus <> 'Draft') AS TotalGoals,
                 CASE WHEN EXISTS (
                     SELECT 1 FROM dbo.Users sub
@@ -193,11 +227,6 @@ const updateStatus = async (req, res) => {
             referenceType: "Goal",
             createdBy: performedBy,
           });
-
-          sendGoalMail(
-            isApproved ? GoalMailEvent.APPROVED : GoalMailEvent.REJECTED,
-            { goalId: Number(goalId), recipientId: employee.UserID },
-          );
         }
       } catch (notifyErr) {
         console.error(

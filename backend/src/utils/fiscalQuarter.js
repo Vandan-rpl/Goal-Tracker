@@ -35,6 +35,31 @@ function getQuarterDayWindow(startDay, endDay, date = new Date()) {
   };
 }
 
+// Goal windows run in the LAST month of each quarter (days are that month's
+// dates, inclusive); goals are added and approved for the next quarter.
+// `endDay` null = the month's last day. E.g. Oct-Dec quarter: Add Goal 1-7
+// Dec, Manager/HOD approval 8-15 Dec, CFO approval 16-31 Dec.
+const GOAL_CREATION_DAYS = [1, 7];
+const MANAGER_HOD_APPROVAL_DAYS = [8, 15];
+const CFO_APPROVAL_DAYS = [16, null];
+
+function getQuarterLastMonthWindow(startDay, endDay, date = new Date()) {
+  const { quarterEndDate } = getFiscalQuarter(date);
+  const year = quarterEndDate.getFullYear();
+  const month = quarterEndDate.getMonth();
+  const windowStartDate = new Date(year, month, startDay);
+  const windowEndDate = endDay ? new Date(year, month, endDay) : new Date(year, month + 1, 0);
+
+  const today = new Date(toDate(date));
+  today.setHours(0, 0, 0, 0);
+
+  return {
+    startDate: windowStartDate,
+    endDate: windowEndDate,
+    isOpen: today >= windowStartDate && today <= windowEndDate,
+  };
+}
+
 function getGoalCreationWindow(date = new Date()) {
   const reopeningStart = new Date(2026, 10, 1);
   const reopeningEnd = new Date(2026, 10, 20);
@@ -49,7 +74,7 @@ function getGoalCreationWindow(date = new Date()) {
     };
   }
 
-  return getQuarterDayWindow(1, 7, date);
+  return getQuarterLastMonthWindow(...GOAL_CREATION_DAYS, date);
 }
 
 function getManagerHodApprovalWindow(date = new Date()) {
@@ -66,7 +91,7 @@ function getManagerHodApprovalWindow(date = new Date()) {
     };
   }
 
-  return getQuarterDayWindow(10, 31, date);
+  return getQuarterLastMonthWindow(...MANAGER_HOD_APPROVAL_DAYS, date);
 }
 
 function getCfoApprovalWindow(date = new Date()) {
@@ -83,7 +108,7 @@ function getCfoApprovalWindow(date = new Date()) {
     };
   }
 
-  return getQuarterDayWindow(16, 31, date);
+  return getQuarterLastMonthWindow(...CFO_APPROVAL_DAYS, date);
 }
 
 function getFiscalQuarter(date = new Date()) {
@@ -236,6 +261,7 @@ module.exports = {
   getNextFiscalQuarter,
   getQuarterStartDate,
   getQuarterDayWindow,
+  getQuarterLastMonthWindow,
   getGoalCreationWindow,
   getManagerHodApprovalWindow,
   getCfoApprovalWindow,

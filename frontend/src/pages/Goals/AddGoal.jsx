@@ -559,7 +559,7 @@ const AddGoal = () => {
               >
                 {goalCreationWindow.isOpen
                   ? "The goal-entry window is open from "
-                  : "The goal-entry window is closed. It is open only for the first 7 calendar days of each quarter. This quarter's window ran from "}
+                  : "The goal-entry window is closed. It is open only on days 1-7 of the last month of each quarter. This quarter's window is "}
                 {formatDisplayDate(goalCreationWindow.startDate)} through{" "}
                 {formatDisplayDate(goalCreationWindow.endDate)}.
               </div>

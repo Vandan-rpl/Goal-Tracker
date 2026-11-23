@@ -125,7 +125,7 @@ const sendPasswordResetOtpMail = ({ user, otp, validMinutes }) =>
 const sendPasswordChangedMail = ({ user, changedAt }) =>
     sendAuthMail({
         user,
-        subject: `Your ${PORTAL_NAME} password was changed`,
+        subject: "Your password was changed",
         bodyHtml: `
                 <p>The password for your ${escapeHtml(PORTAL_NAME)} account was changed using Forgot Password on <strong>${escapeHtml(formatServerDateTime(changedAt))}</strong>.</p>
                 <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>If this was not you, contact IT immediately.</strong></p>
@@ -146,7 +146,7 @@ const sendWelcomeMail = ({ user, temporaryPassword }) => {
 
     return sendAuthMail({
         user,
-        subject: `Your ${PORTAL_NAME} account has been created`,
+        subject: "Your account has been created",
         greetingHtml: `<p>Dear ${escapeHtml(name)},</p>`,
         bodyHtml: `
                 <p>Your ${escapeHtml(PORTAL_NAME)} account has been created.</p>

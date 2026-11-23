@@ -4,13 +4,19 @@ import TaskWorkbookFrame, {
   taskFilterLabelClass,
 } from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
 import DateInput from "../../components/DateInput/DateInput";
-import { assignTasks, getAssignableEmployees, getAssignedByMonth, getTaskApiError } from "../../services/taskService";
+import {
+  assignTasks,
+  getAssignableEmployees,
+  getAssignedByMonth,
+  getEmployeeProjects,
+  getTaskApiError,
+} from "../../services/taskService";
 import { TASK_NAME_MAX, TASK_PRIORITIES, getTaskStatusClasses, getTodayKey } from "../../utils/taskStatus";
 import { worksheetControlClass, worksheetLineAddClass, worksheetLineRemoveClass } from "../../utils/goalWorksheet";
 import { formatDisplayDate } from "../../utils/dateTime";
 
 // Same grid look as the task sheet (components/TaskSheet).
-const COLUMNS = ["Sr.No.", "Employee", "Task Name", "Priority", "Created Date", "Due Date", "Status", ""];
+const COLUMNS = ["Sr.No.", "Employee", "Project", "Task Name", "Priority", "Created Date", "Due Date", "Status", ""];
 const headClass =
   "sticky top-0 z-2 h-10.5 border-r border-b border-[#cbd4e2] bg-[#dce5f2] px-2.5 py-2 text-left text-[11px] font-bold leading-[1.35] text-[#30415f] align-middle whitespace-nowrap last:border-r-0";
 const cellClass = "p-0 border-r border-b border-[#d5dce5] last:border-r-0 align-top";
@@ -20,7 +26,7 @@ const readOnlyClass = "px-2.5 py-3 text-xs text-[#202522]";
 const INITIAL_ROWS = 3;
 
 let rowCounter = 0;
-const newRow = () => ({ key: `row-${(rowCounter += 1)}`, employeeId: "", taskName: "", priority: "Medium", dueDate: "" });
+const newRow = () => ({ key: `row-${(rowCounter += 1)}`, employeeId: "", projectId: "", taskName: "", priority: "Medium", dueDate: "" });
 const freshRows = () => Array.from({ length: INITIAL_ROWS }, newRow);
 
 const monthKey = (dateKey) => dateKey.slice(0, 7); // "YYYY-MM-DD" -> "YYYY-MM"
@@ -45,10 +51,12 @@ const rowError = (row, today) => {
 
 /**
  * Business Head: assign tasks to several employees at once. The sheet is
- * one month of tasks (Month filter, default this month): tasks already
- * assigned that month are listed read-only first, numbered in the order
- * they were assigned; in the current month blank rows follow them. One
- * employee per row; "+ Add row" adds a row and the single Submit at the
+ * a range of months (From / To month filters, default this month): tasks
+ * already assigned in it are listed read-only first, numbered in the order
+ * they were assigned; when the range reaches the current month blank rows
+ * follow them. One
+ * employee per row; Project (optional) lists the projects that employee
+ * is a member of, making it a task in that project. "+ Add row" adds a row and the single Submit at the
  * bottom assigns every filled row (all or none) and emails each employee.
  * After Submit the new tasks join the list and numbering continues. Rows
  * left completely blank are skipped. To change tasks: All Tasks.
@@ -64,31 +72,37 @@ const AssignTask = () => {
 
   const today = getTodayKey();
   const currentMonth = monthKey(today);
-  const [month, setMonth] = useState(currentMonth);
-  const isCurrentMonth = month === currentMonth;
+  const [fromMonth, setFromMonth] = useState(currentMonth);
+  const [toMonth, setToMonth] = useState(currentMonth);
+  // New tasks are always assigned today, so blank rows show only when the
+  // range ends in the current month.
+  const isCurrentMonth = toMonth === currentMonth;
+  const range = `${fromMonth}..${toMonth}`;
+  const rangeLabel =
+    fromMonth === toMonth ? monthLabel(fromMonth) : `${monthLabel(fromMonth)} – ${monthLabel(toMonth)}`;
 
-  // Tasks already assigned in the selected month; loading while that differs.
-  const [saved, setSaved] = useState({ month: null, tasks: [] });
+  // Tasks already assigned in the selected months; loading while that differs.
+  const [saved, setSaved] = useState({ range: null, tasks: [] });
   const [reloadKey, setReloadKey] = useState(0);
   const reloadSaved = useCallback(() => setReloadKey((key) => key + 1), []);
-  const savedLoading = saved.month !== month;
+  const savedLoading = saved.range !== range;
   const savedTasks = savedLoading ? [] : saved.tasks;
 
   useEffect(() => {
     let ignore = false;
-    getAssignedByMonth(month)
+    getAssignedByMonth(fromMonth, toMonth)
       .then((list) => {
-        if (!ignore) setSaved({ month, tasks: list || [] });
+        if (!ignore) setSaved({ range, tasks: list || [] });
       })
       .catch((err) => {
         if (ignore) return;
-        setSaved({ month, tasks: [] });
+        setSaved({ range, tasks: [] });
         setError({ message: getTaskApiError(err, "Failed to load assigned tasks.").message, details: [] });
       });
     return () => {
       ignore = true;
     };
-  }, [month, reloadKey]);
+  }, [fromMonth, toMonth, range, reloadKey]);
 
   useEffect(() => {
     let ignore = false;
@@ -115,6 +129,28 @@ const AssignTask = () => {
       })),
     [employees],
   );
+
+  // Projects per employee (UserID -> list, or null while loading), fetched
+  // the first time that employee is picked on any row.
+  const [projectsByUser, setProjectsByUser] = useState({});
+
+  const loadProjects = (userId) => {
+    if (!userId || userId in projectsByUser) return;
+    setProjectsByUser((current) => ({ ...current, [userId]: null }));
+    getEmployeeProjects(userId)
+      .then((list) => setProjectsByUser((current) => ({ ...current, [userId]: list || [] })))
+      .catch((err) => {
+        setProjectsByUser((current) => ({ ...current, [userId]: [] }));
+        setError({ message: getTaskApiError(err, "Failed to load the employee's projects.").message, details: [] });
+      });
+  };
+
+  const changeEmployee = (key, employeeId) => {
+    updateRow(key, "employeeId", employeeId);
+    // A project belongs to the previous employee; pick again.
+    setRows((current) => current.map((row) => (row.key === key ? { ...row, projectId: "" } : row)));
+    loadProjects(employeeId);
+  };
 
   const updateRow = (key, field, value) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
@@ -165,6 +201,7 @@ const AssignTask = () => {
       const result = await assignTasks(
         filledRows.map((row) => ({
           employeeId: Number(row.employeeId),
+          projectId: row.projectId ? Number(row.projectId) : null,
           taskName: row.taskName.trim(),
           priority: row.priority,
           dueDate: row.dueDate,
@@ -198,22 +235,48 @@ const AssignTask = () => {
       title="Assign Task"
       description="Pick an employee on each row and type the task. Use + Add row for more, then press Submit once to assign them all. Each employee is emailed."
       actions={
-        <div className="w-full sm:w-56">
-          <label htmlFor="assign-month" className={taskFilterLabelClass}>Month</label>
-          <input
-            id="assign-month"
-            type="month"
-            value={month}
-            max={currentMonth}
-            onChange={(e) => {
-              if (e.target.value) setMonth(e.target.value);
-              setSuccess(null);
-            }}
-            className={taskFilterControlClass}
-          />
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <div className="w-full sm:w-48">
+            <label htmlFor="assign-from-month" className={taskFilterLabelClass}>From Month</label>
+            <input
+              id="assign-from-month"
+              type="month"
+              value={fromMonth}
+              max={toMonth}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                setFromMonth(value);
+                // Keep the range valid: a later From moves To with it.
+                if (value > toMonth) setToMonth(value > currentMonth ? currentMonth : value);
+                setSuccess(null);
+              }}
+              className={taskFilterControlClass}
+            />
+          </div>
+          <div className="w-full sm:w-48">
+            <label htmlFor="assign-to-month" className={taskFilterLabelClass}>To Month</label>
+            <input
+              id="assign-to-month"
+              type="month"
+              value={toMonth}
+              min={fromMonth}
+              max={currentMonth}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                const next = value > currentMonth ? currentMonth : value;
+                setToMonth(next);
+                // An earlier To moves From with it.
+                if (next < fromMonth) setFromMonth(next);
+                setSuccess(null);
+              }}
+              className={taskFilterControlClass}
+            />
+          </div>
         </div>
       }
-      footer="Tasks assigned in the selected month are listed first. New tasks can be added only in the current month. Rows left completely blank are skipped. Status and User's Remarks are updated by the employee. To change assigned tasks, open All Tasks."
+      footer="Tasks assigned in the selected months are listed first. New tasks can be added only when the range ends in the current month. Rows left completely blank are skipped. Status and User's Remarks are updated by the employee. To change assigned tasks, open All Tasks."
     >
       {error && (
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700" role="alert">
@@ -245,14 +308,14 @@ const AssignTask = () => {
             {savedLoading && (
               <tr>
                 <td colSpan={COLUMNS.length} className="border-b border-[#d5dce5] px-4 py-3 text-center text-xs text-slate-500">
-                  Loading tasks for {monthLabel(month)}...
+                  Loading tasks for {rangeLabel}...
                 </td>
               </tr>
             )}
             {!savedLoading && savedTasks.length === 0 && !isCurrentMonth && (
               <tr>
                 <td colSpan={COLUMNS.length} className="border-b border-[#d5dce5] px-4 py-6 text-center text-xs text-slate-500">
-                  No tasks were assigned in {monthLabel(month)}.
+                  No tasks were assigned in {rangeLabel}.
                 </td>
               </tr>
             )}
@@ -263,6 +326,11 @@ const AssignTask = () => {
                   <div className={readOnlyClass}>
                     {task.EmployeeName}
                     {task.EmployeeCode && <span className="text-slate-500"> – {task.EmployeeCode}</span>}
+                  </div>
+                </td>
+                <td className={`${cellClass} min-w-[180px]`}>
+                  <div className={`${readOnlyClass} ${task.ProjectName ? "" : "text-slate-400"}`}>
+                    {task.ProjectName || "—"}
                   </div>
                 </td>
                 <td className={`${cellClass} min-w-[260px]`}>
@@ -299,7 +367,7 @@ const AssignTask = () => {
                     <td className={`${cellClass} min-w-[240px]`}>
                       <select
                         value={row.employeeId}
-                        onChange={(e) => updateRow(row.key, "employeeId", e.target.value)}
+                        onChange={(e) => changeEmployee(row.key, e.target.value)}
                         disabled={saving || employeesLoading}
                         aria-label={`Employee, row ${serial}`}
                         className={`${cellInputClass} cursor-pointer ${row.employeeId ? "" : "text-slate-400"}`}
@@ -309,6 +377,36 @@ const AssignTask = () => {
                           <option key={opt.value} value={opt.value} className="text-[#202522]">{opt.label}</option>
                         ))}
                       </select>
+                    </td>
+
+                    <td className={`${cellClass} min-w-[180px]`}>
+                      {(() => {
+                        const projects = row.employeeId ? projectsByUser[row.employeeId] : undefined;
+                        const loadingProjects = Boolean(row.employeeId) && projects === null;
+                        const placeholder = !row.employeeId
+                          ? "Select employee first"
+                          : loadingProjects
+                            ? "Loading projects..."
+                            : projects?.length
+                              ? "Select project (optional)"
+                              : "Not in any project";
+                        return (
+                          <select
+                            value={row.projectId}
+                            onChange={(e) => updateRow(row.key, "projectId", e.target.value)}
+                            disabled={saving || !row.employeeId || loadingProjects || !projects?.length}
+                            aria-label={`Project, row ${serial}`}
+                            className={`${cellInputClass} cursor-pointer disabled:cursor-not-allowed ${row.projectId ? "" : "text-slate-400"}`}
+                          >
+                            <option value="">{placeholder}</option>
+                            {(projects || []).map((project) => (
+                              <option key={project.ProjectID} value={String(project.ProjectID)} className="text-[#202522]">
+                                {project.ProjectName}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </td>
 
                     <td className={`${cellClass} min-w-[260px]`}>
@@ -395,7 +493,7 @@ const AssignTask = () => {
 
       <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         <span className="text-xs text-slate-500">
-          {savedLoading ? "" : `${savedTasks.length} task(s) assigned in ${monthLabel(month)}`}
+          {savedLoading ? "" : `${savedTasks.length} task(s) assigned in ${rangeLabel}`}
           {isCurrentMonth && ` · ${filledRows.length} ready to assign`}
         </span>
         {isCurrentMonth && (

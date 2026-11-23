@@ -1,8 +1,597 @@
-<html><head><meta charset="utf-8"><title>Mail preview</title></head><body style="background:#f3f3f3;">
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Tasks / assigned / with project</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> New task assigned to you by CFO - Project: Cobalt Plant Expansion</p>
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mail preview</title></head>
+<body style="background:#f3f3f3;font-family:Arial,sans-serif;margin:0;padding:24px 16px;">
+    <div id="top" style="max-width:960px;margin:0 auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <h1 style="margin:0 0 4px;font-size:20px;">GATI – all emails</h1>
+        <p style="margin:0;color:#555;font-size:13px;">22 mails the app sends, on an action or from a daily job. Generated 23/11/2026, 16:35:44. Sample data only; nothing was sent.</p>
         
+        <h3 style="margin:18px 0 6px;font-size:14px;color:#2c3e82;">Goal Tracker</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tr style="background:#eef2f8;text-align:left;">
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Mail</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">When it is sent</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">To</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Trigger</th>
+            </tr>
+            
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-1">Goal window reminder</a> <span style="color:#888;">(6 versions)</span></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Daily job, 9:00 AM: the day before a window opens and 2 days before it closes. For Jan–Mar goals: Add Goal 30 Nov / 5 Dec, Manager/HOD 7 Dec / 13 Dec, CFO 15 Dec / 29 Dec.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Add Goal: every active user except Admin. Manager/HOD: users with team members. CFO: the CFO.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#7c3aed;background:#ede9fe;">Daily job</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-2">Goal end date reminder</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Daily job, 9:00 AM: 5 days and 2 days before a running goal's end date.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The goal owner</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#7c3aed;background:#ede9fe;">Daily job</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-3">Completion requested</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Employee clicks Mark complete on a goal.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The approver (Reporting Manager / HOD, or CFO)</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-4">Completion approved</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Approver approves the Mark complete request.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The goal owner</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-5">Completion rejected</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Approver rejects the Mark complete request.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The goal owner</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-6">Final evaluation available</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Final Evaluation is finalized for a user.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+        </table>
+        <h3 style="margin:18px 0 6px;font-size:14px;color:#2c3e82;">Task Tracker</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tr style="background:#eef2f8;text-align:left;">
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Mail</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">When it is sent</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">To</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Trigger</th>
+            </tr>
+            
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-7">Task assigned</a> <span style="color:#888;">(2 versions)</span></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">CFO assigns a task (Assign Task page or All Tasks), or a project creator assigns a task in their project.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee the task is assigned to</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-8">Remark added on a task</a> <span style="color:#888;">(2 versions)</span></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">CFO (or a project's creator) adds or changes the remark on someone's task.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The task owner</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+        </table>
+        <h3 style="margin:18px 0 6px;font-size:14px;color:#2c3e82;">Innovation Ideas</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tr style="background:#eef2f8;text-align:left;">
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Mail</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">When it is sent</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">To</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Trigger</th>
+            </tr>
+            
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-9">Idea submitted</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Employee submits an idea.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The reporting manager they picked</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-10">Approved by reporting manager</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Reporting manager approves the idea and picks the final approver.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The final approver</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-11">Rejected by reporting manager</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Reporting manager rejects the idea.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee who submitted it</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-12">Final approval</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Final approver approves the idea.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee who submitted it</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-13">Final rejection</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Final approver rejects the idea.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee who submitted it</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-14">Closure requested</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Employee asks to close the idea as implemented.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The approver</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-15">Closure approved</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Approver approves the closure.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-16">Closure rejected</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Approver rejects the closure.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-17">Extension requested</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Employee asks for a later target date.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The approver</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-18">Extension approved</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Approver approves the new target date.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-19">Extension rejected</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Approver rejects the new target date.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The employee</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+        </table>
+        <h3 style="margin:18px 0 6px;font-size:14px;color:#2c3e82;">Login / Account</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tr style="background:#eef2f8;text-align:left;">
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Mail</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">When it is sent</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">To</th>
+                <th style="padding:6px 8px;border:1px solid #d5dce5;">Trigger</th>
+            </tr>
+            
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-20">Password reset OTP</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">User clicks Forgot Password and enters their username / email.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">That user</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-21">Password changed</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">User changes or resets their password.</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">That user</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;"><a href="#mail-22">Welcome / account created</a></td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">Admin adds a new employee (single add or Excel import).</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;">The new employee</td>
+                <td style="padding:6px 8px;border:1px solid #d5dce5;white-space:nowrap;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span></td>
+            </tr>
+        </table>
+    </div>
+    
+    <h2 style="max-width:760px;margin:40px auto 0;font-size:18px;color:#2c3e82;">Goal Tracker</h2>
+    
+    <section id="mail-1" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Goal window reminder</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#7c3aed;background:#ede9fe;">Daily job</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Daily job, 9:00 AM: the day before a window opens and 2 days before it closes. For Jan–Mar goals: Add Goal 30 Nov / 5 Dec, Manager/HOD 7 Dec / 13 Dec, CFO 15 Dec / 29 Dec.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> Add Goal: every active user except Admin. Manager/HOD: users with team members. CFO: the CFO.</p>
+        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Add Goal – opens tomorrow</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Reminder: Add Goal window opens on 01 Dec 2026</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>The Add Goal window opens tomorrow, 01 Dec 2026, and stays open until 07 Dec 2026. Please add and submit your goals in GATI - Employee Excellence Portal during this window.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Window</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>01 Dec 2026 to 07 Dec 2026</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goals for</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>GATI - Employee Excellence Portal allows this only from 01 Dec 2026 to 07 Dec 2026.</strong></p>
+                <a href="http://localhost:5173/goals/add" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Add Goals</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Add Goal – closes in 2 days</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Reminder: Add Goal window closes on 07 Dec 2026</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>The Add Goal window closes in 2 days, on 07 Dec 2026. Please add and submit your goals in GATI - Employee Excellence Portal before it closes.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Window</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>01 Dec 2026 to 07 Dec 2026</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goals for</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>GATI - Employee Excellence Portal allows this only from 01 Dec 2026 to 07 Dec 2026.</strong></p>
+                <a href="http://localhost:5173/goals/add" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Add Goals</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Manager/HOD approval – opens tomorrow</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Reminder: Manager/HOD goal approval window opens on 08 Dec 2026</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>The Manager/HOD goal approval window opens tomorrow, 08 Dec 2026, and stays open until 15 Dec 2026. Please review and approve or reject the goals your team members have submitted in GATI - Employee Excellence Portal during this window.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Window</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>08 Dec 2026 to 15 Dec 2026</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goals for</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>GATI - Employee Excellence Portal allows this only from 08 Dec 2026 to 15 Dec 2026.</strong></p>
+                <a href="http://localhost:5173/manager/team-management" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Review Team Goals</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Manager/HOD approval – closes in 2 days</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Reminder: Manager/HOD goal approval window closes on 15 Dec 2026</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>The Manager/HOD goal approval window closes in 2 days, on 15 Dec 2026. Please review and approve or reject the goals your team members have submitted in GATI - Employee Excellence Portal before it closes.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Window</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>08 Dec 2026 to 15 Dec 2026</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goals for</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>GATI - Employee Excellence Portal allows this only from 08 Dec 2026 to 15 Dec 2026.</strong></p>
+                <a href="http://localhost:5173/manager/team-management" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Review Team Goals</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">CFO approval – opens tomorrow</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Reminder: CFO goal approval window opens on 16 Dec 2026</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>The CFO goal approval window opens tomorrow, 16 Dec 2026, and stays open until 31 Dec 2026. Please give final approval to the goals waiting for you in GATI - Employee Excellence Portal during this window.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Window</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>16 Dec 2026 to 31 Dec 2026</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goals for</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>GATI - Employee Excellence Portal allows this only from 16 Dec 2026 to 31 Dec 2026.</strong></p>
+                <a href="http://localhost:5173/manager/team-management" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Review Goals</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">CFO approval – closes in 2 days</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Reminder: CFO goal approval window closes on 31 Dec 2026</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>The CFO goal approval window closes in 2 days, on 31 Dec 2026. Please give final approval to the goals waiting for you in GATI - Employee Excellence Portal before it closes.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Window</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>16 Dec 2026 to 31 Dec 2026</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goals for</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>GATI - Employee Excellence Portal allows this only from 16 Dec 2026 to 31 Dec 2026.</strong></p>
+                <a href="http://localhost:5173/manager/team-management" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Review Goals</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
+    </section>
+    <section id="mail-2" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Goal end date reminder</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#7c3aed;background:#ede9fe;">Daily job</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Daily job, 9:00 AM: 5 days and 2 days before a running goal's end date.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The goal owner</p>
+        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Goal end date approaching: Cut month-end close time from 8 to 5 days</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>This is a reminder that your goal ends in 5 days. Please make sure it is completed and updated in GATI - Employee Excellence Portal before the end date.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Approved</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">End date</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>26 Nov 2026</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
+                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
+    </section>
+    <section id="mail-3" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Completion requested</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Employee clicks Mark complete on a goal.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The approver (Reporting Manager / HOD, or CFO)</p>
+        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Completion approval required: Cut month-end close time from 8 to 5 days</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>Rahul Shah has requested completion of this goal and it is awaiting your approval.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Approved</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>Action required: please open this goal in GATI - Employee Excellence Portal to review it and approve or reject it. Approval can only be done in the app.</strong></p>
+                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
+    </section>
+    <section id="mail-4" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Completion approved</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Approver approves the Mark complete request.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The goal owner</p>
+        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Completion approved: Cut month-end close time from 8 to 5 days</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>Completion of your goal has been approved.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Approved</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
+                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
+    </section>
+    <section id="mail-5" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Completion rejected</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Approver rejects the Mark complete request.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The goal owner</p>
+        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Completion rejected: Cut month-end close time from 8 to 5 days</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>Completion of your goal was not approved.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q4 (Jan–Mar 2027)</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Approved</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Remark</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Good progress.
+Please add a cost estimate.</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
+                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
+    </section>
+    <section id="mail-6" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Final evaluation available</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Final Evaluation is finalized for a user.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee</p>
+        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Final evaluation available: FY2027</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Hello Priya,</h3>
+                <p>Your final evaluation for FY2027 has been generated.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Weighted score</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>3.8</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Status</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Completed</strong></td>
+                    </tr>
+                </table>
+                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
+                <a href="http://localhost:5173/goals/final-evaluation/7" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Evaluation</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
+    </section>
+    <h2 style="max-width:760px;margin:40px auto 0;font-size:18px;color:#2c3e82;">Task Tracker</h2>
+    
+    <section id="mail-7" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Task assigned</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> CFO assigns a task (Assign Task page or All Tasks), or a project creator assigns a task in their project.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee the task is assigned to</p>
+        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Personal task</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - New task assigned to you by CFO</p>
+            
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+                
+                <h3>Dear Rahul Shah,</h3>
+                <p>The CFO has assigned a new task to you.</p>
+                <table style="border-collapse: collapse; margin: 12px 0;">
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Task Name</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Reconcile Q3 vendor payments &amp; credit notes</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Priority</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>High</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Due Date</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>30/11/2026</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">CFO&#39;s Remarks</td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Please prioritise this.
+Share a summary by Friday.</strong></td>
+                    </tr>
+                </table>
+                <a href="http://localhost:5173/tasks/my-tasks" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Open My Tasks</a>
+                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+            </div>
+        
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Project task</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - New task assigned to you by CFO - Project: Cobalt Plant Expansion</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Dear Rahul Shah,</h3>
@@ -22,11 +611,11 @@
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Due Date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>28/11/2026</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>30/11/2026</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Responsible Person</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Priya Mehta</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Manager / CFO Remarks</td>
@@ -38,30 +627,32 @@ Share a summary by Friday.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Tasks / assigned / without project</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> New task assigned to you by CFO</p>
+    <section id="mail-8" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Remark added on a task</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> CFO (or a project's creator) adds or changes the remark on someone's task.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The task owner</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Personal task</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - CFO added a remark on your task</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Dear Rahul Shah,</h3>
-                <p>The CFO has assigned a new task to you.</p>
+                <p>The CFO has added a remark on your task.</p>
                 <table style="border-collapse: collapse; margin: 12px 0;">
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Task Name</td>
                         <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Reconcile Q3 vendor payments &amp; credit notes</strong></td>
                     </tr>
                     <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Priority</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>High</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Due Date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>28/11/2026</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">CFO&#39;s Remarks</td>
+                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Remark</td>
                         <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Please prioritise this.
 Share a summary by Friday.</strong></td>
                     </tr>
@@ -70,11 +661,11 @@ Share a summary by Friday.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Tasks / cfoRemark / with project</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> CFO added a remark on your task - Project: Cobalt Plant Expansion</p>
-        
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <p style="margin:0 0 6px;font:12px monospace;color:#888;">Project task</p>
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - CFO added a remark on your task - Project: Cobalt Plant Expansion</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Dear Rahul Shah,</h3>
@@ -98,35 +689,23 @@ Share a summary by Friday.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Tasks / cfoRemark / without project</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> CFO added a remark on your task</p>
+    <h2 style="max-width:760px;margin:40px auto 0;font-size:18px;color:#2c3e82;">Innovation Ideas</h2>
+    
+    <section id="mail-9" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Idea submitted</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Employee submits an idea.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The reporting manager they picked</p>
         
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Dear Rahul Shah,</h3>
-                <p>The CFO has added a remark on your task.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Task Name</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Reconcile Q3 vendor payments &amp; credit notes</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Remark</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Please prioritise this.
-Share a summary by Friday.</strong></td>
-                    </tr>
-                </table>
-                <a href="http://localhost:5173/tasks/my-tasks" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Open My Tasks</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / submitted / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Approval required: Automate vendor GST verification & reconciliation</p>
-        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Approval required: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -154,11 +733,21 @@ Share a summary by Friday.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / managerApproved / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Approval required: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-10" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Approved by reporting manager</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Reporting manager approves the idea and picks the final approver.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The final approver</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Approval required: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -195,11 +784,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / managerRejected / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Idea rejected: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-11" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Rejected by reporting manager</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Reporting manager rejects the idea.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee who submitted it</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Idea rejected: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -232,11 +831,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / finalApproved / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Idea approved: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-12" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Final approval</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Final approver approves the idea.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee who submitted it</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Idea approved: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -260,7 +869,7 @@ Please add a cost estimate.</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Target date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>21/12/2026</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>23/12/2026</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Final approver&#39;s remark</td>
@@ -273,11 +882,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / finalRejected / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Idea rejected: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-13" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Final rejection</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Final approver rejects the idea.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee who submitted it</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Idea rejected: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -310,11 +929,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / closureRequested / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Closure approval required: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-14" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Closure requested</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Employee asks to close the idea as implemented.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The approver</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Closure approval required: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -347,11 +976,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / closureApproved / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Closure approved: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-15" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Closure approved</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Approver approves the closure.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Closure approved: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -384,11 +1023,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / closureRejected / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Closure rejected: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-16" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Closure rejected</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Approver rejects the closure.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Closure rejected: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -421,11 +1070,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / extensionRequested / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Extension approval required: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-17" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Extension requested</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Employee asks for a later target date.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The approver</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Extension approval required: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -449,11 +1108,11 @@ Please add a cost estimate.</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current target date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>21/12/2026</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>23/12/2026</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Requested target date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>05/01/2027</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>07/01/2027</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Reason</td>
@@ -466,11 +1125,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / extensionApproved / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Extension approved: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-18" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Extension approved</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Approver approves the new target date.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Extension approved: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -494,11 +1163,11 @@ Please add a cost estimate.</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Previous target date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>21/12/2026</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>23/12/2026</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">New target date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>21/12/2026</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>23/12/2026</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Reporting manager&#39;s remark</td>
@@ -511,11 +1180,21 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Ideas / extensionRejected / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> [IDEA-0042] Extension rejected: Automate vendor GST verification & reconciliation</p>
+    <section id="mail-19" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Extension rejected</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Approver rejects the new target date.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The employee</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - [IDEA-0042] Extension rejected: Automate vendor GST verification &amp; reconciliation</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Priya Mehta,</h3>
@@ -539,11 +1218,11 @@ Please add a cost estimate.</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Target date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>21/12/2026</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>23/12/2026</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Requested target date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>20/01/2027</strong></td>
+                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>22/01/2027</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Rejection remark</td>
@@ -556,468 +1235,23 @@ Please add a cost estimate.</strong></td>
                 <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / submitted / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Approval required: Cut month-end close time from 8 to 5 days</p>
+    <h2 style="max-width:760px;margin:40px auto 0;font-size:18px;color:#2c3e82;">Login / Account</h2>
+    
+    <section id="mail-20" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Password reset OTP</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> User clicks Forgot Password and enters their username / email.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> That user</p>
         
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Rahul Shah has submitted a goal for your approval.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>Action required: please open this goal in GATI - Employee Excellence Portal to review it and approve or reject it. Approval can only be done in the app.</strong></p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / approved / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Goal approved: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Your goal has been approved.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / rejected / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Goal rejected: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Your goal has been rejected.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / reviewed / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Goal reviewed: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Your goal has been reviewed.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Rating</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>4/5</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Comment</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Well executed.</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / cfoReviewed / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Goal reviewed by CFO: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Your goal has been reviewed by the CFO.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Rating</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>4/5</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Comment</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Well executed.</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / cfoReviewedApprover / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Goal reviewed by CFO: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>The goal of Rahul Shah, which you approved, has now been reviewed by the CFO.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Rating</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>4/5</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Comment</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Well executed.</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / completionRequested / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Completion approval required: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Rahul Shah has requested completion of this goal and it is awaiting your approval.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #fff4e5; border-left: 4px solid #f59e0b;"><strong>Action required: please open this goal in GATI - Employee Excellence Portal to review it and approve or reject it. Approval can only be done in the app.</strong></p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / completionApproved / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Completion approved: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Completion of your goal has been approved.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / completionRejected / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Completion rejected: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Completion of your goal was not approved.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Remark</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Good progress.
-Please add a cost estimate.</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / quarterlyUpdateSubmitted / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Quarterly update submitted: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Rahul Shah has submitted a quarterly progress update for this goal.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Update quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Progress</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>60%</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / hodRatingSubmitted / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> HOD rating submitted: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Your goal has received an HOD rating.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Rating</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>4/5</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Feedback</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Strong delivery this quarter.</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / finalEvaluationGenerated / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Final evaluation available: FY2026</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>Your final evaluation for FY2026 has been generated.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Weighted score</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>3.8</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Completed</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/final-evaluation/7" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Evaluation</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Goals / dueReminder / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Goal end date approaching: Cut month-end close time from 8 to 5 days</p>
-        
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
-                
-                <h3>Hello Priya,</h3>
-                <p>This is a reminder that your goal ends in 5 days. Please make sure it is completed and updated in GATI - Employee Excellence Portal before the end date.</p>
-                <table style="border-collapse: collapse; margin: 12px 0;">
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Cut month-end close time from 8 to 5 days</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Quarter</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Q2</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Goal owner</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>Rahul Shah</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">Current status</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>In Progress</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 12px 6px 0; color: #555; vertical-align: top; white-space: nowrap;">End date</td>
-                        <td style="padding: 6px 0; white-space: pre-wrap;"><strong>26 Nov 2026</strong></td>
-                    </tr>
-                </table>
-                <p style="padding: 10px 12px; background-color: #eef6ee; border-left: 4px solid #4CAF50;">This email is for your information only. No action is needed.</p>
-                <a href="http://localhost:5173/goals/view/101" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Goal</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
-            </div>
-        
-    </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Auth / PASSWORD_RESET_OTP / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Password Reset OTP</p>
-        
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Password Reset OTP</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Rahul Shah,</h3>
@@ -1030,11 +1264,21 @@ Please add a cost estimate.</strong></td>
                 <p style="color: #777; font-size: 12px;">This is an automated email from GATI - Employee Excellence Portal. Please do not reply.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Auth / PASSWORD_CHANGED / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Your GATI - Employee Excellence Portal password was changed</p>
+    <section id="mail-21" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Password changed</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> User changes or resets their password.</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> That user</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Your password was changed</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <h3>Hello Rahul Shah,</h3>
@@ -1045,11 +1289,21 @@ Please add a cost estimate.</strong></td>
                 <p style="color: #777; font-size: 12px;">This is an automated email from GATI - Employee Excellence Portal. Please do not reply.</p>
             </div>
         
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
     </section>
-    <section style="max-width:700px;margin:24px auto;padding:20px;background:#fff;border:1px solid #ccc;">
-        <p style="font:12px monospace;color:#888;margin:0 0 8px;">Auth / WELCOME / default</p>
-        <p style="margin:0 0 16px;"><strong>Subject:</strong> Your GATI - Employee Excellence Portal account has been created</p>
+    <section id="mail-22" style="max-width:760px;margin:16px auto;padding:20px;background:#fff;border:1px solid #ccc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 style="margin:0;font-size:16px;">Welcome / account created</h3>
+            <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#1d4ed8;background:#dbeafe;">On action</span>
+        </div>
+        <p style="margin:8px 0 2px;font-size:13px;color:#444;"><strong>When:</strong> Admin adds a new employee (single add or Excel import).</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#444;"><strong>To:</strong> The new employee</p>
         
+        <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            
+            <p style="margin:0 0 12px;padding:8px 10px;background:#f7f7f7;border:1px solid #e5e5e5;font-size:13px;"><strong>Subject:</strong> GATI:Employee Excellence Portal - Your account has been created</p>
+            
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
                 
                 <p>Dear Rahul Shah,</p>
@@ -1069,4 +1323,7 @@ Please add a cost estimate.</strong></td>
                 <p style="color: #777; font-size: 12px;">This is an automated email from GATI - Employee Excellence Portal. Please do not reply.</p>
             </div>
         
-    </section></body></html>
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;"><a href="#top">↑ Back to list</a></p>
+    </section>
+</body></html>

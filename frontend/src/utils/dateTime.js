@@ -259,3 +259,17 @@ export const formatDisplayDateTime = (value, fallback = "") => {
   const hour = date.getHours();
   return `${formatDisplayDate(date)}, ${hour % 12 || 12}:${pad2(date.getMinutes())} ${hour < 12 ? "AM" : "PM"}`;
 };
+
+/**
+ * Date + time saved by the server with GETDATE() (e.g. Notifications.CreatedAt).
+ * SQL Server stores India local time, but the API sends it labelled as UTC
+ * ("...Z"), so read the UTC parts as-is instead of converting them again.
+ * Output: DD/MM/YYYY, h:mm AM/PM.
+ */
+export const formatServerDateTime = (value, fallback = "") => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  const hour = date.getUTCHours();
+  return `${pad2(date.getUTCDate())}/${pad2(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}, ${hour % 12 || 12}:${pad2(date.getUTCMinutes())} ${hour < 12 ? "AM" : "PM"}`;
+};

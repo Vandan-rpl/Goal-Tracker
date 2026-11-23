@@ -338,6 +338,16 @@ const parseTaskListQuery = (query = {}, scope) => {
         errors.push("Source must be self or assigned.");
     }
 
+    // project: "none" = tasks outside any project, or a ProjectID.
+    const project = text(String(query.project ?? ""));
+    if (project === "none") {
+        filters.projectId = "none";
+    } else if (project) {
+        const id = Number(project);
+        if (!Number.isInteger(id) || id <= 0) errors.push("Project must be a project id or none.");
+        else filters.projectId = id;
+    }
+
     if (scope !== "my") {
         const employeeId = text(String(query.employeeId ?? ""));
         if (employeeId) {
@@ -496,21 +506,36 @@ const getAllTasks = async (user, query) => {
 const getAssignedByMonth = async (user, query = {}) => {
     assertBusinessHead(user, "Only the Business Head can assign tasks.");
 
+    // fromMonth..toMonth (YYYY-MM, inclusive); `month` alone = that one
+    // month; nothing = the current month.
     const now = new Date();
-    const month = text(query.month) || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const match = month.match(/^(\d{4})-(\d{2})$/);
-    const monthNumber = match ? Number(match[2]) : 0;
-    if (!match || monthNumber < 1 || monthNumber > 12) {
-        throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, ["Month must be in YYYY-MM format."]);
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const fromMonth = text(query.fromMonth) || text(query.month) || thisMonth;
+    const toMonth = text(query.toMonth) || text(query.month) || fromMonth;
+
+    const parseMonth = (value, label) => {
+        const match = value.match(/^(\d{4})-(\d{2})$/);
+        const monthNumber = match ? Number(match[2]) : 0;
+        if (!match || monthNumber < 1 || monthNumber > 12) {
+            throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, [`${label} must be in YYYY-MM format.`]);
+        }
+        return { year: Number(match[1]), monthNumber };
+    };
+
+    parseMonth(fromMonth, "From month");
+    const to = parseMonth(toMonth, "To month");
+    if (fromMonth > toMonth) {
+        throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, ["From month cannot be after To month."]);
     }
 
-    const year = Number(match[1]);
-    const next = monthNumber === 12 ? `${year + 1}-01` : `${year}-${String(monthNumber + 1).padStart(2, "0")}`;
+    const next = to.monthNumber === 12
+        ? `${to.year + 1}-01`
+        : `${to.year}-${String(to.monthNumber + 1).padStart(2, "0")}`;
 
     const pool = await poolPromise;
     const rows = await taskModel.listAssignedByMonth(pool, {
         assignerId: Number(user.userId),
-        from: `${month}-01`,
+        from: `${fromMonth}-01`,
         to: `${next}-01`,
     });
     return rows.map((row) => withPermissions(row, user));
@@ -545,6 +570,26 @@ const getAssignableEmployees = async (user) => {
     assertBusinessHead(user, "Only the Business Head can assign tasks.");
     const pool = await poolPromise;
     return await taskModel.getAssignableEmployees(pool, user.userId);
+};
+
+/**
+ * My Tasks' Project column: active projects the user is an active member
+ * of (a self-added task can go into one of them).
+ */
+const getMyProjects = async (user) => {
+    const pool = await poolPromise;
+    return await projectModel.listUserProjects(pool, Number(user.userId));
+};
+
+/**
+ * Assign Task's Project column: active projects the employee is an active
+ * member of.
+ */
+const getEmployeeProjects = async (userIdParam, user) => {
+    assertBusinessHead(user, "Only the Business Head can assign tasks.");
+    const userId = parseId(userIdParam, "user id");
+    const pool = await poolPromise;
+    return await projectModel.listUserProjects(pool, userId);
 };
 
 /**
@@ -753,8 +798,10 @@ const MAX_BULK_ASSIGN = 100;
 
 /**
  * Assign several tasks at once (Business Head, Assign Task page).
- * body.tasks = [{ employeeId, taskName, priority, dueDate, cfoRemarks }],
- * one employee per row. All rows are saved in one transaction (none if any
+ * body.tasks = [{ employeeId, projectId, taskName, priority, dueDate,
+ * cfoRemarks }], one employee per row. projectId (optional) = a project the
+ * employee is an active member of; the task is then a project task with
+ * them as Responsible Person, like an assignment from the project page. All rows are saved in one transaction (none if any
  * row is invalid); then one "New task assigned" email per task.
  */
 const assignTasks = async (body = {}, user) => {
@@ -777,9 +824,16 @@ const assignTasks = async (body = {}, user) => {
         if (!employeeId) rowErrors.push("Employee is required.");
         else if (employeeId === businessHeadId) rowErrors.push("You cannot assign a task to yourself.");
 
+        let projectId = null;
+        if (safeRow.projectId !== undefined && safeRow.projectId !== null && safeRow.projectId !== "") {
+            const rawProjectId = Number(safeRow.projectId);
+            if (Number.isInteger(rawProjectId) && rawProjectId > 0) projectId = rawProjectId;
+            else rowErrors.push("Invalid project.");
+        }
+
         const input = checkAssignInput(safeRow, rowErrors);
         rowErrors.forEach((message) => errors.push(`Row ${index + 1}: ${message}`));
-        return { employeeId, input };
+        return { employeeId, projectId, input };
     });
 
     if (errors.length > 0) throw validationError(errors);
@@ -793,9 +847,22 @@ const assignTasks = async (body = {}, user) => {
             names.set(employeeId, employee.FullName);
         }
 
+        for (const [index, { employeeId, projectId }] of inputs.entries()) {
+            if (!projectId) continue;
+            if (!(await projectModel.getProject(transaction, projectId))) {
+                throw validationError([`Row ${index + 1}: The selected project no longer exists.`]);
+            }
+            if (!(await projectModel.isActiveMember(transaction, projectId, employeeId))) {
+                throw validationError([`Row ${index + 1}: The employee is not a member of the selected project.`]);
+            }
+        }
+
         const out = [];
-        for (const { employeeId, input } of inputs) {
-            const taskId = await insertAssignedTask(transaction, { employeeId, input, businessHeadId });
+        for (const { employeeId, projectId, input } of inputs) {
+            const project = projectId
+                ? { projectId, responsiblePersonId: employeeId, assignmentGroupId: null }
+                : {};
+            const taskId = await insertAssignedTask(transaction, { employeeId, input, businessHeadId, project });
             out.push({ taskId, userId: employeeId, name: names.get(employeeId) });
         }
         return out;
@@ -1064,6 +1131,8 @@ module.exports = {
     getAllFilterOptions,
     getEmployeeTaskSummary,
     getAssignableEmployees,
+    getEmployeeProjects,
+    getMyProjects,
     getTaskById,
     markTasksSeen,
     createTask,

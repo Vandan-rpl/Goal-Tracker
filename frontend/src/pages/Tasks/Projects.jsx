@@ -20,10 +20,10 @@ const PROJECT_DESCRIPTION_MAX = 2000;
 const EMPTY_FORM = { projectName: "", description: "", memberIds: [] };
 
 /**
- * Task Tracker > Projects. The Business Head and Managers create projects
- * (name, description, first members - a Manager picks from their
- * reportees). The Business Head and Admin see every project; a Manager sees
- * the ones they created; a member sees the ones they belong to. Counts
+ * Task Tracker > Projects. The Business Head and anyone Admin allows create
+ * projects (name, description, first members - any active user). The
+ * Business Head and Admin see every project; other creators see the ones
+ * they created; a member sees the ones they belong to. Counts
  * cover every task where the viewer sees all of them (SeesAllTasks),
  * otherwise only the viewer's own.
  */

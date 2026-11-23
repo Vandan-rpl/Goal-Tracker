@@ -36,6 +36,7 @@ const EMPTY_DRAFT = {
   userRemarks: "",
   responsiblePersonId: "",
   assignTo: "",
+  projectId: "",
 };
 
 const draftFromTask = (task) => ({
@@ -47,6 +48,7 @@ const draftFromTask = (task) => ({
   userRemarks: task.UserRemarks || "",
   responsiblePersonId: task.ResponsiblePersonID ? String(task.ResponsiblePersonID) : "",
   assignTo: "",
+  projectId: "",
 });
 
 const BASE_COLUMNS = ["Sr.No.", "Task Name", "Priority", "Created Date", "Due Date", "Status"];
@@ -149,6 +151,10 @@ const toSheetItems = (tasks, collapseGroups) => {
  *   newTaskIds      Set of TaskIDs to highlight as New
  *   onSaved(employeeId)  reload that employee's tasks after a change
  *   showCfoRemarks  false hides the CFO's Remarks column
+ *   ownProjects     own mode outside a project (My Tasks): the user's
+ *                   projects [{ ProjectID, ProjectName }], or null while
+ *                   loading. Adds a Project column; a new row can pick one
+ *                   to add the task to that project. Omit for no column.
  */
 export default function TaskSheet({
   groups,
@@ -159,6 +165,7 @@ export default function TaskSheet({
   showGroupHeaders = true,
   newTaskIds = null,
   onSaved,
+  ownProjects = undefined,
 }) {
   const isAssignMode = mode === "assign";
   const { user } = useAuth();
@@ -168,7 +175,11 @@ export default function TaskSheet({
   const [drafts, setDrafts] = useState({}); // rowKey -> draft (edited rows only)
 
   const showResponsible = Boolean(project);
-  const columns = [...BASE_COLUMNS, ...(project ? projectColumns(showResponsible) : []), ...endColumns(Boolean(project), showCfoRemarks)];
+  const showProjectColumn = ownProjects !== undefined && !project && !isAssignMode;
+  const baseColumns = showProjectColumn
+    ? [BASE_COLUMNS[0], "Project", ...BASE_COLUMNS.slice(1)]
+    : BASE_COLUMNS;
+  const columns = [...baseColumns, ...(project ? projectColumns(showResponsible) : []), ...endColumns(Boolean(project), showCfoRemarks)];
   const [extraRows, setExtraRows] = useState({}); // employeeId -> [rowKey] added with "+ Add row"
   const [baseRowSeed, setBaseRowSeed] = useState({}); // employeeId -> n, to renew used blank rows
   const [rowErrors, setRowErrors] = useState({});
@@ -312,7 +323,8 @@ export default function TaskSheet({
           status: draft.status,
           userRemarks: draft.userRemarks.trim(),
         };
-        if (project) await createProjectTask(project.ProjectID, task);
+        const projectId = project ? project.ProjectID : draft.projectId ? Number(draft.projectId) : null;
+        if (projectId) await createProjectTask(projectId, task);
         else await createTask(task);
         toast.success("Task added.");
       }
@@ -528,7 +540,8 @@ export default function TaskSheet({
     const isNew = Boolean(task && newTaskIds?.has(task.TaskID));
     const dueMin =
       (isNewRow && isAssignMode) || (task?.IsAssignedByBusinessHead && draft.dueDate !== task.DueDate) ? today : undefined;
-    const projectTag = !project && task?.ProjectName;
+    // The Project column shows it instead when there is one.
+    const projectTag = !project && !showProjectColumn && task?.ProjectName;
     // My Tasks shows "Assigned by ..." in the CFO's Remarks cell, other sheets above the task name.
     const showAssignerTag = Boolean(task?.IsAssignedByBusinessHead) && !nested;
     const assignerInRemarks = showAssignerTag && !isAssignMode && !project;
@@ -542,6 +555,37 @@ export default function TaskSheet({
           <td className={`${cellClass} w-14 bg-[#edf1f7] pt-3 text-center text-xs font-medium text-slate-600`}>
             {isNewRow ? <span className="text-slate-300">+</span> : serial}
           </td>
+
+          {showProjectColumn && (
+            <td className={`${cellClass} min-w-[170px]`}>
+              {isNewRow ? (
+                <select
+                  value={draft.projectId}
+                  onChange={(e) => updateCell(key, task, "projectId", e.target.value)}
+                  disabled={saving || !ownProjects?.length}
+                  aria-label="Project"
+                  className={`${cellInputClass} cursor-pointer disabled:cursor-not-allowed ${draft.projectId ? "" : "text-slate-400"}`}
+                >
+                  <option value="">
+                    {ownProjects === null
+                      ? "Loading projects..."
+                      : ownProjects.length
+                        ? "Select project (optional)"
+                        : "Not in any project"}
+                  </option>
+                  {(ownProjects || []).map((p) => (
+                    <option key={p.ProjectID} value={String(p.ProjectID)} className="text-[#202522]">
+                      {p.ProjectName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className={`${readOnlyClass} ${task.ProjectName ? "" : "text-slate-400"}`}>
+                  {task.ProjectName || "—"}
+                </div>
+              )}
+            </td>
+          )}
 
           <td className={`${cellClass} min-w-[240px]`}>
             {task && (isNew || assignerInName || projectTag) && (

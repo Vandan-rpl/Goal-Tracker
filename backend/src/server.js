@@ -11,6 +11,7 @@ const { logAuthMailMode } = require('./services/authMailService');
 const { logTaskMailMode } = require('./services/taskMailService');
 const { logGoalMailMode } = require('./services/goalMailService');
 const { startGoalDueReminderJob } = require('./jobs/goalDueReminderJob');
+const { startGoalWindowReminderJob } = require('./jobs/goalWindowReminderJob');
 
 // Forgot Password OTPs and reset tokens are hashed with OTP_SECRET; refuse to
 // start without it rather than store weak hashes.
@@ -181,4 +182,5 @@ const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
     console.log(`Server (HTTP + Socket.IO) is running smoothly on port ${PORT}`);
     startGoalDueReminderJob();
+    startGoalWindowReminderJob();
 });

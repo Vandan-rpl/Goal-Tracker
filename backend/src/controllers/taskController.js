@@ -148,6 +148,24 @@ exports.getAssignableEmployees = handle(
 );
 
 /**
+ * Projects I am a member of (My Tasks' Project column)
+ * GET /api/v1/tasks/my-projects
+ */
+exports.getMyProjects = handle(
+    "Get My Projects", "Failed to fetch projects.", 200, "Projects fetched successfully.",
+    (req) => taskService.getMyProjects(req.user)
+);
+
+/**
+ * Projects an employee is a member of (Assign Task's Project column)
+ * GET /api/v1/tasks/employees/:userId/projects
+ */
+exports.getEmployeeProjects = handle(
+    "Get Employee Projects", "Failed to fetch projects.", 200, "Projects fetched successfully.",
+    (req) => taskService.getEmployeeProjects(req.params.userId, req.user)
+);
+
+/**
  * Assign Task (Business Head)
  * POST /api/v1/tasks/assign
  */
@@ -158,7 +176,7 @@ exports.assignTask = handle(
 
 /**
  * Tasks I Assigned In A Month (Business Head, Assign Task page)
- * GET /api/v1/tasks/assign/month?month=YYYY-MM
+ * GET /api/v1/tasks/assign/month?fromMonth=YYYY-MM&toMonth=YYYY-MM (or ?month=YYYY-MM)
  */
 exports.getAssignedByMonth = handle(
     "Get Assigned Tasks", "Failed to fetch assigned tasks.", 200, "Assigned tasks fetched successfully.",
@@ -167,7 +185,7 @@ exports.getAssignedByMonth = handle(
 
 /**
  * Assign Several Tasks (Business Head)
- * POST /api/v1/tasks/assign/bulk   body: { tasks: [{ employeeId, taskName, priority, dueDate }] }
+ * POST /api/v1/tasks/assign/bulk   body: { tasks: [{ employeeId, projectId?, taskName, priority, dueDate }] }
  */
 exports.assignTasks = handle(
     "Assign Tasks", "Failed to assign tasks.", 201,

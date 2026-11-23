@@ -216,6 +216,28 @@ const listMembers = async (db, projectId) => {
 };
 
 /**
+ * Active projects the user is an active member of (Assign Task's Project
+ * column), by name.
+ */
+const listUserProjects = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            SELECT p.ProjectID, p.ProjectName
+            FROM dbo.ProjectMembers pm
+            INNER JOIN dbo.Projects p
+                ON p.ProjectID = pm.ProjectID
+            WHERE pm.UserID = @UserID
+              AND pm.IsActive = 1
+              AND p.IsActive = 1
+            ORDER BY p.ProjectName;
+        `);
+
+    return result.recordset;
+};
+
+/**
  * True if the user is an active member of the project.
  */
 const isActiveMember = async (db, projectId, userId) => {
@@ -524,6 +546,7 @@ module.exports = {
     updateProject,
     listMembers,
     isActiveMember,
+    listUserProjects,
     hasActiveProjects,
     addMember,
     removeMember,

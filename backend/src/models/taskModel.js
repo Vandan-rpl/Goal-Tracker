@@ -293,6 +293,13 @@ const buildTaskListWhere = ({ scope, viewerId, filters }) => {
         conditions.push("t.AssignedBy IS NOT NULL");
     }
 
+    if (filters.projectId === "none") {
+        conditions.push("t.ProjectID IS NULL");
+    } else if (filters.projectId) {
+        conditions.push("t.ProjectID = @ProjectID");
+        params.push(["ProjectID", sql.Int, filters.projectId]);
+    }
+
     if (filters.employeeId) {
         conditions.push("t.UserID = @EmployeeID");
         params.push(["EmployeeID", sql.Int, filters.employeeId]);
@@ -623,7 +630,7 @@ const getGroupTasks = async (db, assignmentGroupId, lock = false) => {
 };
 
 /**
- * Assign Task page: non-project tasks the Business Head assigned between
+ * Assign Task page: tasks the Business Head assigned between
  * @From (inclusive) and @To (exclusive), whatever their status, in the
  * order they were assigned.
  */
@@ -638,7 +645,6 @@ const listAssignedByMonth = async (db, { assignerId, from, to }) => {
                 ${TASK_SELECT}
             ${TASK_FROM}
             WHERE t.IsDeleted = 0
-              AND t.ProjectID IS NULL
               AND t.AssignedBy = @AssignerID
               AND COALESCE(t.AssignedDate, t.CreatedDate) >= CAST(@From AS DATETIME2)
               AND COALESCE(t.AssignedDate, t.CreatedDate) <  CAST(@To AS DATETIME2)

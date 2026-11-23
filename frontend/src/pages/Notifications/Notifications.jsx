@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
@@ -14,7 +14,7 @@ import {
   deleteNotification,
   deleteAllNotifications,
 } from "../../redux/slices/notificationSlice";
-import { formatDisplayDateTime } from "../../utils/dateTime";
+import { formatServerDateTime } from "../../utils/dateTime";
 
 const Notifications = () => {
   const dispatch = useDispatch();
@@ -28,8 +28,23 @@ const Notifications = () => {
     else navigate(-1);
   };
 
+  // Notifications that were unread when the page opened: still highlighted
+  // as "new" for this visit, although they are marked read straight away.
+  const [newIds, setNewIds] = useState(() => new Set());
+
+  // Opening this page marks every notification as read, so the header
+  // badge count is cleared when the user goes back.
   useEffect(() => {
-    dispatch(fetchNotifications());
+    let cancelled = false;
+    dispatch(fetchNotifications()).then((action) => {
+      if (cancelled || !Array.isArray(action.payload)) return;
+      const unread = action.payload.filter((n) => !n.IsRead).map((n) => n.NotificationId);
+      setNewIds(new Set(unread));
+      if (unread.length > 0) dispatch(markAllRead());
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [dispatch]);
 
   const handleRead = (id) => dispatch(markAsRead(id));
@@ -37,7 +52,8 @@ const Notifications = () => {
   const handleReadAll = () => dispatch(markAllRead());
   const handleDeleteAll = () => dispatch(deleteAllNotifications());
 
-  const unreadCount = notifications.filter((n) => !n.IsRead).length;
+  const isNew = (item) => !item.IsRead || newIds.has(item.NotificationId);
+  const unreadCount = notifications.filter(isNew).length;
 
   return (
     <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-4 bg-white min-h-screen text-slate-800">
@@ -71,7 +87,7 @@ const Notifications = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleReadAll}
-            disabled={loading || notifications.length === 0 || unreadCount === 0}
+            disabled={loading || !notifications.some((n) => !n.IsRead)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm"
           >
             <MarkEmailReadIcon className="text-emerald-600" style={{ fontSize: 16 }} />
@@ -116,7 +132,7 @@ const Notifications = () => {
             <div
               key={item.NotificationId}
               className={`group flex items-start justify-between gap-3 p-3.5 rounded-xl border transition-all ${
-                item.IsRead
+                !isNew(item)
                   ? "bg-white border-slate-200 hover:border-slate-300"
                   : "bg-blue-50/30 border-blue-200 border-l-4 border-l-blue-600 shadow-xs"
               }`}
@@ -124,7 +140,7 @@ const Notifications = () => {
               {/* Card Main Info */}
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-2">
-                  {!item.IsRead && (
+                  {isNew(item) && (
                     <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
                   )}
                   <h3 className="text-sm font-semibold text-slate-900 truncate">
@@ -136,20 +152,9 @@ const Notifications = () => {
                   {item.Message}
                 </p>
 
-                {/* Metadata Badges */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider bg-slate-100 text-slate-600 rounded border border-slate-200">
-                    {item.NotificationType}
-                  </span>
-
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    &bull;
-                  </span>
-
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    {formatDisplayDateTime(item.CreatedAt)}
-                  </span>
-                </div>
+                <p className="pt-1 text-[11px] text-slate-400 font-medium">
+                  {formatServerDateTime(item.CreatedAt)}
+                </p>
               </div>
 
               {/* Action Buttons */}

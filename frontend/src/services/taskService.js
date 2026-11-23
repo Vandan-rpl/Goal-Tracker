@@ -81,6 +81,18 @@ export const getAssignableEmployees = async () => {
     return response.data.data;
 };
 
+// My Tasks: active projects the logged-in user is a member of
+export const getMyProjects = async () => {
+    const response = await api.get('/tasks/my-projects');
+    return response.data.data;
+};
+
+// Business Head, Assign Task: active projects the employee is a member of
+export const getEmployeeProjects = async (userId) => {
+    const response = await api.get(`/tasks/employees/${userId}/projects`);
+    return response.data.data;
+};
+
 // { taskName, priority, dueDate, status, userRemarks }
 export const createTask = async (task) => {
     const response = await api.post('/tasks', task);
@@ -113,10 +125,10 @@ export const assignTasks = async (tasks) => {
     return response.data.data;
 };
 
-// Business Head, Assign Task page: tasks they assigned in month "YYYY-MM"
-// (non-project, any status), oldest first.
-export const getAssignedByMonth = async (month) => {
-    const response = await api.get('/tasks/assign/month', { params: { month } });
+// Business Head, Assign Task page: tasks they assigned from fromMonth to toMonth ("YYYY-MM", inclusive)
+// (any status, project tasks included), oldest first.
+export const getAssignedByMonth = async (fromMonth, toMonth = fromMonth) => {
+    const response = await api.get('/tasks/assign/month', { params: { fromMonth, toMonth } });
     return response.data.data;
 };
 

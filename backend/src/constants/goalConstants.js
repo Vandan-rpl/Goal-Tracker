@@ -20,6 +20,22 @@ const GoalMailEvent = Object.freeze({
   HOD_RATING_SUBMITTED: "hodRatingSubmitted",
   FINAL_EVALUATION_GENERATED: "finalEvaluationGenerated",
   DUE_REMINDER: "dueReminder",
+  WINDOW_REMINDER: "windowReminder",
+});
+
+// Goal windows the window reminder job (jobs/goalWindowReminderJob.js)
+// emails about: who gets it, and what they do in it. The dates come from
+// utils/fiscalQuarter.js (last month of each quarter).
+const GoalWindow = Object.freeze({
+  ADD_GOAL: "addGoal",
+  MANAGER_HOD_APPROVAL: "managerHodApproval",
+  CFO_APPROVAL: "cfoApproval",
+});
+
+// Reminder stages: the day before a window opens, and 2 days before it closes.
+const GoalWindowReminderStage = Object.freeze({
+  OPENING: { key: "opening", daysBeforeStart: 1 },
+  CLOSING: { key: "closing", daysBeforeEnd: 2 },
 });
 
 // Goal end-date reminders sent by jobs/goalDueReminderJob.js. Each stage is
@@ -42,6 +58,8 @@ const GOAL_STATUSES_WITHOUT_DUE_REMINDER = Object.freeze([
 
 module.exports = {
   GoalMailEvent,
+  GoalWindow,
+  GoalWindowReminderStage,
   GoalDueReminderStages,
   GOAL_STATUSES_WITHOUT_DUE_REMINDER,
 };

@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-import { getCurrentFiscalQuarterValue } from "../../utils/fiscalQuarter";
+import {
+  getCurrentFiscalQuarterValue,
+  getFiscalQuarterOptions,
+  formatQuarterLabel,
+} from "../../utils/fiscalQuarter";
 import useAuth from "../../hooks/useAuth";
 import CompletionRequests from "../../components/GoalCompletion/CompletionRequests";
 import { formatDisplayDate } from "../../utils/dateTime";
@@ -9,10 +13,33 @@ import { getGoalStatusLabel } from "../../utils/goalStatus";
 import { getRoleLabel } from "../../utils/roleLabel";
 
 const MAX_GOALS_PER_QUARTER = 8;
+const QUARTER_OPTIONS = getFiscalQuarterOptions();
+
+// Dot on a row (CFO only): this user has a goal waiting for approval, or
+// someone below them in the tree does (shown on every manager above them).
+const PendingDot = ({ user }) => {
+  const own = Boolean(user.HasPendingGoals);
+  const team = Boolean(user.TeamHasPendingGoals);
+  if (!own && !team) return null;
+
+  const title = own && team
+    ? "Goal waiting for approval, also in their team"
+    : own
+      ? "Goal waiting for approval"
+      : "A team member has a goal waiting for approval";
+
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      className="ml-2 inline-block h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-amber-100 align-middle"
+    />
+  );
+};
 
 // Recursive row component: renders one user, and — if expanded — renders
 // its own direct reports as nested TeamRow instances underneath it.
-const TeamRow = ({ user, depth, onViewGoals }) => {
+const TeamRow = ({ user, depth, onViewGoals, showPending }) => {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
@@ -69,6 +96,7 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
             <span className="mr-2 w-4 inline-block"></span>
           )}
           {user.FirstName} {user.LastName}
+          {showPending && <PendingDot user={user} />}
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
           {user.Designation || getRoleLabel(user.Role)}
@@ -108,6 +136,7 @@ const TeamRow = ({ user, depth, onViewGoals }) => {
             user={child}
             depth={depth + 1}
             onViewGoals={onViewGoals}
+            showPending={showPending}
           />
         ))}
     </>
@@ -129,13 +158,41 @@ const TeamManagement = () => {
   const loggedInUserId = getLoggedInUserId();
   const role = String(user?.Role || user?.role || "").toUpperCase();
   const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
+  // The user whose goals are open is kept in the URL (?userId=&name=), so
+  // "Back to Goals" on a goal page returns to that user's goals, not the list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedUserId = searchParams.get("userId");
+  const selectedUser = useMemo(
+    () =>
+      selectedUserId
+        ? { id: selectedUserId, name: searchParams.get("name") || "" }
+        : null,
+    [selectedUserId, searchParams],
+  );
+  // Quarter filter for the user's goals ("" = all), also kept in the URL.
+  const quarterFilter = searchParams.get("quarter") || "";
+
+  const setQuarterFilter = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("quarter", value);
+    else next.delete("quarter");
+    setSearchParams(next, { replace: true });
+  };
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const filteredGoals = useMemo(
+    () =>
+      quarterFilter
+        ? goals.filter((goal) => goal.Quarter === quarterFilter)
+        : goals,
+    [goals, quarterFilter],
+  );
+
+  // Allocation of the filtered quarter, or the current one when showing all.
   const quarterGoalSummary = useMemo(() => {
-    const quarter = getCurrentFiscalQuarterValue();
+    const quarter = quarterFilter || getCurrentFiscalQuarterValue();
     const activeQuarterGoals = goals.filter(
       (goal) =>
         goal.Quarter === quarter &&
@@ -154,7 +211,7 @@ const TeamManagement = () => {
       allocatedPercentage: allocatedHundredths / 100,
       remainingPercentage: Math.max(0, 10000 - allocatedHundredths) / 100,
     };
-  }, [goals]);
+  }, [goals, quarterFilter]);
 
   useEffect(() => {
     fetchTeamUsers();
@@ -194,8 +251,11 @@ const TeamManagement = () => {
     }
   };
 
-  const handleViewGoals = async (userId, userName) => {
-    setSelectedUser({ id: userId, name: userName });
+  const handleViewGoals = (userId, userName) => {
+    setSearchParams({ userId: String(userId), name: userName });
+  };
+
+  const fetchUserGoals = async (userId) => {
     setGoals([]);
     setLoading(true);
     try {
@@ -227,6 +287,11 @@ const TeamManagement = () => {
       setLoading(false);
     }
   };
+
+  // Load the goals of the user in the URL (also when coming back to it).
+  useEffect(() => {
+    if (selectedUserId) fetchUserGoals(selectedUserId);
+  }, [selectedUserId]);
 
   return (
     <div className="p-6">
@@ -285,6 +350,7 @@ const TeamManagement = () => {
                       user={user}
                       depth={0}
                       onViewGoals={handleViewGoals}
+                      showPending={role === "BUSINESSHEAD"}
                     />
                   ))
                 ) : (
@@ -308,7 +374,7 @@ const TeamManagement = () => {
               Goals for:{" "}
               <span className="text-indigo-600">{selectedUser.name}</span>
               <span className="ml-2 text-xs font-normal text-gray-500">
-                {quarterGoalSummary.quarter}:{" "}
+                {formatQuarterLabel(quarterGoalSummary.quarter)}:{" "}
                 {quarterGoalSummary.allocatedPercentage.toFixed(2)}% allocated,{" "}
                 {quarterGoalSummary.remainingPercentage.toFixed(2)}% remaining ·{" "}
                 {quarterGoalSummary.goalCount}/{MAX_GOALS_PER_QUARTER} goals
@@ -325,15 +391,40 @@ const TeamManagement = () => {
                 </Link>
               )}
               <button
-                onClick={() => {
-                  setSelectedUser(null);
-                  setGoals([]);
-                }}
+                onClick={() => setSearchParams({})}
                 className="text-sm bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-300 font-medium transition"
               >
                 &larr; Back to Team List
               </button>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3 mb-4">
+            <div className="w-full sm:w-72">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Quarter
+              </label>
+              <select
+                value={quarterFilter}
+                onChange={(e) => setQuarterFilter(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">All Quarters</option>
+                {QUARTER_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {quarterFilter && (
+              <button
+                onClick={() => setQuarterFilter("")}
+                className="text-sm font-semibold text-gray-500 hover:text-gray-700 px-3 py-2"
+              >
+                Clear filter
+              </button>
+            )}
           </div>
 
           <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -368,8 +459,8 @@ const TeamManagement = () => {
                         Loading goals...
                       </td>
                     </tr>
-                  ) : goals.length > 0 ? (
-                    goals.map((goal) => (
+                  ) : filteredGoals.length > 0 ? (
+                    filteredGoals.map((goal) => (
                       <tr
                         key={goal.GoalID}
                         className="hover:bg-gray-50/50 transition"
@@ -428,7 +519,9 @@ const TeamManagement = () => {
                         colSpan="5"
                         className="px-6 py-12 text-center text-sm text-gray-500"
                       >
-                        No active goals found for this user.
+                        {quarterFilter
+                          ? "No goals found for this user in the selected quarter."
+                          : "No active goals found for this user."}
                       </td>
                     </tr>
                   )}

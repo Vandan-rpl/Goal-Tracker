@@ -107,7 +107,7 @@ const ApproveGoals = () => {
         >
           {approvalWindow.isOpen
             ? `${isCfo ? 'CFO' : 'Manager/HOD'} approvals are open through `
-            : `${isCfo ? 'CFO approvals are open only on quarter days 16-30.' : 'Manager/HOD approvals are open only on quarter days 8-25.'} This quarter's window is `}
+            : `${isCfo ? 'CFO approvals are open only from day 16 to the end of the last month of each quarter.' : 'Manager/HOD approvals are open only on days 8-15 of the last month of each quarter.'} This quarter's window is `}
           {formatDisplayDate(approvalWindow.startDate)} through{' '}
           {formatDisplayDate(approvalWindow.endDate)}.
         </div>

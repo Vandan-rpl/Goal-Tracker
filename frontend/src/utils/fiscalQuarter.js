@@ -36,6 +36,25 @@ export const getQuarterDayWindow = (startDay, endDay, date = new Date()) => {
   };
 };
 
+// Goal windows run in the LAST month of each quarter (same as the backend's
+// utils/fiscalQuarter.js). `endDay` null = the month's last day. E.g.
+// Oct-Dec quarter: Add Goal 1-7 Dec, Manager/HOD 8-15 Dec, CFO 16-31 Dec.
+export const getQuarterLastMonthWindow = (startDay, endDay, date = new Date()) => {
+  const quarterIndex = Math.floor(((date.getMonth() + 9) % 12) / 3);
+  const lastMonth = (quarterIndex * 3 + 5) % 12;
+  // Q4 (Jan-Mar) ends in March of the same calendar year as `date`.
+  const year = date.getFullYear();
+  const startDate = new Date(year, lastMonth, startDay);
+  const endDate = endDay ? new Date(year, lastMonth, endDay) : new Date(year, lastMonth + 1, 0);
+  const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  return {
+    startDate,
+    endDate,
+    isOpen: today >= startDate && today <= endDate,
+  };
+};
+
 //Goal add window
 export const getGoalCreationWindow = (date = new Date()) => {
   const reopeningStart = new Date(2026, 10, 1);
@@ -50,7 +69,7 @@ export const getGoalCreationWindow = (date = new Date()) => {
     };
   }
 
-  return getQuarterDayWindow(1, 7, date);
+  return getQuarterLastMonthWindow(1, 7, date);
 };
 
 //Manager/HOD approval window
@@ -67,7 +86,7 @@ export const getManagerHodApprovalWindow = (date = new Date()) => {
     };
   }
 
-  return getQuarterDayWindow(10, 31, date);
+  return getQuarterLastMonthWindow(8, 15, date);
 };
 
 export const getCfoApprovalWindow = (date = new Date()) => {
@@ -84,7 +103,7 @@ export const getCfoApprovalWindow = (date = new Date()) => {
     };
   }
 
-  return getQuarterDayWindow(16, 31, date);
+  return getQuarterLastMonthWindow(16, null, date);
 }
 
 export const getFiscalQuarterValue = (dateValue) => {

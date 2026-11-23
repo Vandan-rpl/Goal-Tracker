@@ -46,8 +46,8 @@ const {
  *     to one member). Sees every project, Managers' too,
  *     with every task, and adds remarks on any task.
  *   Project creator (anyone Admin put on dbo.ProjectCreators): creates
- *     projects and runs only their own; members are limited to their
- *     reportees (Users.ReportingManagerID = them). Sees the projects they
+ *     projects and runs only their own; like the Business Head, any active
+ *     user can be added as a member. Sees the projects they
  *     created (every task, "Manager / CFO Remarks" on them) and any project
  *     they are a member of. Taken off the list = no longer runs them.
  *   Admin: sees every project and its tasks (read-only), like All Tasks.
@@ -75,9 +75,6 @@ const parseGroupId = (value) => {
 };
 
 const notFound = () => new AppError("Project not found.", StatusCodes.NOT_FOUND);
-
-// A project creator who is not the Business Head (on the Admin's list).
-const isManagerRole = (user) => canCreateProjects(user) && !isBusinessHead(user);
 
 /**
  * True if the user runs the project: whoever created it (while they can
@@ -147,7 +144,7 @@ const getViewableProject = async (db, projectId, user) => {
 
 /**
  * Members picked for a project: active users other than the creator
- * themselves; for a Manager, only their reportees. Throws 400.
+ * themselves. Throws 400.
  */
 const checkMemberPicks = async (db, userIds, user) => {
     const actorId = Number(user.userId);
@@ -158,9 +155,6 @@ const checkMemberPicks = async (db, userIds, user) => {
     const users = await projectModel.getUsers(db, userIds);
     if (users.length !== userIds.length || users.some((u) => !u.IsActive)) {
         throw validationError(["Every selected member must be an active user."]);
-    }
-    if (isManagerRole(user) && users.some((u) => u.ReportingManagerID !== actorId)) {
-        throw validationError(["You can add only your own reportees as members."]);
     }
 };
 
@@ -218,15 +212,12 @@ const getProjectDetails = async (projectIdParam, user) => {
 };
 
 /**
- * Users that can be added as members: for the Business Head every active
- * user but themselves, for a Manager their active reportees.
+ * Users that can be added as members: every active user but themselves.
  */
 const getMemberOptions = async (user) => {
     assertCanCreate(user);
     const pool = await poolPromise;
-    return isManagerRole(user)
-        ? await projectModel.listReportees(pool, Number(user.userId))
-        : await taskModel.getAssignableEmployees(pool, user.userId);
+    return await taskModel.getAssignableEmployees(pool, user.userId);
 };
 
 /**
@@ -286,7 +277,7 @@ const updateProject = async (projectIdParam, body = {}, user) => {
 };
 
 /**
- * Add members (whoever runs the project; a Manager only their reportees). A
+ * Add members (whoever runs the project). A
  * user removed earlier is reactivated on their existing row. They get only
  * tasks assigned from now on.
  */
@@ -313,9 +304,8 @@ const addMembers = async (projectIdParam, body = {}, user) => {
 };
 
 /**
- * Remove a member (whoever runs the project; a Manager only their
- * reportees). Their tasks stay as they are and stay visible on the project
- * page to whoever sees all its tasks.
+ * Remove a member (whoever runs the project). Their tasks stay as they are
+ * and stay visible on the project page to whoever sees all its tasks.
  */
 const removeMember = async (projectIdParam, userIdParam, user) => {
     const projectId = parseId(projectIdParam, "project id");
@@ -323,13 +313,6 @@ const removeMember = async (projectIdParam, userIdParam, user) => {
 
     await withTransaction(async (transaction) => {
         await getManagedProject(transaction, projectId, user, true);
-
-        if (isManagerRole(user)) {
-            const [member] = await projectModel.getUsers(transaction, [memberId]);
-            if (!member || member.ReportingManagerID !== Number(user.userId)) {
-                throw forbidden("You can remove only your own reportees.");
-            }
-        }
 
         if (!(await projectModel.removeMember(transaction, projectId, memberId))) {
             throw new AppError("This user is not a member of the project.", StatusCodes.NOT_FOUND);

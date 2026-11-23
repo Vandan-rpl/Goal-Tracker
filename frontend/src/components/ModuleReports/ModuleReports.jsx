@@ -289,7 +289,7 @@ const ModuleReports = ({
   return (
     <TaskWorkbookFrame
       barSubtitle="Reports & Analytics"
-      badge="CFO VIEW"
+      // badge="CFO VIEW"
       title="Reports & Analytics"
       description={description}
       filters={filters}
