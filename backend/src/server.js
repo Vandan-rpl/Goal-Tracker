@@ -9,6 +9,7 @@ const { setIO } = require('./sockets/io');
 const { requireOtpSecret } = require('./utils/passwordResetCrypto');
 const { logAuthMailMode } = require('./services/authMailService');
 const { logTaskMailMode } = require('./services/taskMailService');
+const { logGoalMailMode } = require('./services/goalMailService');
 const { startGoalDueReminderJob } = require('./jobs/goalDueReminderJob');
 
 // Forgot Password OTPs and reset tokens are hashed with OTP_SECRET; refuse to
@@ -22,6 +23,7 @@ try {
 
 logAuthMailMode();
 logTaskMailMode();
+logGoalMailMode();
 
 // Import Routers
 const authRoutes = require('./routes/authRoutes');

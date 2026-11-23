@@ -743,10 +743,9 @@ const AddGoal = () => {
               className="-mx-3 mt-4.5 flex min-h-10.5 items-stretch gap-4.5 border-t border-[#d5dce5] bg-[#f4f6fa] px-3 sm:-mx-8 sm:px-6"
               aria-hidden="true"
             >
-              <span className="flex items-center border-t-[3px] border-[#2c3e82] bg-white px-4.5 text-xs font-bold text-[#2c3e82]">
+              {/* <span className="flex items-center border-t-[3px] border-[#2c3e82] bg-white px-4.5 text-xs font-bold text-[#2c3e82]">
                 Goal Entry
-              </span>
-              {/* <span className="self-center text-[11px] text-slate-500">Quarterly planning worksheet</span> */}
+              </span> */}
             </div>
           </div>
         </div>

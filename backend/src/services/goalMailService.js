@@ -25,6 +25,21 @@ const { GoalMailEvent } = require("../constants/goalConstants");
  * ============================================================
  */
 
+const redirectAddress = () => String(process.env.GOAL_MAIL_REDIRECT_TO || "").trim();
+
+/**
+ * Called once at startup (server.js).
+ */
+const logGoalMailMode = () => {
+  const redirectTo = redirectAddress();
+
+  if (redirectTo) {
+    logger.warn(`[GOAL MAIL] Redirect is ON: every goal email goes to ${redirectTo} (GOAL_MAIL_REDIRECT_TO).`);
+  } else {
+    logger.info("[GOAL MAIL] Redirect is OFF: goal emails go to the real recipients.");
+  }
+};
+
 const noComment = (value, fallback) => (value && String(value).trim()) || fallback;
 
 /**
@@ -297,7 +312,7 @@ const sendGoalMail = async (event, context = {}) => {
       return { sent: false, reason: "no email" };
     }
 
-    const redirectTo = String(process.env.GOAL_MAIL_REDIRECT_TO || "").trim();
+    const redirectTo = redirectAddress();
     const subject = buildSubject(definition, goal, context);
 
     await sendEmail({
@@ -318,5 +333,6 @@ module.exports = {
   GOAL_MAIL_EVENTS,
   buildSubject,
   buildHtml,
+  logGoalMailMode,
   sendGoalMail,
 };

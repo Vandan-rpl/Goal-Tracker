@@ -194,7 +194,7 @@ const AssignTask = () => {
   return (
     <TaskWorkbookFrame
       barSubtitle="Assign tasks"
-      badge="CFO"
+      // badge="CFO"
       title="Assign Task"
       description="Pick an employee on each row and type the task. Use + Add row for more, then press Submit once to assign them all. Each employee is emailed."
       actions={
