@@ -181,7 +181,7 @@ const MyIdeas = () => {
           activeKey={status}
           loading={loading}
           onSelect={changeStatus}
-          gridClassName="grid-cols-2 sm:grid-cols-4 lg:grid-cols-8"
+          gridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8"
         />
 
         {/* Filters */}

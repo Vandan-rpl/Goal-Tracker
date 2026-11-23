@@ -97,7 +97,7 @@ const IdeaDashboard = () => {
       ) : summary && (
         <div className="space-y-6">
           <SummaryCards
-            gridClassName="grid-cols-2 md:grid-cols-4 xl:grid-cols-8"
+            gridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8"
             cards={[
               { label: "Total Ideas", value: summary.total, accent: "text-[#2c3e82]" },
               { label: "HOD/Manager approval pending", value: summary.pendingManager, accent: "text-[#d08a1c]" },

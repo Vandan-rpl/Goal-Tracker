@@ -208,7 +208,7 @@ const ListGoal = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50/75">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 min-w-56 max-w-md text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Goal No / Description
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -243,11 +243,13 @@ const ListGoal = () => {
                       key={goal.GoalID}
                       className="hover:bg-gray-50/50 transition"
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-bold text-gray-900">
+                      {/* Long titles wrap instead of widening the table, so
+                          Actions stays in view without scrolling. */}
+                      <td className="px-6 py-4 min-w-56 max-w-md">
+                        <div className="text-sm font-bold text-gray-900 wrap-break-word">
                           #{goal.GoalNumber} - {goal.GoalTitle}
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-gray-400 whitespace-nowrap">
                           Timeline:{" "}
                           {goal.Timeline
                             ? formatDisplayDate(goal.Timeline)

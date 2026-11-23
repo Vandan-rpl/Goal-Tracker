@@ -74,7 +74,7 @@ const IdeaReports = () => (
     itemColumns={ITEM_COLUMNS}
     itemKey="IdeaID"
     completion={{ label: "Implementation", status: "Implemented" }}
-    summaryGridClassName="grid-cols-2 md:grid-cols-4 xl:grid-cols-8"
+    summaryGridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8"
     footer="Ideas are counted in the fiscal year they were submitted; Drafts are left out. Final approval moves an idea straight to In Implementation. The In Implementation card counts every idea being implemented, overdue ones included; in the tables and charts an idea past its target date counts as Overdue only. Implementation % = Implemented ÷ (In Implementation + Overdue + Implemented)."
   />
 );

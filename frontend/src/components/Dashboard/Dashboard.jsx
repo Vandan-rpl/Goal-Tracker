@@ -17,12 +17,17 @@ import { dashboardCellClass, dashboardHeadClass } from "./dashboardStyles";
 // so both look the same. Each page passes its own data and labels; every
 // count comes from its backend.
 
-const panelTitleClass = "border-b border-[#cbd4e2] bg-[#f4f6fa] px-4 py-2.5 text-sm font-bold text-[#30415f]";
+const panelTitleClass =
+  "border-b border-[#cbd4e2] bg-[#f4f6fa] px-4 py-2.5 text-sm font-bold text-[#30415f] wrap-break-word";
 
 export const SummaryCard = ({ label, value, accent }) => (
-  <div className="border border-[#cbd4e2] bg-[#f4f6fa] px-4 py-4">
-    <p className="text-[11px] font-bold uppercase tracking-wider text-[#30415f]">{label}</p>
-    <p className={`mt-1 text-3xl font-bold ${accent}`}>{value}</p>
+  // min-w-0 + overflow-wrap keep long labels ("Implementation %") and
+  // values inside narrow cards instead of spilling past the border.
+  <div className="flex min-w-0 flex-col justify-between border border-[#cbd4e2] bg-[#f4f6fa] px-3 py-3 sm:px-4 sm:py-4">
+    <p className="text-[11px] font-bold uppercase leading-tight tracking-wide text-[#30415f] wrap-break-word [overflow-wrap:anywhere]">
+      {label}
+    </p>
+    <p className={`mt-1 text-2xl font-bold leading-tight tabular-nums wrap-break-word sm:text-3xl ${accent}`}>{value}</p>
   </div>
 );
 
@@ -37,9 +42,9 @@ export const SummaryCards = ({ cards, gridClassName }) => (
 
 // Titled breakdown table (row label with its chart colour, and count).
 export const BreakdownTable = ({ title, rows, colors }) => (
-  <section className="border border-[#cbd4e2]">
+  <section className="min-w-0 border border-[#cbd4e2]">
     <h2 className={panelTitleClass}>{title}</h2>
-    <div className="p-4">
+    <div className="overflow-x-auto p-4">
       <table className="w-full border border-[#aeb9cc] border-collapse">
         <thead>
           <tr>
@@ -50,7 +55,7 @@ export const BreakdownTable = ({ title, rows, colors }) => (
         <tbody>
           {rows.map((row) => (
             <tr key={row.label}>
-              <td className={dashboardCellClass}>
+              <td className={`${dashboardCellClass} wrap-break-word`}>
                 <span className="inline-flex items-center gap-2">
                   <span className="size-2.5 shrink-0" style={{ backgroundColor: colors[row.label] }} aria-hidden="true" />
                   {row.label}

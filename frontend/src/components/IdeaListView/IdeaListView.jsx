@@ -234,7 +234,7 @@ export default function IdeaListView({ title, description, fetchIdeas, fetchFilt
           activeKey={activeBox}
           loading={loading && !result}
           onSelect={selectBox}
-          gridClassName="grid-cols-2 sm:grid-cols-4 lg:grid-cols-7"
+          gridClassName="grid-cols-2 sm:grid-cols-4 xl:grid-cols-7"
         />
 
         {/* Filters */}

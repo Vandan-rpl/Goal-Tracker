@@ -152,7 +152,7 @@ const ModuleReports = ({
   itemKey,
   footer,
   completion = { label: "Completion", status: "Completed" },
-  summaryGridClassName = "grid-cols-2 md:grid-cols-4 xl:grid-cols-7",
+  summaryGridClassName = "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7",
 }) => {
   const snapshotColors = { [completion.status]: C.green, Remaining: C.slate };
   const Plural = nounPlural.charAt(0).toUpperCase() + nounPlural.slice(1);
@@ -295,7 +295,7 @@ const ModuleReports = ({
       filters={filters}
       footer={footer}
     >
-      <div className="mb-5 flex gap-2 border-b border-[#cbd4e2]" role="tablist">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-[#cbd4e2]" role="tablist">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -303,7 +303,7 @@ const ModuleReports = ({
             role="tab"
             aria-selected={tab.key === scope}
             onClick={() => changeScope(tab.key)}
-            className={`-mb-px cursor-pointer border-b-2 px-4 py-2 text-sm font-semibold ${
+            className={`-mb-px shrink-0 cursor-pointer whitespace-nowrap border-b-2 px-3 py-2 sm:px-4 text-sm font-semibold ${
               tab.key === scope
                 ? "border-[#2c3e82] text-[#2c3e82]"
                 : "border-transparent text-slate-500 hover:text-slate-800"
