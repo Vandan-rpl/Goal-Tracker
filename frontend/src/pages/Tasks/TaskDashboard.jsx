@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
-import TaskWorkbookFrame from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
+import { Link } from "react-router-dom";
+import { Plus } from "lucide-react";
+import TaskWorkbookFrame, { taskPrimaryButtonClass } from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
+import { TASKS_HOME_PATH } from "../../utils/tasksMenu";
 import {
   DashboardBreakdowns,
   DashboardEmptyState,
@@ -85,6 +88,12 @@ const TaskDashboard = () => {
       badge="DASHBOARD"
       title="My Dashboard"
       description="Your own tasks and tasks assigned to you by the CFO. Project tasks are not included."
+      actions={
+        <Link to={TASKS_HOME_PATH} className={taskPrimaryButtonClass}>
+          <Plus size={15} />
+          Add Task
+        </Link>
+      }
       footer="Only Completed, In Progress and Overdue tasks are counted. A task that is not Completed and is past its due date counts as Overdue only."
     >
       <DashboardError message={error} />

@@ -11,6 +11,10 @@ export const taskFilterLabelClass = "mb-1 block text-[11px] font-bold uppercase 
 export const taskSecondaryButtonClass =
   "inline-flex cursor-pointer items-center gap-1.5 border border-blue-200 bg-white px-3.5 py-2 text-sm font-semibold text-[#2c3e82] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50";
 
+// Primary button (filled navy), e.g. Share Idea / Add Task on the dashboards.
+export const taskPrimaryButtonClass =
+  "inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#2c3e82] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1f2c61]";
+
 /**
  * Props:
  *   barLabel     small caps text in the navy bar (e.g. "TASK WORKBOOK")

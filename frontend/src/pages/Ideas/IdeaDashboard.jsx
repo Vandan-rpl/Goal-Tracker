@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import TaskWorkbookFrame from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
+import { Link } from "react-router-dom";
+import { Plus } from "lucide-react";
+import TaskWorkbookFrame, { taskPrimaryButtonClass } from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
 import IdeaStatusBadge from "../../components/IdeaStatusBadge/IdeaStatusBadge";
 import {
   DashboardBreakdowns,
@@ -80,6 +82,12 @@ const IdeaDashboard = () => {
       badge="DASHBOARD"
       title="My Dashboard"
       description="Ideas you have submitted. Drafts are not included."
+      actions={
+        <Link to="/ideas/share" className={taskPrimaryButtonClass}>
+          <Plus size={15} />
+          Share Idea
+        </Link>
+      }
       footer="Final approval moves an idea straight to In Implementation. The In Implementation card counts every idea being implemented, overdue ones included; in the Status Breakdown an idea past its target date counts as Overdue only. Implementation % = Implemented / (In Implementation + Implemented). Rejected ideas are shown only in the Rejected card."
     >
       <DashboardError message={error} />
