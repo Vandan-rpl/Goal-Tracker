@@ -43,8 +43,6 @@ import TaskDashboard from './pages/Tasks/TaskDashboard';
 import TeamTasks from './pages/Tasks/TeamTasks';
 import AllTasks from './pages/Tasks/AllTasks';
 import AssignTask from './pages/Tasks/AssignTask';
-import Projects from './pages/Tasks/Projects';
-import ProjectDetails from './pages/Tasks/ProjectDetails';
 import { TASKS_DASHBOARD_PATH, TASKS_HOME_PATH } from './utils/tasksMenu';
 import {ToastContainer} from 'react-toastify';
 
@@ -141,10 +139,9 @@ function App() {
               <Route path="/tasks" element={<Navigate to={TASKS_DASHBOARD_PATH} replace />} />
               <Route path="/tasks/dashboard" element={<TaskDashboard />} />
               <Route path="/tasks/my-tasks" element={<MyTasks />} />
-              <Route element={<TasksRoute menuKey="projects" />}>
-                <Route path="/tasks/projects" element={<Projects />} />
-                <Route path="/tasks/projects/:projectId" element={<ProjectDetails />} />
-              </Route>
+              {/* The Projects pages are removed from the Task Tracker for everyone;
+                  old links go to My Tasks. */}
+              <Route path="/tasks/projects/*" element={<Navigate to="/tasks/my-tasks" replace />} />
               <Route element={<TasksRoute menuKey="team" />}>
                 <Route path="/tasks/team" element={<TeamTasks />} />
               </Route>
