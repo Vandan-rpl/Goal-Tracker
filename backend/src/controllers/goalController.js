@@ -873,24 +873,40 @@ const getQuarterGoalDetails = async (req, res) => {
         evaluationResult.recordset.filter(
           (row) => row.EvaluationCategory === category,
         );
-      // Total per carried-in category: weightage of goals from an earlier
-      // start quarter that were still open when this quarter began (not
-      // marked complete and approved before it), whether or not they were
-      // completed in this quarter. Achieved is the part of this total
-      // completed in this quarter.
-      const totalsResult = await pool
+      // Carried-in goals: from an earlier start quarter and still open when
+      // this quarter began (not marked complete and approved before it),
+      // whether or not they were completed in this quarter. Their weightage
+      // per category is that category's total (the Quarter Score adds it to
+      // the denominator). Achieved is the part completed in this quarter;
+      // the rest are listed as pending (contribute 0) so the section shows
+      // every goal behind its total.
+      const carriedInResult = await pool
         .request()
         .input("UserID", sql.Int, targetUserId)
         .input("QStart", sql.Date, quarterBounds.startKey)
+        .input("QEnd", sql.Date, quarterBounds.endKey)
         .query(`
-          SELECT
-            SUM(CASE WHEN ${isBroughtForwardGoal("g")} AND g.Timeline >= @QStart
-                     THEN g.Weightage ELSE 0 END) AS BroughtForwardTotal,
-            SUM(CASE WHEN ${isBroughtForwardGoal("g")} AND g.Timeline < @QStart
-                     THEN g.Weightage ELSE 0 END) AS BroughtForwardOverdueTotal,
-            SUM(CASE WHEN ${isBroughtForwardGoal("g")} THEN 0
-                     ELSE g.Weightage END) AS OverdueAchievedTotal
+          SELECT g.GoalID, g.GoalNumber, g.GoalTitle, g.Weightage,
+                 g.AchievedWeightage, g.Timeline, g.GoalStatus,
+                 g.CompletedDate, g.CompletionRemark, g.Quarter,
+                 g.QuarterEndDate,
+                 ${completionMarkedDate("g")} AS CompletionMarkedDate,
+                 progress.CompletedSubGoalCount, progress.TotalSubGoalCount,
+                 CASE WHEN ${isBroughtForwardGoal("g")} AND g.Timeline >= @QStart
+                        THEN 'BroughtForward'
+                      WHEN ${isBroughtForwardGoal("g")}
+                        THEN 'BroughtForwardOverdue'
+                      ELSE 'OverdueAchieved'
+                 END AS CarriedInCategory,
+                 CASE WHEN ${isCompletedWithin("g", "@QStart", "@QEnd")}
+                      THEN 1 ELSE 0 END AS IsCompletedInQuarter
           FROM dbo.Goals g
+          OUTER APPLY (
+            SELECT ISNULL(SUM(CASE WHEN sg.Status = 'Completed' THEN 1 ELSE 0 END), 0) AS CompletedSubGoalCount,
+                   COUNT(sg.SubGoalID) AS TotalSubGoalCount
+            FROM dbo.GoalSubGoals sg
+            WHERE sg.GoalID = g.GoalID
+          ) progress
           WHERE g.UserID = @UserID
             AND ${isAllocatedGoal("g")}
             AND g.QuarterEndDate < @QStart
@@ -898,13 +914,33 @@ const getQuarterGoalDetails = async (req, res) => {
               g.GoalStatus = 'Completed'
               AND ${completionMarkedDate("g")} < @QStart
             )
+          ORDER BY g.GoalNumber, g.GoalID
         `);
-      const totals = totalsResult.recordset[0] || {};
+      const carriedInRows = (category) =>
+        carriedInResult.recordset.filter(
+          (row) => row.CarriedInCategory === category,
+        );
+      const totals = {
+        BroughtForwardTotal: sumBy(carriedInRows("BroughtForward"), (row) => row.Weightage),
+        BroughtForwardOverdueTotal: sumBy(
+          carriedInRows("BroughtForwardOverdue"),
+          (row) => row.Weightage,
+        ),
+        OverdueAchievedTotal: sumBy(carriedInRows("OverdueAchieved"), (row) => row.Weightage),
+      };
+      // Still pending in this quarter (not completed within it).
+      const pendingCarriedIn = (category) =>
+        carriedInRows(category)
+          .filter((row) => row.IsCompletedInQuarter !== 1)
+          .map((row) => ({ ...toGoal(row), pending: true }));
 
       const categoryOf = (category, total) => {
         const rows = rowsIn(category);
         return {
-          goals: rows.map(toGoal),
+          goals: [
+            ...rows.map(toGoal),
+            ...(total === undefined ? [] : pendingCarriedIn(category)),
+          ],
           weightage: sumBy(
             rows,
             (row) => row.AchievedWeightage ?? row.Weightage,

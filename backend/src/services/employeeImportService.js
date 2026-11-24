@@ -241,7 +241,7 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
       "SELECT DepartmentID, DepartmentName FROM dbo.Departments",
     );
     const usersResult = await request().query(`
-      SELECT UserID, EmployeeCode, Username, Email, FirstName, LastName, Role
+      SELECT UserID, EmployeeCode, Username, Email, FirstName, LastName, Role, IsActive
       FROM dbo.Users
     `);
 
@@ -486,11 +486,15 @@ const importEmployees = async (buffer, { dryRun = false, deactivateMissing = fal
       h.roleChanged = roleChanges.has(h.userId);
     });
 
-    // ---------- Leave every user from the file inactive until the Admin activates them ----------
-    // Done last: manager linking and the Manager role above count only active users. The
-    // Business Head (needed active by every import) and Admins stay active.
+    // ---------- Leave new (and previously inactive) users inactive until the Admin activates them ----------
+    // Done last: manager linking and the Manager role above count only active users. Users who
+    // were already active before this import stay active so their login keeps working; the
+    // Business Head (needed active by every import) and Admins also stay active.
+    const pendingUserIds = records
+      .filter((rec) => !(rec.existing && (rec.existing.IsActive === true || rec.existing.IsActive === 1)))
+      .map((rec) => rec.UserID);
     const pendingResult = await request()
-      .input("UserIDs", sql.NVarChar(sql.MAX), JSON.stringify(records.map((rec) => rec.UserID)))
+      .input("UserIDs", sql.NVarChar(sql.MAX), JSON.stringify(pendingUserIds))
       .input("BusinessHeadID", sql.Int, businessHead.UserID)
       .query(`
         UPDATE dbo.Users SET IsActive = 0, ModifiedDate = GETDATE()

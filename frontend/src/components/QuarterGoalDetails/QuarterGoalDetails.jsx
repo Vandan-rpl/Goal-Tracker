@@ -22,6 +22,9 @@ function formatPercent(value) {
 // One short line: the first rule that applies.
 function getGoalNote(goal, section) {
   if (section === "category") {
+    if (goal.pending) {
+      return `Not completed in this quarter · from ${formatFiscalQuarterLabel(goal.fromQuarter)} · counts in total, achieved 0`;
+    }
     const marked = goal.completionMarkedDate
       ? `Marked complete on ${formatDateForDisplay(goal.completionMarkedDate)}`
       : "Completed";
