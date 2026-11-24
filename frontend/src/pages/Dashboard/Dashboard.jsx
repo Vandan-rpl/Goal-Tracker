@@ -10,7 +10,6 @@ import {
   XCircle,
   Filter,
   Loader2,
-  Plus,
   RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -34,20 +33,19 @@ import QuarterSummaryTable from "../../components/QuarterSummaryTable/QuarterSum
 import { formatDisplayDate } from "../../utils/dateTime";
 
 const MAX_GOALS_PER_QUARTER = 8;
-const STATUS_GROUPS = {
-  Draft: ["draft"],
-  "Pending approval": [
-    "submitted",
-    "manager approved",
-    "hod approved",
-    "reviewed by hod",
-    "review by business head",
-  ],
-  Approved: ["approved", "business head approved", "running"],
-  "Pending completion": ["completion submitted"],
-  Rejected: ["rejected"],
-  Completed: ["completed"],
-};
+// One status card per goal status, in lifecycle order (same statuses as the
+// Goal Management filter). Any other status the user's goals are in (e.g.
+// Postpone) gets a card after these.
+const DASHBOARD_STATUSES = [
+  "Draft",
+  "Submitted",
+  "HOD Approved",
+  "Business Head Approved",
+  "Approved",
+  "Completion Submitted",
+  "Completed",
+  "Rejected",
+];
 
 // ---------------------------------------------------------------------------
 // STATUS STYLING — mapped to the real GoalStatus enum values.
@@ -361,16 +359,14 @@ export default function GoalDashboard() {
     Number(currentQuarterAllocation.unallocated || 0),
   );
 
-  const goalStatusCounts =
-    dashboardSummary?.goalStatusCounts ||
-    Object.fromEntries(
-      Object.entries(STATUS_GROUPS).map(([group, statuses]) => [
-        group,
-        goals.filter((goal) =>
-          statuses.includes(normalizeGoalStatus(goal.GoalStatus)),
-        ).length,
-      ]),
-    );
+  // Every status card: the fixed lifecycle list, then any other status the
+  // user's goals are in.
+  const statusCards = [
+    ...DASHBOARD_STATUSES,
+    ...Object.keys(statusCounts).filter(
+      (status) => !DASHBOARD_STATUSES.includes(status),
+    ),
+  ];
   const subGoalStatusCounts = dashboardSummary?.subGoalStatusCounts || {
     completed: 0,
     pending: 0,
@@ -378,12 +374,7 @@ export default function GoalDashboard() {
   const filtered =
     statusFilter === "All"
       ? goals
-      : goals.filter((goal) => {
-          const groupStatuses = STATUS_GROUPS[statusFilter];
-          return groupStatuses
-            ? groupStatuses.includes(normalizeGoalStatus(goal.GoalStatus))
-            : goal.GoalStatus === statusFilter;
-        });
+      : goals.filter((goal) => goal.GoalStatus === statusFilter);
 
   if (loading) {
     return (
@@ -437,18 +428,9 @@ export default function GoalDashboard() {
           </div>
 
           {currentQuarterAllocation.goalCount === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-gray-400">
-                No goals added for this quarter yet
-              </p>
-              <Link
-                to="/goals/add"
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
-              >
-                <Plus size={15} />
-                Create Goal
-              </Link>
-            </div>
+            <p className="mt-4 text-sm text-gray-400">
+              No goals added for this quarter yet
+            </p>
           ) : (
             <>
               <div
@@ -532,16 +514,16 @@ export default function GoalDashboard() {
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-800">Goal status</h2>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {Object.entries(STATUS_GROUPS).map(([group]) => (
+              {statusCards.map((status) => (
                 <a
-                  key={group}
+                  key={status}
                   href="#goal-list"
-                  onClick={() => setStatusFilter(group)}
+                  onClick={() => setStatusFilter(status)}
                   className="rounded-xl border border-gray-100 bg-gray-50 p-3 transition hover:border-indigo-200 hover:bg-indigo-50"
                 >
-                  <span className="block text-xs text-gray-500">{group}</span>
+                  <span className="block text-xs text-gray-500">{getGoalStatusLabel(status)}</span>
                   <span className="mt-1 block text-xl font-bold text-gray-900">
-                    {goalStatusCounts[group] || 0}
+                    {statusCounts[status] || 0}
                   </span>
                 </a>
               ))}
@@ -663,23 +645,11 @@ export default function GoalDashboard() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-indigo-500 sm:w-auto"
               >
                 <option value="All">All statuses ({goals.length})</option>
-                {Object.entries(STATUS_GROUPS).map(([group]) => (
-                  <option key={group} value={group}>
-                    {group} ({goalStatusCounts[group] || 0})
+                {statusCards.map((status) => (
+                  <option key={status} value={status}>
+                    {getGoalStatusLabel(status)} ({statusCounts[status] || 0})
                   </option>
                 ))}
-                {Object.entries(statusCounts)
-                  .filter(
-                    ([status]) =>
-                      !Object.values(STATUS_GROUPS).some((statuses) =>
-                        statuses.includes(normalizeGoalStatus(status)),
-                      ),
-                  )
-                  .map(([status, count]) => (
-                    <option key={status} value={status}>
-                      {getGoalStatusLabel(status)} ({count})
-                    </option>
-                  ))}
               </select>
             </div>
           </div>

@@ -18,9 +18,7 @@ const STATUS_OPTIONS = [
   "Draft",
   "Submitted",
   "HOD Approved",
-  "Reviewed By HOD",
   "Business Head Approved",
-  "Review By Business Head",
   "Rejected",
   "Completion Submitted",
   "Completed",
@@ -337,16 +335,6 @@ const ListGoal = () => {
                         icon={<AssignmentOutlinedIcon sx={{ fontSize: 40 }} />}
                         title="No goals found"
                         description="No goals match the selected filters."
-                        action={
-                          <Button
-                            component={Link}
-                            to="/goals/add"
-                            size="small"
-                            disabled={Boolean(addGoalDisabledReason)}
-                          >
-                            Add New Goal
-                          </Button>
-                        }
                       />
                     </td>
                   </tr>

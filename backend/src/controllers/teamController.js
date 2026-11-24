@@ -1,5 +1,7 @@
 const { poolPromise, sql } = require("../config/db");
 const { notifyUser } = require("../services/notifyService");
+const { canApproveOrRejectGoal } = require("./goalController");
+const { isGoLiveOpenQuarter } = require("../utils/fiscalQuarter");
 
 // Goals waiting for approval (submitted, not yet finally approved). Drives
 // the dot on Goal Review & Approval.
@@ -124,7 +126,27 @@ const getUserGoals = async (req, res) => {
             ORDER BY g.CreatedDate DESC
         `);
 
-    return res.status(200).json({ success: true, data: result.recordset });
+    // Same flags as GET /goals/:id, so the Goal Review & Approval list
+    // offers the actions the goal page does. Every goal here has the same
+    // owner, so the approver check runs once.
+    const requesterUserId = req.user?.UserID || req.user?.userId;
+    const requesterRole = String(req.user?.role || req.user?.Role || "")
+      .trim()
+      .toUpperCase();
+    const canApproveOrReject =
+      requesterRole === "CFO" ||
+      requesterRole === "ADMIN" ||
+      (await canApproveOrRejectGoal(requesterUserId, userId));
+
+    return res.status(200).json({
+      success: true,
+      data: result.recordset.map((goal) => ({
+        ...goal,
+        IsGoalOwner: Number(requesterUserId) === Number(goal.UserID),
+        CanApproveOrReject: canApproveOrReject,
+        ApprovalWindowExempt: isGoLiveOpenQuarter(goal.Quarter),
+      })),
+    });
   } catch (error) {
     console.error("Get User Goals Error:", error);
     return res

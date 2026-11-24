@@ -4610,4 +4610,5 @@ module.exports = {
   approveGoalCompletion,
   rejectGoalCompletion,
   getPendingCompletionRequests,
+  canApproveOrRejectGoal,
 };

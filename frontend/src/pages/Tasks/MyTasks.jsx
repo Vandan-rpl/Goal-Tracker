@@ -7,7 +7,14 @@ import TaskWorkbookFrame, {
 } from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
 import { getMyProjects, getMyTasks, getTaskApiError, markTasksSeen } from "../../services/taskService";
 import { taskUnseenCountReceived } from "../../redux/slices/taskSlice";
-import { TASK_PRIORITIES, TASK_SOURCES, TASK_STATUSES } from "../../utils/taskStatus";
+import {
+  TASK_PRIORITIES,
+  TASK_SOURCES,
+  TASK_STATUSES,
+  formatMonthRangeLabel,
+  getMonthKey,
+  getTodayKey,
+} from "../../utils/taskStatus";
 import DateInput from "../../components/DateInput/DateInput";
 
 const EMPTY_FILTERS = { status: "", priority: "", dueFrom: "", dueTo: "", source: "", project: "" };
@@ -16,8 +23,12 @@ const EMPTY_FILTERS = { status: "", priority: "", dueFrom: "", dueTo: "", source
 const ME = { UserID: "me", FullName: "Me" };
 
 /**
- * My Tasks as a sheet: every task of the user with blank rows below to add
- * new ones, Submit per row (see TaskSheet, mode "own"). Tasks not yet seen
+ * My Tasks as a month sheet, like the CFO's Assign Task page: From / To
+ * Month filters (default this month) list the tasks created or assigned in
+ * those months, in the order they were added, so yesterday's and older
+ * tasks stay visible. Blank rows to add new tasks follow when the range ends
+ * in the current month; on the 1st of a month the default view starts
+ * empty. Submit per row (see TaskSheet, mode "own"). Tasks not yet seen
  * (new assignments and CFO remarks) are highlighted as New on this visit and
  * marked seen, which clears the Tasks badge.
  */
@@ -29,6 +40,14 @@ const MyTasks = () => {
   const [error, setError] = useState("");
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const currentMonth = getMonthKey(getTodayKey());
+  const [fromMonth, setFromMonth] = useState(currentMonth);
+  const [toMonth, setToMonth] = useState(currentMonth);
+  // New tasks are always created today, so blank rows show only when the
+  // range ends in the current month.
+  const isCurrentMonth = toMonth === currentMonth;
+  const rangeLabel = formatMonthRangeLabel(fromMonth, toMonth);
 
   // Rows that were unseen when loaded; they stay highlighted as New on this
   // visit even after being marked seen.
@@ -55,7 +74,11 @@ const MyTasks = () => {
 
   useEffect(() => {
     let ignore = false;
-    const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ""));
+    const params = {
+      ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== "")),
+      fromMonth,
+      toMonth,
+    };
 
     getMyTasks(params)
       .then((list) => {
@@ -84,7 +107,7 @@ const MyTasks = () => {
     return () => {
       ignore = true;
     };
-  }, [filters, reloadKey, dispatch]);
+  }, [filters, fromMonth, toMonth, reloadKey, dispatch]);
 
   const hasFilters = Object.values(filters).some((value) => value !== "");
   const changeFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
@@ -101,7 +124,7 @@ const MyTasks = () => {
       actions={
         !loading && (
           <div className="flex items-center gap-4 text-sm">
-            <span className="text-slate-600"><strong className="text-[#2c3e82]">{openCount}</strong> open</span>
+            {/* <span className="text-slate-600"><strong className="text-[#2c3e82]">{openCount}</strong> open</span> */}
             {overdueCount > 0 && (
               <span className="text-[#b3403f]"><strong>{overdueCount}</strong> overdue</span>
             )}
@@ -110,6 +133,42 @@ const MyTasks = () => {
       }
       filters={
         <>
+          <div>
+            <label htmlFor="my-task-from-month" className={filterLabelClass}>From Month</label>
+            <input
+              id="my-task-from-month"
+              type="month"
+              value={fromMonth}
+              max={toMonth}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                setFromMonth(value);
+                // Keep the range valid: a later From moves To with it.
+                if (value > toMonth) setToMonth(value > currentMonth ? currentMonth : value);
+              }}
+              className={selectClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="my-task-to-month" className={filterLabelClass}>To Month</label>
+            <input
+              id="my-task-to-month"
+              type="month"
+              value={toMonth}
+              min={fromMonth}
+              max={currentMonth}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                const next = value > currentMonth ? currentMonth : value;
+                setToMonth(next);
+                // An earlier To moves From with it.
+                if (next < fromMonth) setFromMonth(next);
+              }}
+              className={selectClass}
+            />
+          </div>
           <div>
             <label htmlFor="my-task-status" className={filterLabelClass}>Status</label>
             <select id="my-task-status" value={filters.status} onChange={(e) => changeFilter("status", e.target.value)} className={selectClass}>
@@ -125,7 +184,7 @@ const MyTasks = () => {
             </select>
           </div>
           <div>
-            <label htmlFor="my-task-due-from" className={filterLabelClass}>Date From</label>
+            <label htmlFor="my-task-due-from" className={filterLabelClass}>Due Date From</label>
             <DateInput
               id="my-task-due-from"
               value={filters.dueFrom}
@@ -135,7 +194,7 @@ const MyTasks = () => {
             />
           </div>
           <div>
-            <label htmlFor="my-task-due-to" className={filterLabelClass}>Date To</label>
+            <label htmlFor="my-task-due-to" className={filterLabelClass}>Due Date To</label>
             <DateInput
               id="my-task-due-to"
               value={filters.dueTo}
@@ -180,17 +239,21 @@ const MyTasks = () => {
           )}
         </>
       }
-      footer="On tasks assigned by the CFO you can change only Status and User's Remarks. CFO's Remarks are added by the CFO. Completed tasks older than 30 days are hidden unless you pick Status = Completed."
+      footer="Tasks added or assigned in the selected months are listed in the order they were added. New tasks can be added only when the range ends in the current month; each month starts with a fresh sheet. On tasks assigned by the CFO you can change only Status and User's Remarks. CFO's Remarks are added by the CFO."
     >
       {error && (
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>
       )}
       {loading ? (
         <p className="border border-[#aeb9cc] px-4 py-8 text-center text-sm text-slate-500">Loading your tasks...</p>
+      ) : !isCurrentMonth && tasks.length === 0 ? (
+        <p className="border border-[#aeb9cc] px-4 py-8 text-center text-sm text-slate-500">
+          No tasks were added in {rangeLabel}.
+        </p>
       ) : (
         <TaskSheet
           mode="own"
-          groups={[{ employee: ME, tasks, canAdd: true }]}
+          groups={[{ employee: ME, tasks, canAdd: isCurrentMonth }]}
           blankRows={3}
           showGroupHeaders={false}
           newTaskIds={newTaskIds}

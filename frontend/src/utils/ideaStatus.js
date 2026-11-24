@@ -26,7 +26,7 @@ const IDEA_STATUS_CLASSES = {
 // Display wording for stored statuses whose name differs on screen. The
 // stored value (used for filters and the API) is unchanged.
 const IDEA_STATUS_LABELS = {
-  "Pending Final Approval": "Final approval pending",
+  "Pending Final Approval": "Final approval pending (by IT Team)",
 };
 
 export const getIdeaStatusLabel = (status) => IDEA_STATUS_LABELS[status] || status;

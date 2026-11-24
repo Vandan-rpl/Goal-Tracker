@@ -1025,7 +1025,7 @@ const getDashboard = async (user) => {
     const count = (...groups) => ideas.filter((idea) => groups.includes(idea.DashboardStatus)).length;
 
     const pendingManager = count("HOD/Manager approval pending");
-    const pendingFinal = count("Final approval pending");
+    const pendingFinal = count("Final approval pending (by IT Team)");
     const inImplementation = count("In Implementation");
     const closurePending = count("Closure Pending");
     const overdue = count("Overdue");
@@ -1048,7 +1048,7 @@ const getDashboard = async (user) => {
         // Rejected ideas are only a card, not part of this table.
         statusBreakdown: [
             { label: "HOD/Manager approval pending", count: pendingManager },
-            { label: "Final approval pending", count: pendingFinal },
+            { label: "Final approval pending (by IT Team)", count: pendingFinal },
             { label: "In Implementation", count: inImplementation + closurePending },
             { label: "Overdue", count: overdue },
             { label: "Implemented", count: implemented },
@@ -1070,7 +1070,7 @@ const getDashboard = async (user) => {
 // Tracker's Business Head report.
 const IDEA_REPORT_STATUSES = [
     "HOD/Manager approval pending",
-    "Final approval pending",
+    "Final approval pending (by IT Team)",
     "In Implementation", "Overdue", "Implemented", "Rejected"];
 
 // Ideas that got final approval (implementation % is out of these).
@@ -1113,7 +1113,7 @@ const getReport = async (user, query) => {
         Summary: {
             total: ideas.length,
             pendingManager: counts["HOD/Manager approval pending"],
-            pendingFinal: counts["Final approval pending"],
+            pendingFinal: counts["Final approval pending (by IT Team)"],
             // Every idea in implementation now, overdue ones included.
             inImplementation: (counts["In Implementation"] || 0) + (counts.Overdue || 0),
             overdue: counts.Overdue,

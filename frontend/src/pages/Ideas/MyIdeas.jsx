@@ -6,24 +6,12 @@ import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
 import TableLoader from "../../components/loaders/TableLoader";
 import EmptyState from "../../components/EmptyState/EmptyState";
 import IdeaStatusBadge from "../../components/IdeaStatusBadge/IdeaStatusBadge";
-import IdeaCountBoxes from "../../components/IdeaCountBoxes/IdeaCountBoxes";
 import TablePagination from "../../components/TablePagination/TablePagination";
 import { getIdeaApiError, getIdeaPurposes, getMyIdeas } from "../../services/ideaService";
 import { IDEA_STATUSES, formatIdeaDate, getIdeaStatusLabel } from "../../utils/ideaStatus";
 
 const PAGE_SIZE = 10;
 const COLUMN_COUNT = 7;
-
-// Count boxes; `status: ""` is Total and clears the status filter.
-const COUNT_BOXES = [
-  { label: "Total", status: "" },
-  { label: "Drafts", status: "Draft" },
-  { label: "Submitted", status: "Submitted" },
-  { label: "Final approval pending", status: "Pending Final Approval" },
-  { label: "In Implementation", status: "In Implementation" },
-  { label: "Implemented", status: "Implemented" },
-  { label: "Rejected", status: "Rejected" },
-];
 
 const selectClass =
   "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -79,15 +67,6 @@ const MyIdeas = () => {
       ignore = true;
     };
   }, []);
-
-  const counts = useMemo(
-    () =>
-      ideas.reduce(
-        (totals, idea) => ({ ...totals, [idea.Status]: (totals[idea.Status] || 0) + 1 }),
-        { "": ideas.length },
-      ),
-    [ideas],
-  );
 
   const filteredIdeas = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -167,22 +146,13 @@ const MyIdeas = () => {
               Track the ideas you have shared and their progress.
             </p>
           </div>
-          <Link
+          {/* <Link
             to="/ideas/share"
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md transition flex items-center"
           >
             + Share an Idea
-          </Link>
+          </Link> */}
         </div>
-
-        {/* Count Boxes */}
-        <IdeaCountBoxes
-          boxes={COUNT_BOXES.map((box) => ({ key: box.status, label: box.label, count: counts[box.status] || 0 }))}
-          activeKey={status}
-          loading={loading}
-          onSelect={changeStatus}
-          gridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8"
-        />
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -324,8 +294,7 @@ const MyIdeas = () => {
                         <EmptyState
                           icon={<LightbulbOutlinedIcon sx={{ fontSize: 40 }} />}
                           title="You haven't shared any ideas yet."
-                          description="Have an idea to improve a process?"
-                          action={shareIdeaAction}
+                          // action={shareIdeaAction}
                         />
                       ) : (
                         <EmptyState

@@ -7,7 +7,7 @@ import { formatIdeaDate } from "../../utils/ideaStatus";
 
 const STATUS_COLORS = {
   "HOD/Manager approval pending": C.amber,
-  "Final approval pending": "#1f8a9d",
+  "Final approval pending (by IT Team)": "#1f8a9d",
   "In Implementation": C.navy,
   Overdue: C.red,
   Implemented: C.green,
@@ -29,7 +29,7 @@ const PURPOSE_COLORS = Object.fromEntries(
 const summaryCards = (summary) => [
   { label: "Total Ideas", value: summary.total, accent: "text-[#2c3e82]" },
   { label: "HOD/Manager approval pending", value: summary.pendingManager, accent: "text-[#d08a1c]" },
-  { label: "Final approval pending", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
+  { label: "Final approval pending (by IT Team)", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
   { label: "In Implementation", value: summary.inImplementation, accent: "text-[#2c3e82]" },
   { label: "Implemented", value: summary.implemented, accent: "text-[#1f9d6b]" },
   { label: "Rejected", value: summary.rejected, accent: "text-[#b3403f]" },

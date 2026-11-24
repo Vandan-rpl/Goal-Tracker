@@ -32,7 +32,7 @@ export const QUARTER_SCORE_FORMULA =
 export const QUARTER_SCORE_TITLE = `Quarter Score = ${QUARTER_SCORE_FORMULA} for this quarter.`;
 
 export const YEAR_SCORE_FORMULA =
-  "(Achieved + Brought Forward Achieved + Brought Forward Overdue Achieved + Overdue Achieved, totalled across Q1–Q4) ÷ 400 × 100";
+  "((Achieved + Brought Forward Achieved + Brought Forward Overdue Achieved + Overdue Achieved, totalled across Q1–Q4) ÷ 400) × 100";
 
 // Kept for existing imports (Team Reports column titles).
 export const QUARTER_COMPLETION_TITLE = QUARTER_SCORE_TITLE;

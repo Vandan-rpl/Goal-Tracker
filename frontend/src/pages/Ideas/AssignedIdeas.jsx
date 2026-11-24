@@ -41,7 +41,7 @@ const FLAG_FILTERS = {
 
 const COUNT_BOXES = [
   { key: PENDING_KEY, label: "Pending with Me" },
-  { key: "Pending Final Approval", label: "Final approval pending" },
+  { key: "Pending Final Approval", label: "Final approval pending (by IT Team)" },
   { key: "In Implementation", label: "In Implementation" },
   { key: OVERDUE_KEY, label: "Overdue", tone: "danger" },
   { key: "Implemented", label: "Implemented" },

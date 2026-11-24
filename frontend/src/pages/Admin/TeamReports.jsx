@@ -84,6 +84,14 @@ const buildTeamColumns = (quarterLabels) => [
     getValue: (member) => member.CompletedCount,
     render: (member) => `${member.CompletedCount} of ${member.CountedGoalCount}`,
   },
+  {
+    key: "YearScorePercentage",
+    label: "Year Score",
+    title: YEAR_SCORE_FORMULA,
+    className: "font-semibold text-indigo-800",
+    getValue: (member) => member.YearScorePercentage,
+    render: (member) => formatScorePercent(member.YearScorePercentage),
+  },
 ];
 
 // Missing values (nothing due / not started) always sort last.
@@ -539,14 +547,14 @@ const TeamReports = () => {
                 <StatCard
                   label="Completed"
                   value={summary.CompletedGoals}
-                  hint={`Completed in ${fiscalYearLabel(report.FiscalYear)}`}
+                  hint={`Achieved, overdue achieved and brought forward achieved in ${fiscalYearLabel(report.FiscalYear)}`}
                   accent="text-emerald-600"
                 />
                 <StatCard
-                  label="Brought forward achieved"
-                  value={summary.BroughtForwardAchievedGoals}
-                  hint="Brought-forward goals completed after their start quarter"
-                  accent="text-amber-600"
+                  label="Overdue"
+                  value={summary.OverdueGoals}
+                  hint={`${summary.OverdueOnlyGoals} overdue · ${summary.BroughtForwardOverdueGoals} brought forward overdue`}
+                  accent="text-red-600"
                 />
               </div>
             )}

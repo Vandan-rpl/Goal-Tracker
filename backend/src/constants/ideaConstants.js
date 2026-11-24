@@ -32,7 +32,7 @@ const IDEA_STATUSES = Object.freeze(Object.values(IdeaStatus));
 // Display wording for stored statuses whose name differs on screen (same as
 // the frontend utils/ideaStatus.js). The stored value is unchanged.
 const IDEA_STATUS_LABELS = Object.freeze({
-  [IdeaStatus.PENDING_FINAL_APPROVAL]: "Final approval pending",
+  [IdeaStatus.PENDING_FINAL_APPROVAL]: "Final approval pending (by IT Team)",
 });
 const getIdeaStatusLabel = (status) => IDEA_STATUS_LABELS[status] || status;
 

@@ -620,7 +620,7 @@ export default function TaskListView({
       {filterKeys.includes("dueRange") && (
         <>
           <div>
-            <label htmlFor="task-filter-due-from" className={filterLabelClass}>Date From</label>
+            <label htmlFor="task-filter-due-from" className={filterLabelClass}>Due Date From</label>
             <DateInput
               id="task-filter-due-from"
               value={filters.dueFrom}
@@ -630,7 +630,7 @@ export default function TaskListView({
             />
           </div>
           <div>
-            <label htmlFor="task-filter-due-to" className={filterLabelClass}>Date To</label>
+            <label htmlFor="task-filter-due-to" className={filterLabelClass}>Due Date To</label>
             <DateInput
               id="task-filter-due-to"
               value={filters.dueTo}

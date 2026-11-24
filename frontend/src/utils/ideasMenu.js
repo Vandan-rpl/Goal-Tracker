@@ -39,7 +39,7 @@ export const IDEAS_MENU = [
   },
   {
     key: "share",
-    label: "Share an Idea",
+    label: "Share an Innovation Idea",
     path: "/ideas/share",
     activePaths: ["/ideas/edit"],
     access: IDEAS_ACCESS.EVERYONE,
@@ -47,7 +47,7 @@ export const IDEAS_MENU = [
   },
   {
     key: "my-ideas",
-    label: "Idea Management",
+    label: "Innovation Idea Tracker",
     path: "/ideas/my-ideas",
     access: IDEAS_ACCESS.EVERYONE,
     icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012-2m-6 9l2 2 4-4",

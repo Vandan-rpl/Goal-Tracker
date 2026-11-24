@@ -7,8 +7,8 @@ const {
 } = require('./evaluationController');
 const {
     isBroughtForwardGoal,
-    isCompletedAfterOwnQuarter,
-    isCompletedWithin
+    isCompletedWithin,
+    isOverdueGoal
 } = require('../constants/goalQuarterRules');
 
 // Final-approved goals that are still being worked on (same set as the
@@ -250,16 +250,18 @@ const getActiveDirectReports = async (pool, userId, role) => {
 
 // Goal counts for the summary cards, over the given employees.
 //   InProgress: approved, not completed, goals of `inProgressQuarter`.
-//   Completed: completed within the fiscal year.
-//   BroughtForwardAchieved: brought-forward goals (End Date in a later quarter
-//     than the start quarter) marked complete within the fiscal year after
-//     their own quarter ended, and approved: the goals behind the Final
-//     Evaluation "Brought Forward" and "Brought Forward Overdue" columns,
-//     summed over Q1-Q4.
+//   Completed: every goal marked complete within the fiscal year and
+//     approved, whatever its Final Evaluation category: Achieved, Overdue
+//     Achieved, Brought Forward Achieved and Brought Forward Overdue Achieved.
+//   Overdue: goals of the fiscal year whose End Date has passed and that are
+//     not yet marked complete: plain overdue goals (End Date in the start
+//     quarter) and brought-forward overdue goals (End Date in a later quarter).
 const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
     const request = pool.request()
         .input('FiscalYearStart', sql.Date, getFiscalQuarterBoundsFromLabel(`Q1-${fiscalYear}`).startKey)
         .input('FiscalYearEnd', sql.Date, getFiscalQuarterBoundsFromLabel(`Q4-${fiscalYear}`).endKey)
+        .input('FiscalYear', sql.VarChar(4), String(fiscalYear))
+        .input('Today', sql.Date, new Date())
         .input('InProgressQuarter', sql.VarChar(10), inProgressQuarter);
     const filter = buildUserIdFilter(request, userIds, 'g.UserID');
     const inProgressStatuses = bindStatusList(request, 'InProgressStatus', IN_PROGRESS_STATUSES);
@@ -269,22 +271,28 @@ const getGoalCounts = async (pool, userIds, fiscalYear, inProgressQuarter) => {
             SUM(CASE WHEN g.Quarter = @InProgressQuarter
                       AND g.GoalStatus IN (${inProgressStatuses})
                      THEN 1 ELSE 0 END) AS InProgressGoals,
-            SUM(CASE WHEN g.GoalStatus = 'Completed'
-                      AND g.CompletedDate >= @FiscalYearStart
-                      AND g.CompletedDate < DATEADD(DAY, 1, @FiscalYearEnd)
+            SUM(CASE WHEN ${isCompletedWithin('g', '@FiscalYearStart', '@FiscalYearEnd')}
                      THEN 1 ELSE 0 END) AS CompletedGoals,
-            SUM(CASE WHEN ${isBroughtForwardGoal('g')}
-                      AND ${isCompletedAfterOwnQuarter('g')}
-                      AND ${isCompletedWithin('g', '@FiscalYearStart', '@FiscalYearEnd')}
-                     THEN 1 ELSE 0 END) AS BroughtForwardAchievedGoals
+            SUM(CASE WHEN ${isOverdueGoal('g', '@Today')}
+                      AND RIGHT(g.Quarter, 4) = @FiscalYear
+                      AND NOT (${isBroughtForwardGoal('g')})
+                     THEN 1 ELSE 0 END) AS OverdueOnlyGoals,
+            SUM(CASE WHEN ${isOverdueGoal('g', '@Today')}
+                      AND RIGHT(g.Quarter, 4) = @FiscalYear
+                      AND ${isBroughtForwardGoal('g')}
+                     THEN 1 ELSE 0 END) AS BroughtForwardOverdueGoals
         FROM dbo.Goals g
         WHERE ${filter}
     `);
     const row = result.recordset[0] || {};
+    const overdueOnly = row.OverdueOnlyGoals || 0;
+    const broughtForwardOverdue = row.BroughtForwardOverdueGoals || 0;
     return {
         InProgressGoals: row.InProgressGoals || 0,
         CompletedGoals: row.CompletedGoals || 0,
-        BroughtForwardAchievedGoals: row.BroughtForwardAchievedGoals || 0
+        OverdueOnlyGoals: overdueOnly,
+        BroughtForwardOverdueGoals: broughtForwardOverdue,
+        OverdueGoals: overdueOnly + broughtForwardOverdue
     };
 };
 

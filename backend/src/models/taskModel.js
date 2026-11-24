@@ -262,10 +262,21 @@ const buildTaskListWhere = ({ scope, viewerId, filters }) => {
         conditions.push(DIRECT_REPORT_CONDITION("owner"));
     }
 
+    // Month sheet (My Tasks): tasks created or assigned in [from, to). Every
+    // task of those months is listed, completed ones included.
+    if (filters.createdRange) {
+        conditions.push(`
+            COALESCE(t.AssignedDate, t.CreatedDate) >= CAST(@CreatedFrom AS DATETIME2)
+            AND COALESCE(t.AssignedDate, t.CreatedDate) < CAST(@CreatedTo AS DATETIME2)
+        `);
+        params.push(["CreatedFrom", sql.Date, filters.createdRange.from]);
+        params.push(["CreatedTo", sql.Date, filters.createdRange.to]);
+    }
+
     if (filters.status) {
         conditions.push("t.Status = @Status");
         params.push(["Status", sql.NVarChar(20), filters.status]);
-    } else {
+    } else if (!filters.createdRange) {
         conditions.push(`
             t.Status <> N'${TaskStatus.COMPLETED}'
             OR t.CompletedDate >= CAST(DATEADD(DAY, -${TASK_DONE_RECENT_DAYS}, ${TODAY}) AS DATETIME2)
@@ -327,16 +338,21 @@ const listTasks = async (db, { scope, viewerId, filters }) => {
 
     const { where, bind } = buildTaskListWhere({ scope, viewerId, filters });
 
+    // A month sheet lists tasks in the order they were added (like Assign
+    // Task); other lists put open tasks first by due date.
+    const orderBy = filters.createdRange
+        ? "COALESCE(t.AssignedDate, t.CreatedDate), t.TaskID"
+        : `CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN 1 ELSE 0 END,
+            CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN NULL ELSE t.DueDate END,
+            t.CompletedDate DESC,
+            t.TaskID DESC`;
+
     const result = await bind(db.request()).query(`
         SELECT
             ${TASK_SELECT}
         ${TASK_FROM}
         WHERE ${where}
-        ORDER BY
-            CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN 1 ELSE 0 END,
-            CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN NULL ELSE t.DueDate END,
-            t.CompletedDate DESC,
-            t.TaskID DESC;
+        ORDER BY ${orderBy};
     `);
 
     return result.recordset;

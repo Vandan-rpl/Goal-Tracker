@@ -1176,7 +1176,7 @@ const getIdeaMailData = async (db, ideaId) => {
  * are not included). Each idea gets one DashboardStatus so the groups never
  * overlap:
  *   HOD/Manager approval pending     Submitted
- *   Final approval pending           Pending Final Approval
+ *   Final approval pending (by IT Team)           Pending Final Approval
  *   Rejected          Rejected
  *   Implemented       Implemented
  *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
@@ -1201,7 +1201,7 @@ const listDashboardIdeas = async (db, userId) => {
                 pendingRequest.PendingRequestType,
                 CASE
                     WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'HOD/Manager approval pending'
-                    WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Final approval pending'
+                    WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Final approval pending (by IT Team)'
                     WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
                     WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Implemented'
                     WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
@@ -1224,7 +1224,7 @@ const listDashboardIdeas = async (db, userId) => {
  * is the fiscal year the idea was submitted in. ReportStatus groups (never
  * overlapping):
  *   HOD/Manager approval pending     Submitted
- *   Final approval pending           Pending Final Approval
+ *   Final approval pending (by IT Team)           Pending Final Approval
  *   Rejected          Rejected
  *   Implemented       Implemented
  *   Overdue           IS_OVERDUE (Active / In Implementation past TargetDate)
@@ -1253,7 +1253,7 @@ const listReportIdeas = async (db) => {
             ${sqlFiscalYear(submittedOn)} AS FiscalYear,
             CASE
                 WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'HOD/Manager approval pending'
-                WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Final approval pending'
+                WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Final approval pending (by IT Team)'
                 WHEN i.Status = N'${IdeaStatus.REJECTED}' THEN N'Rejected'
                 WHEN i.Status = N'${IdeaStatus.IMPLEMENTED}' THEN N'Implemented'
                 WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'

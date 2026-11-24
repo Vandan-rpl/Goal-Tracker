@@ -646,7 +646,7 @@ export default function TaskSheet({
 
           <td className={`${cellClass} w-32 min-w-[110px]`}>
             <div className={`${readOnlyClass} text-center ${isNewRow ? "text-slate-400" : ""}`}>
-              {isNewRow ? "Today" : formatDisplayDate(task.CreatedDate)}
+              {formatDisplayDate(isNewRow ? today : task.CreatedDate)}
             </div>
           </td>
 

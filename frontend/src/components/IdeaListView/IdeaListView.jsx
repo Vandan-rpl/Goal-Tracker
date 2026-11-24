@@ -21,7 +21,7 @@ const STATUS_OPTIONS = IDEA_STATUSES.filter((status) => status !== "Draft");
 
 const COUNT_BOXES = [
   { key: "Submitted", label: "Submitted" },
-  { key: "Pending Final Approval", label: "Final approval pending" },
+  { key: "Pending Final Approval", label: "Final approval pending (by IT Team)" },
   { key: "In Implementation", label: "In Implementation" },
   { key: "Overdue", label: "Overdue", tone: "danger" },
   { key: "Implemented", label: "Implemented" },

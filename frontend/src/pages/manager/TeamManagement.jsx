@@ -11,8 +11,30 @@ import CompletionRequests from "../../components/GoalCompletion/CompletionReques
 import { formatDisplayDate } from "../../utils/dateTime";
 import { getGoalStatusLabel } from "../../utils/goalStatus";
 import { getRoleLabel } from "../../utils/roleLabel";
+import { getGoalReviewActions } from "../../utils/goalReviewActions";
+import api from "../../services/api";
 
 const MAX_GOALS_PER_QUARTER = 8;
+
+// One colour per goal status, so the stage is readable at a glance:
+// waiting for a decision (amber/sky/violet), approved and in progress
+// (blue), completion stages (cyan/green), rejected (red).
+const STATUS_BADGE_CLASSES = {
+  Submitted: "bg-amber-100 text-amber-800",
+  "Manager Approved": "bg-sky-100 text-sky-800",
+  "HOD Approved": "bg-sky-100 text-sky-800",
+  "Reviewed By HOD": "bg-sky-100 text-sky-800",
+  "Business Head Approved": "bg-violet-100 text-violet-800",
+  "Review By Business Head": "bg-violet-100 text-violet-800",
+  Approved: "bg-blue-100 text-blue-800",
+  Running: "bg-blue-100 text-blue-800",
+  "Completion Submitted": "bg-cyan-100 text-cyan-800",
+  Completed: "bg-emerald-100 text-emerald-800",
+  Postpone: "bg-orange-100 text-orange-800",
+  Rejected: "bg-red-100 text-red-800",
+  Cancelled: "bg-gray-200 text-gray-700",
+};
+const DEFAULT_STATUS_BADGE_CLASS = "bg-gray-100 text-gray-800";
 const QUARTER_OPTIONS = getFiscalQuarterOptions();
 
 // Dot on a row (CFO only): this user has a goal waiting for approval, or
@@ -288,6 +310,27 @@ const TeamManagement = () => {
     }
   };
 
+  // Approve / Reject from the list: same call as the goal page.
+  const [actionGoalId, setActionGoalId] = useState(null);
+  const handleGoalAction = async (goal, newStatus, verb) => {
+    if (!window.confirm(`Are you sure you want to ${verb} "${goal.GoalTitle}"?`)) return;
+    try {
+      setActionGoalId(goal.GoalID);
+      const response = await api.put(`/goals/status/${goal.GoalID}`, {
+        goalStatus: newStatus,
+      });
+      if (response.data.success) {
+        await fetchUserGoals(selectedUserId);
+      } else {
+        alert(response.data.message || "Failed to update status.");
+      }
+    } catch (error) {
+      alert(error.response?.data?.message || "Server error while updating status.");
+    } finally {
+      setActionGoalId(null);
+    }
+  };
+
   // Load the goals of the user in the URL (also when coming back to it).
   useEffect(() => {
     if (selectedUserId) fetchUserGoals(selectedUserId);
@@ -436,6 +479,12 @@ const TeamManagement = () => {
                       Goal No / Description
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Start Date
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Due Date
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                       Weightage
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -453,7 +502,7 @@ const TeamManagement = () => {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan="5"
+                        colSpan="7"
                         className="px-6 py-12 text-center text-sm text-gray-500"
                       >
                         Loading goals...
@@ -470,11 +519,17 @@ const TeamManagement = () => {
                             #{goal.GoalNumber} - {goal.GoalTitle}
                           </div>
                           <div className="text-xs text-gray-400">
-                            Timeline:{" "}
-                            {goal.Timeline
-                              ? formatDisplayDate(goal.Timeline)
+                            Created:{" "}
+                            {goal.SubmittedDate || goal.CreatedDate
+                              ? formatDisplayDate(goal.SubmittedDate || goal.CreatedDate)
                               : "N/A"}
                           </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {goal.StartDate ? formatDisplayDate(goal.StartDate) : "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {goal.Timeline ? formatDisplayDate(goal.Timeline) : "N/A"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">
                           {goal.Weightage}%
@@ -495,28 +550,66 @@ const TeamManagement = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              goal.GoalStatus === "Rejected"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-emerald-100 text-emerald-800"
+                              STATUS_BADGE_CLASSES[goal.GoalStatus] || DEFAULT_STATUS_BADGE_CLASS
                             }`}
                           >
                             {getGoalStatusLabel(goal.GoalStatus)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                          <Link
-                            to={`/goals/view/${goal.GoalID}`}
-                            className="text-indigo-600 hover:text-indigo-900 font-semibold"
-                          >
-                            View
-                          </Link>
+                          {(() => {
+                            const actions = getGoalReviewActions(goal, role);
+                            const busy = actionGoalId === goal.GoalID;
+                            return (
+                              <>
+                                <Link
+                                  to={`/goals/view/${goal.GoalID}`}
+                                  className="text-indigo-600 hover:text-indigo-900 font-semibold"
+                                >
+                                  View
+                                </Link>
+                                {actions.canEdit && (
+                                  <Link
+                                    to={`/goals/edit/${goal.GoalID}`}
+                                    className="text-gray-700 hover:text-gray-900 font-semibold"
+                                  >
+                                    Edit
+                                  </Link>
+                                )}
+                                {actions.canApproveReject && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        handleGoalAction(goal, actions.approveStatus, "approve")
+                                      }
+                                      className="text-emerald-600 hover:text-emerald-800 font-semibold disabled:opacity-50 cursor-pointer"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        handleGoalAction(goal, "Rejected", "reject")
+                                      }
+                                      className="text-rose-600 hover:text-rose-800 font-semibold disabled:opacity-50 cursor-pointer"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan="5"
+                        colSpan="7"
                         className="px-6 py-12 text-center text-sm text-gray-500"
                       >
                         {quarterFilter

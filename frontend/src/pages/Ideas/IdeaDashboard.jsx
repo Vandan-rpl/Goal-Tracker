@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
-import TaskWorkbookFrame, { taskPrimaryButtonClass } from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
+import TaskWorkbookFrame from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
 import IdeaStatusBadge from "../../components/IdeaStatusBadge/IdeaStatusBadge";
 import {
   DashboardBreakdowns,
@@ -21,7 +19,7 @@ import { formatIdeaDate } from "../../utils/ideaStatus";
 
 const STATUS_COLORS = {
   "HOD/Manager approval pending": C.amber,
-  "Final approval pending": "#1f8a9d",
+  "Final approval pending (by IT Team)": "#1f8a9d",
   "In Implementation": C.navy,
   Overdue: C.red,
   Implemented: C.green,
@@ -82,12 +80,6 @@ const IdeaDashboard = () => {
       badge="DASHBOARD"
       title="My Dashboard"
       description="Ideas you have submitted. Drafts are not included."
-      actions={
-        <Link to="/ideas/share" className={taskPrimaryButtonClass}>
-          <Plus size={15} />
-          Share Idea
-        </Link>
-      }
       footer="Final approval moves an idea straight to In Implementation. The In Implementation card counts every idea being implemented, overdue ones included; in the Status Breakdown an idea past its target date counts as Overdue only. Implementation % = Implemented / (In Implementation + Implemented). Rejected ideas are shown only in the Rejected card."
     >
       <DashboardError message={error} />
@@ -101,7 +93,7 @@ const IdeaDashboard = () => {
             cards={[
               { label: "Total Ideas", value: summary.total, accent: "text-[#2c3e82]" },
               { label: "HOD/Manager approval pending", value: summary.pendingManager, accent: "text-[#d08a1c]" },
-              { label: "Final approval pending", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
+              { label: "Final approval pending (by IT Team)", value: summary.pendingFinal, accent: "text-[#d08a1c]" },
               { label: "In Implementation", value: summary.inImplementation, accent: "text-[#2c3e82]" },
               { label: "Implemented", value: summary.implemented, accent: "text-[#1f9d6b]" },
               { label: "Rejected", value: summary.rejected, accent: "text-[#b3403f]" },

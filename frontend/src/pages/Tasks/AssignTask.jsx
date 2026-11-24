@@ -11,7 +11,14 @@ import {
   getEmployeeProjects,
   getTaskApiError,
 } from "../../services/taskService";
-import { TASK_NAME_MAX, TASK_PRIORITIES, getTaskStatusClasses, getTodayKey } from "../../utils/taskStatus";
+import {
+  TASK_NAME_MAX,
+  TASK_PRIORITIES,
+  formatMonthRangeLabel,
+  getMonthKey,
+  getTaskStatusClasses,
+  getTodayKey,
+} from "../../utils/taskStatus";
 import { worksheetControlClass, worksheetLineAddClass, worksheetLineRemoveClass } from "../../utils/goalWorksheet";
 import { formatDisplayDate } from "../../utils/dateTime";
 
@@ -28,13 +35,6 @@ const INITIAL_ROWS = 3;
 let rowCounter = 0;
 const newRow = () => ({ key: `row-${(rowCounter += 1)}`, employeeId: "", projectId: "", taskName: "", priority: "Medium", dueDate: "" });
 const freshRows = () => Array.from({ length: INITIAL_ROWS }, newRow);
-
-const monthKey = (dateKey) => dateKey.slice(0, 7); // "YYYY-MM-DD" -> "YYYY-MM"
-
-const monthLabel = (month) => {
-  const [year, m] = month.split("-").map(Number);
-  return new Date(year, m - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
-};
 
 const isBlank = (row) => !row.employeeId && !row.taskName.trim() && !row.dueDate;
 
@@ -71,15 +71,14 @@ const AssignTask = () => {
   const [saving, setSaving] = useState(false);
 
   const today = getTodayKey();
-  const currentMonth = monthKey(today);
+  const currentMonth = getMonthKey(today);
   const [fromMonth, setFromMonth] = useState(currentMonth);
   const [toMonth, setToMonth] = useState(currentMonth);
   // New tasks are always assigned today, so blank rows show only when the
   // range ends in the current month.
   const isCurrentMonth = toMonth === currentMonth;
   const range = `${fromMonth}..${toMonth}`;
-  const rangeLabel =
-    fromMonth === toMonth ? monthLabel(fromMonth) : `${monthLabel(fromMonth)} – ${monthLabel(toMonth)}`;
+  const rangeLabel = formatMonthRangeLabel(fromMonth, toMonth);
 
   // Tasks already assigned in the selected months; loading while that differs.
   const [saved, setSaved] = useState({ range: null, tasks: [] });

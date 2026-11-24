@@ -301,6 +301,41 @@ const getAccess = async (user) => {
  *   status, priority, dueFrom, dueTo (YYYY-MM-DD), source (self | assigned),
  *   employeeId (team, all), department (all)
  */
+/**
+ * fromMonth..toMonth (YYYY-MM, inclusive); `month` alone = that one month.
+ * Returns { from, to } as 'YYYY-MM-DD' keys: the first day of fromMonth and
+ * the first day of the month after toMonth (exclusive). With nothing given:
+ * the current month when defaultToCurrent, otherwise null (no month filter).
+ */
+const parseMonthRange = (query = {}, { defaultToCurrent = false } = {}) => {
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const fromMonth = text(query.fromMonth) || text(query.month) || (defaultToCurrent ? thisMonth : "");
+    const toMonth = text(query.toMonth) || text(query.month) || fromMonth;
+    if (!fromMonth) return null;
+
+    const parseMonth = (value, label) => {
+        const match = value.match(/^(\d{4})-(\d{2})$/);
+        const monthNumber = match ? Number(match[2]) : 0;
+        if (!match || monthNumber < 1 || monthNumber > 12) {
+            throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, [`${label} must be in YYYY-MM format.`]);
+        }
+        return { year: Number(match[1]), monthNumber };
+    };
+
+    parseMonth(fromMonth, "From month");
+    const to = parseMonth(toMonth, "To month");
+    if (fromMonth > toMonth) {
+        throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, ["From month cannot be after To month."]);
+    }
+
+    const next = to.monthNumber === 12
+        ? `${to.year + 1}-01`
+        : `${to.year}-${String(to.monthNumber + 1).padStart(2, "0")}`;
+
+    return { from: `${fromMonth}-01`, to: `${next}-01` };
+};
+
 const parseTaskListQuery = (query = {}, scope) => {
     const errors = [];
 
@@ -359,6 +394,15 @@ const parseTaskListQuery = (query = {}, scope) => {
 
     if (scope === "all") {
         filters.department = text(query.department).slice(0, 150);
+    }
+
+    // My Tasks month sheet: tasks created (or assigned) in fromMonth..toMonth.
+    if (scope === "my") {
+        try {
+            filters.createdRange = parseMonthRange(query);
+        } catch (err) {
+            errors.push(...(err.errors?.length ? err.errors : [err.message]));
+        }
     }
 
     if (errors.length > 0) {
@@ -510,37 +554,13 @@ const getAllTasks = async (user, query) => {
 const getAssignedByMonth = async (user, query = {}) => {
     assertBusinessHead(user, "Only the Business Head can assign tasks.");
 
-    // fromMonth..toMonth (YYYY-MM, inclusive); `month` alone = that one
-    // month; nothing = the current month.
-    const now = new Date();
-    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const fromMonth = text(query.fromMonth) || text(query.month) || thisMonth;
-    const toMonth = text(query.toMonth) || text(query.month) || fromMonth;
-
-    const parseMonth = (value, label) => {
-        const match = value.match(/^(\d{4})-(\d{2})$/);
-        const monthNumber = match ? Number(match[2]) : 0;
-        if (!match || monthNumber < 1 || monthNumber > 12) {
-            throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, [`${label} must be in YYYY-MM format.`]);
-        }
-        return { year: Number(match[1]), monthNumber };
-    };
-
-    parseMonth(fromMonth, "From month");
-    const to = parseMonth(toMonth, "To month");
-    if (fromMonth > toMonth) {
-        throw new AppError("Invalid filters.", StatusCodes.BAD_REQUEST, ["From month cannot be after To month."]);
-    }
-
-    const next = to.monthNumber === 12
-        ? `${to.year + 1}-01`
-        : `${to.year}-${String(to.monthNumber + 1).padStart(2, "0")}`;
+    const { from, to } = parseMonthRange(query, { defaultToCurrent: true });
 
     const pool = await poolPromise;
     const rows = await taskModel.listAssignedByMonth(pool, {
         assignerId: Number(user.userId),
-        from: `${fromMonth}-01`,
-        to: `${next}-01`,
+        from,
+        to,
     });
     return rows.map((row) => withPermissions(row, user));
 };

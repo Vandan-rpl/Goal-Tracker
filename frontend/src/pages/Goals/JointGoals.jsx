@@ -34,7 +34,7 @@ const JointGoals = () => {
     <div className="flex-1 bg-gray-50 min-h-screen overflow-y-auto p-4 sm:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <h1 className="text-2xl font-bold text-gray-900">My Joint Goals</h1>
+          <h1 className="text-2xl font-bold text-gray-900">My Joint Goals (Assigned by other team members)</h1>
           <p className="text-sm text-gray-500 mt-1">Goals where you are a joint accountability participant.</p>
         </div>
 
@@ -91,7 +91,6 @@ const JointGoals = () => {
                         icon={<AssignmentOutlinedIcon sx={{ fontSize: 40 }} />}
                         title="No joint goals"
                         description="You have no joint accountability assignments."
-                        action={<Button component={Link} to="/goals" size="small">View owned goals</Button>}
                       />
                     </td>
                   </tr>

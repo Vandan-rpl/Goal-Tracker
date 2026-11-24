@@ -53,3 +53,18 @@ export const getTaskPriorityClasses = (priority) => PRIORITY_CLASSES[priority] |
 export const formatTaskDate = formatIdeaDate;
 export const formatTaskDateTime = formatIdeaDateTime;
 export { getTodayKey };
+
+// Month sheets (Assign Task, My Tasks): "YYYY-MM-DD" -> "YYYY-MM".
+export const getMonthKey = (dateKey) => dateKey.slice(0, 7);
+
+// "YYYY-MM" -> "November 2026".
+export const formatMonthLabel = (month) => {
+  const [year, m] = month.split("-").map(Number);
+  return new Date(year, m - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+};
+
+// "November 2026" or "October 2026 – November 2026".
+export const formatMonthRangeLabel = (fromMonth, toMonth) =>
+  fromMonth === toMonth
+    ? formatMonthLabel(fromMonth)
+    : `${formatMonthLabel(fromMonth)} – ${formatMonthLabel(toMonth)}`;
