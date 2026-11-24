@@ -974,129 +974,22 @@ const getAllIdeaFilterOptions = async (user) => {
 };
 
 /**
- * ------------------------------------------------------------
- * Track Idea (Team Ideas users + CFO / Admin; visibility applied in the
- * query)
- * ------------------------------------------------------------
- */
-
-const TRACK_IDEA_NUMBER_MAX_LENGTH = 50;
-
-// The Team Ideas check (has direct reports) or a view-all role.
-const assertCanTrackIdeas = async (user) => {
-    if (hasViewAllRole(user)) return;
-
-    const pool = await poolPromise;
-    if (!(await ideaModel.hasDirectReports(pool, user.userId))) {
-        throw new AppError(
-            "Track Idea is only available to reporting managers, HODs, CFO and Admin users.",
-            StatusCodes.FORBIDDEN
-        );
-    }
-};
-
-/**
- * Validate the Track Idea query: ideaNumber, ideaName (part of the title),
- * submittedDate (YYYY-MM-DD), initiatedBy, page, pageSize. At least one filter is required; blank ones
- * are ignored. Throws 400 with every problem listed.
- */
-const parseTrackIdeaQuery = (query = {}) => {
-    const errors = [];
-    const text = (value) => (typeof value === "string" ? value.trim() : "");
-
-    const positiveInt = (value, label) => {
-        if (value === undefined || value === "") return null;
-        const number = Number(value);
-        if (!Number.isInteger(number) || number <= 0) {
-            errors.push(`${label} must be a positive whole number.`);
-            return null;
-        }
-        return number;
-    };
-
-    const filters = {
-        ideaNumber: text(query.ideaNumber),
-        ideaName: text(query.ideaName),
-        submittedDate: text(query.submittedDate),
-        initiatedBy: positiveInt(text(query.initiatedBy), "Initiated by"),
-    };
-
-    if (filters.ideaNumber.length > TRACK_IDEA_NUMBER_MAX_LENGTH) {
-        errors.push(`Idea number cannot exceed ${TRACK_IDEA_NUMBER_MAX_LENGTH} characters.`);
-    }
-
-    if (filters.ideaName.length > IDEA_TITLE_MAX_LENGTH) {
-        errors.push(`Idea name cannot exceed ${IDEA_TITLE_MAX_LENGTH} characters.`);
-    }
-
-    if (filters.submittedDate && !isValidDateKey(filters.submittedDate)) {
-        errors.push("Idea date must be a date in YYYY-MM-DD format.");
-    }
-
-    if (
-        !filters.ideaNumber &&
-        !filters.ideaName &&
-        !filters.submittedDate &&
-        !filters.initiatedBy &&
-        errors.length === 0
-    ) {
-        errors.push("Enter an idea number, an idea name, an idea date or an employee to search for.");
-    }
-
-    const page = positiveInt(query.page, "Page") || 1;
-    const pageSize = positiveInt(query.pageSize, "Page size") || IDEA_LIST_PAGE_SIZE_DEFAULT;
-    if (pageSize > IDEA_LIST_PAGE_SIZE_MAX) {
-        errors.push(`Page size cannot exceed ${IDEA_LIST_PAGE_SIZE_MAX}.`);
-    }
-
-    if (errors.length > 0) {
-        throw new AppError("Invalid search.", StatusCodes.BAD_REQUEST, errors);
-    }
-
-    return { filters, page, pageSize };
-};
-
-/**
- * Track Idea search: { items, total, page, pageSize, totalPages }. Ideas the
- * user may not see are simply not matched.
- */
-const trackIdeas = async (user, query) => {
-    await assertCanTrackIdeas(user);
-    const { filters, page, pageSize } = parseTrackIdeaQuery(query);
-    const pool = await poolPromise;
-
-    const { items, total } = await ideaModel.trackIdeas(pool, {
-        viewer: toViewer(user),
-        filters,
-        page,
-        pageSize,
-    });
-
-    return {
-        items,
-        total,
-        page,
-        pageSize,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
-    };
-};
-
-/**
- * Initiated By options: all active users
- */
-const getTrackIdeaInitiators = async (user) => {
-    await assertCanTrackIdeas(user);
-    const pool = await poolPromise;
-    return await ideaModel.getTrackIdeaInitiators(pool);
-};
-
-/**
- * Get Ideas Assigned To Me (logged-in user is the reporting manager or the
- * final approver). IsPendingWithMe ideas come first.
+ * Ideas Review & Approval: ideas where the logged-in user is the reporting
+ * manager or the final approver, plus their team members' ideas (submitter's
+ * Reporting Manager or HOD). IsPendingWithMe ideas come first.
  */
 const getAssignedIdeas = async (user) => {
     const pool = await poolPromise;
     return await ideaModel.getAssignedIdeas(pool, user.userId);
+};
+
+/**
+ * Ideas Review & Approval "Submitted By" names: the user's team members,
+ * including those with no ideas (an empty list if they have none).
+ */
+const getReviewTeamMembers = async (user) => {
+    const pool = await poolPromise;
+    return await ideaModel.getReviewTeamMembers(pool, Number(user.userId));
 };
 
 /**
@@ -1248,12 +1141,11 @@ module.exports = {
     getDashboard,
     getReport,
     getAssignedIdeas,
+    getReviewTeamMembers,
     getTeamIdeas,
     getTeamIdeaFilterOptions,
     getAllIdeas,
     getAllIdeaFilterOptions,
-    trackIdeas,
-    getTrackIdeaInitiators,
     managerApprove,
     managerReject,
     finalApprove,

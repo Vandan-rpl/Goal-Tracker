@@ -4,7 +4,7 @@ CREATE TABLE dbo.Tasks (
     TaskName            NVARCHAR(500) NOT NULL,
     Priority            NVARCHAR(10) NOT NULL,
     DueDate             DATE NOT NULL,
-    Status              NVARCHAR(20) NOT NULL DEFAULT 'Pending',
+    Status              NVARCHAR(20) NOT NULL CONSTRAINT DF_Tasks_Status DEFAULT 'Not Started',
     CFORemarks          NVARCHAR(2000) NULL,
     CFORemarksBy        INT NULL,
     CFORemarksDate      DATETIME2 NULL,
@@ -22,7 +22,7 @@ CREATE TABLE dbo.Tasks (
     CONSTRAINT FK_Tasks_CFORemarksBy FOREIGN KEY (CFORemarksBy) REFERENCES dbo.Users(UserID),
     CONSTRAINT FK_Tasks_CreatedBy   FOREIGN KEY (CreatedBy)    REFERENCES dbo.Users(UserID),
     CONSTRAINT CK_Tasks_Priority CHECK (Priority IN ('Low','Medium','High')),
-    CONSTRAINT CK_Tasks_Status   CHECK (Status IN ('Pending','In Progress','Done'))
+    CONSTRAINT CK_Tasks_Status   CHECK (Status IN ('Not Started','Started','In Progress','Completed'))
 );
 GO
 

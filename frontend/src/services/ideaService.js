@@ -62,6 +62,13 @@ export const getAssignedIdeas = async () => {
     return response.data.data;
 };
 
+// Ideas Review & Approval Submitted By names: the user's team members
+// (UserID, FullName, DepartmentName), with or without ideas.
+export const getReviewTeamMembers = async () => {
+    const response = await api.get('/ideas/assigned/team-members');
+    return response.data.data;
+};
+
 // Team Ideas / All Ideas: server-side filters, sorting and paging. `params`
 // are passed through as the query string (search, status, purpose,
 // overdueOnly, submittedFrom, submittedTo, memberId | department, leadId,
@@ -84,20 +91,6 @@ export const getAllIdeas = async (params) => {
 
 export const getAllIdeaFilterOptions = async () => {
     const response = await api.get('/ideas/all/filter-options');
-    return response.data.data;
-};
-
-// Track Idea: search the ideas the user may see (ideaNumber, ideaName,
-// submittedDate, initiatedBy: filled-in ones must all match; page, pageSize). Returns
-// { items, total, page, pageSize, totalPages }.
-export const trackIdeas = async (params) => {
-    const response = await api.get('/ideas/track', { params });
-    return response.data.data;
-};
-
-// Initiated By options: all active users (UserID, FullName, EmployeeCode).
-export const getTrackIdeaInitiators = async () => {
-    const response = await api.get('/ideas/track/initiators');
     return response.data.data;
 };
 

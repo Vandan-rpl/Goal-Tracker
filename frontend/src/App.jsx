@@ -36,7 +36,6 @@ import TeamIdeas from './pages/Ideas/TeamIdeas';
 import AllIdeas from './pages/Ideas/AllIdeas';
 import IdeaReports from './pages/Ideas/IdeaReports';
 import TaskReports from './pages/Tasks/TaskReports';
-import TrackIdea from './pages/Ideas/TrackIdea';
 import { IDEAS_DASHBOARD_PATH, IDEAS_HOME_PATH } from './utils/ideasMenu';
 import TasksRoute from './components/TasksRoute';
 import MyTasks from './pages/Tasks/MyTasks';
@@ -123,9 +122,8 @@ function App() {
               <Route element={<IdeasRoute menuKey="assigned" />}>
                 <Route path="/ideas/assigned" element={<AssignedIdeas />} />
               </Route>
-              <Route element={<IdeasRoute menuKey="track" />}>
-                <Route path="/ideas/track" element={<TrackIdea />} />
-              </Route>
+              {/* Track Idea was merged into Ideas Review & Approval. */}
+              <Route path="/ideas/track" element={<Navigate to="/ideas/assigned" replace />} />
               <Route element={<IdeasRoute menuKey="team" />}>
                 <Route path="/ideas/team" element={<TeamIdeas />} />
               </Route>

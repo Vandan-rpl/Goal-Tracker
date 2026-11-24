@@ -28,6 +28,7 @@ const STATUS_TAG_CLASSES = {
 
 const summaryCards = (summary) => [
   { label: "Total Tasks", value: summary.total, accent: "text-[#2c3e82]" },
+  { label: "Total Projects", value: summary.projects ?? 0, accent: "text-[#2c3e82]" },
   { label: "Not Started", value: summary.notStarted, accent: "text-[#7c8ba3]" },
   { label: "In Progress", value: summary.inProgress, accent: "text-[#2c3e82]" },
   { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
@@ -72,9 +73,10 @@ const TaskReports = () => (
     statusColors={STATUS_COLORS}
     category={{ title: "Priority Breakdown", colors: PRIORITY_COLORS }}
     summaryCards={summaryCards}
+    summaryGridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8"
     itemColumns={ITEM_COLUMNS}
     itemKey="TaskID"
-    footer="Every task counts (self-added, assigned and project tasks), in the fiscal year it was assigned or added. A task that is not Completed and is past its due date counts as Overdue only. Completion % = Completed ÷ all tasks."
+    footer="Every task counts (self-added, assigned and project tasks), in the fiscal year it was assigned or added. A task that is not Completed and is past its due date counts as Overdue only. Completion % = Completed ÷ all tasks. Total Projects = every active project, whatever the filters."
   />
 );
 

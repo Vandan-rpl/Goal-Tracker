@@ -295,7 +295,7 @@ const ModuleReports = ({
       filters={filters}
       footer={footer}
     >
-      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-[#cbd4e2]" role="tablist">
+      <div className="mb-5 flex gap-2 overflow-x-auto overflow-y-hidden border-b border-[#cbd4e2]" role="tablist">
         {TABS.map((tab) => (
           <button
             key={tab.key}

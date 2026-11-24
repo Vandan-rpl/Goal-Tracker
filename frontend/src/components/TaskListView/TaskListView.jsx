@@ -25,6 +25,7 @@ import DateInput from "../DateInput/DateInput";
 const PAGE_SIZE = 20;
 
 const EMPTY_FILTERS = {
+  project: "",
   department: "",
   employeeId: "",
   status: "",
@@ -66,8 +67,8 @@ const labelClass = "inline-flex border px-1.5 py-0.5 text-[10px] font-semibold w
  *   title, description, badge, barSubtitle
  *   loadTasks(params)      list API (getTeamTasks / getAllTasks / getMyTasks)
  *   loadFilterOptions()    optional: { employees, departments }
- *   filterKeys             any of department, employee, status, priority,
- *                          dueRange, source
+ *   filterKeys             any of project, department, employee, status,
+ *                          priority, dueRange, source
  *   showEmployee           Employee Name and Department columns
  *   groupByEmployee        one collapsible row per employee; click it to
  *                          list that employee's tasks underneath
@@ -100,7 +101,7 @@ export default function TaskListView({
   const dispatch = useDispatch();
 
   const [tasks, setTasks] = useState([]);
-  const [options, setOptions] = useState({ employees: [], departments: [] });
+  const [options, setOptions] = useState({ employees: [], departments: [], projects: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState(() => ({ ...EMPTY_FILTERS, ...initialFilters }));
@@ -132,7 +133,13 @@ export default function TaskListView({
     let ignore = false;
     loadFilterOptions()
       .then((result) => {
-        if (!ignore) setOptions({ employees: result?.employees || [], departments: result?.departments || [] });
+        if (!ignore) {
+          setOptions({
+            employees: result?.employees || [],
+            departments: result?.departments || [],
+            projects: result?.projects || [],
+          });
+        }
       })
       .catch(() => {
         // The grid still works without the dropdown options.
@@ -209,10 +216,35 @@ export default function TaskListView({
     });
   }, [tasks, search, overdueOnly]);
 
+  // The project picked in the Project filter, if any.
+  const selectedProject = useMemo(
+    () => (options.projects || []).find((p) => String(p.ProjectID) === String(filters.project)) || null,
+    [options.projects, filters.project],
+  );
+
   // groupByEmployee: one group per employee, by name, keeping task order.
+  // With a project picked, its members with no matching tasks get a group
+  // too (0 tasks), within the Department / Employee filters and search.
   const employeeGroups = useMemo(() => {
     if (!groupByEmployee) return [];
     const groups = new Map();
+    if (selectedProject) {
+      const term = search.trim().toLowerCase();
+      (options.employees || [])
+        .filter((emp) => selectedProject.MemberIDs.includes(emp.UserID))
+        .filter((emp) => !filters.department || emp.DepartmentName === filters.department)
+        .filter((emp) => !filters.employeeId || String(emp.UserID) === String(filters.employeeId))
+        .filter((emp) => !term || (emp.FullName || "").toLowerCase().includes(term))
+        .forEach((emp) => {
+          groups.set(emp.UserID, {
+            userId: emp.UserID,
+            name: emp.FullName,
+            code: emp.EmployeeCode,
+            department: emp.DepartmentName,
+            tasks: [],
+          });
+        });
+    }
     visibleTasks.forEach((task) => {
       if (!groups.has(task.UserID)) {
         groups.set(task.UserID, {
@@ -223,10 +255,15 @@ export default function TaskListView({
           tasks: [],
         });
       }
-      groups.get(task.UserID).tasks.push(task);
+      const group = groups.get(task.UserID);
+      // Prefer the task row's details (it carries the employee code).
+      group.name = task.EmployeeName;
+      group.code = task.EmployeeCode;
+      group.department = task.DepartmentName;
+      group.tasks.push(task);
     });
     return [...groups.values()].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  }, [groupByEmployee, visibleTasks]);
+  }, [groupByEmployee, visibleTasks, selectedProject, options.employees, filters.department, filters.employeeId, search]);
 
   // Pages count employees when grouped, tasks otherwise.
   const pageItems = groupByEmployee ? employeeGroups : visibleTasks;
@@ -450,7 +487,24 @@ export default function TaskListView({
     );
   };
 
-  const employeeOptions = options.employees || [];
+  // With a project picked, the Employee dropdown lists only its members.
+  const employeeOptions = (options.employees || []).filter(
+    (emp) => !selectedProject || selectedProject.MemberIDs.includes(emp.UserID),
+  );
+
+  const changeProject = (value) => {
+    const project = (options.projects || []).find((p) => String(p.ProjectID) === String(value));
+    setFilters((current) => ({
+      ...current,
+      project: value,
+      // Drop an employee who isn't in the newly picked project.
+      employeeId:
+        project && current.employeeId && !project.MemberIDs.includes(Number(current.employeeId))
+          ? ""
+          : current.employeeId,
+    }));
+    setPage(1);
+  };
 
   const summaryBoxes = [
     showEmployee && { label: "Employees", value: summary.employees },
@@ -478,6 +532,24 @@ export default function TaskListView({
           className={selectClass}
         />
       </div>
+
+      {filterKeys.includes("project") && (
+        <div>
+          <label htmlFor="task-filter-project" className={filterLabelClass}>Project</label>
+          <select
+            id="task-filter-project"
+            value={filters.project}
+            onChange={(e) => changeProject(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All Tasks</option>
+            <option value="none">Non-project tasks</option>
+            {(options.projects || []).map((p) => (
+              <option key={p.ProjectID} value={p.ProjectID}>{p.ProjectName}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {filterKeys.includes("department") && (
         <div>
@@ -729,6 +801,13 @@ export default function TaskListView({
                         </button>
                       </td>
                     </tr>
+                    {expanded && group.tasks.length === 0 && (
+                      <tr>
+                        <td colSpan={headings.length} className={`${cellClass} bg-white text-center text-slate-500`}>
+                          No tasks in this project{hasFilters ? " match the selected filters" : ""}.
+                        </td>
+                      </tr>
+                    )}
                     {expanded && group.tasks.map((task, index) => renderTaskRow(task, index + 1))}
                   </React.Fragment>
                 );

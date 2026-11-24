@@ -17,8 +17,8 @@ export const TASKS_ACCESS = {
   // Business Head or Admin (Admin is read-only, like All Ideas).
   VIEW_ALL: "viewAll",
   BUSINESS_HEAD: "businessHead",
-  // Business Head / Admin / Manager, or anyone in (or who created) an
-  // active project.
+  // Admin / Manager, or anyone in (or who created) an active project; never
+  // the Business Head (CFO).
   PROJECTS: "projects",
 };
 
@@ -81,7 +81,10 @@ export const TASKS_MENU = [
 
 export const canAccessTasksItem = (item, { isBusinessHead, canViewAll, hasDirectReports, hasProjects, canCreateProjects }) => {
   if (item.access === TASKS_ACCESS.VIEW_ALL) return Boolean(canViewAll);
-  if (item.access === TASKS_ACCESS.PROJECTS) return Boolean(canViewAll || hasProjects || canCreateProjects);
+  // Not for the CFO: All Tasks has a Project filter instead.
+  if (item.access === TASKS_ACCESS.PROJECTS) {
+    return !isBusinessHead && Boolean(canViewAll || hasProjects || canCreateProjects);
+  }
   if (item.access === TASKS_ACCESS.BUSINESS_HEAD) return Boolean(isBusinessHead);
   if (item.access === TASKS_ACCESS.HAS_REPORTEES) return Boolean(hasDirectReports);
   return true;

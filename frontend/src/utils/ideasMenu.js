@@ -17,8 +17,6 @@ export const IDEAS_ACCESS = {
   EVERYONE: "everyone",
   HAS_REPORTEES: "hasReportees",
   VIEW_ALL: "viewAll",
-  // Either of the two above.
-  HAS_REPORTEES_OR_VIEW_ALL: "hasReporteesOrViewAll",
   // The CFO (Business Head) only.
   BUSINESS_HEAD: "businessHead",
   // HOD / Reporting Manager section: manager roles (same as the Goal
@@ -61,13 +59,6 @@ export const IDEAS_MENU = [
     access: IDEAS_ACCESS.REVIEWER,
     section: "For HOD/Reporting Manager",
     icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
-  },
-  {
-    key: "track",
-    label: "Track Idea",
-    path: "/ideas/track",
-    access: IDEAS_ACCESS.HAS_REPORTEES_OR_VIEW_ALL,
-    icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
   },
   // {
   //   key: "team",
@@ -113,9 +104,6 @@ export const canAccessIdeasItem = (item, { role, hasReportees, isFinalApprover }
   if (item.access === IDEAS_ACCESS.BUSINESS_HEAD) return String(role).toUpperCase() === "BUSINESSHEAD";
   if (item.access === IDEAS_ACCESS.VIEW_ALL) return canViewAllIdeas(role);
   if (item.access === IDEAS_ACCESS.HAS_REPORTEES) return Boolean(hasReportees);
-  if (item.access === IDEAS_ACCESS.HAS_REPORTEES_OR_VIEW_ALL) {
-    return Boolean(hasReportees) || canViewAllIdeas(role);
-  }
   return true;
 };
 

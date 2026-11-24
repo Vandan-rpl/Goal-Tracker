@@ -22,7 +22,7 @@ const AllTasks = () => {
       footer={`${isBusinessHead ? "Use Assign Task to assign new tasks. " : ""}The Overdue box shows only overdue tasks; click it again to show all.`}
       loadTasks={getAllTasks}
       loadFilterOptions={getAllTaskFilterOptions}
-      filterKeys={["department", "employee", "status", "priority"]}
+      filterKeys={["project", "department", "employee", "status", "priority"]}
       showEmployee
       groupByEmployee
       cfoEditable

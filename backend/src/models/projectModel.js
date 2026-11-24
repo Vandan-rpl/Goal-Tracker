@@ -238,6 +238,71 @@ const listUserProjects = async (db, userId) => {
 };
 
 /**
+ * Active projects the employee is an active member of or created (Assign
+ * Task's Project column), by name. A creator is usually not a member of
+ * their own project, so membership alone would hide it.
+ */
+const listAssignableProjects = async (db, userId) => {
+
+    const result = await db.request()
+        .input("UserID", sql.Int, userId)
+        .query(`
+            SELECT p.ProjectID, p.ProjectName
+            FROM dbo.Projects p
+            WHERE p.IsActive = 1
+              AND (
+                    p.CreatedBy = @UserID
+                    OR EXISTS (
+                        SELECT 1
+                        FROM dbo.ProjectMembers pm
+                        WHERE pm.ProjectID = p.ProjectID
+                          AND pm.UserID = @UserID
+                          AND pm.IsActive = 1
+                    )
+                  )
+            ORDER BY p.ProjectName;
+        `);
+
+    return result.recordset;
+};
+
+/**
+ * Number of active projects (CFO Reports' Total Projects card). With a
+ * departmentId, only projects whose creator or an active member belongs
+ * to that department.
+ */
+const countActiveProjects = async (db, departmentId = null) => {
+
+    const result = await db.request()
+        .input("DepartmentID", sql.Int, departmentId)
+        .query(`
+            SELECT COUNT(*) AS Total
+            FROM dbo.Projects p
+            WHERE p.IsActive = 1
+              AND (
+                    @DepartmentID IS NULL
+                    OR EXISTS (
+                        SELECT 1
+                        FROM dbo.Users u
+                        WHERE u.UserID = p.CreatedBy
+                          AND u.DepartmentID = @DepartmentID
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM dbo.ProjectMembers pm
+                        JOIN dbo.Users u
+                            ON u.UserID = pm.UserID
+                        WHERE pm.ProjectID = p.ProjectID
+                          AND pm.IsActive = 1
+                          AND u.DepartmentID = @DepartmentID
+                    )
+                  );
+        `);
+
+    return result.recordset[0].Total;
+};
+
+/**
  * True if the user is an active member of the project.
  */
 const isActiveMember = async (db, projectId, userId) => {
@@ -547,6 +612,8 @@ module.exports = {
     listMembers,
     isActiveMember,
     listUserProjects,
+    listAssignableProjects,
+    countActiveProjects,
     hasActiveProjects,
     addMember,
     removeMember,

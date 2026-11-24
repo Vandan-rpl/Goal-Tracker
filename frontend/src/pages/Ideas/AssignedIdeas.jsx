@@ -9,11 +9,24 @@ import IdeaStatusBadge from "../../components/IdeaStatusBadge/IdeaStatusBadge";
 import IdeaCountBoxes from "../../components/IdeaCountBoxes/IdeaCountBoxes";
 import TablePagination from "../../components/TablePagination/TablePagination";
 import IdeaDaysLeft from "../../components/IdeaDaysLeft/IdeaDaysLeft";
-import { getAssignedIdeas, getIdeaApiError, getIdeaPurposes } from "../../services/ideaService";
+import SearchableSelect from "../../components/SearchableSelect/SearchableSelect";
+import { getAssignedIdeas, getIdeaApiError, getIdeaPurposes, getReviewTeamMembers } from "../../services/ideaService";
 import { IDEA_STATUSES, formatIdeaDate, getIdeaStatusLabel } from "../../utils/ideaStatus";
 
 const PAGE_SIZE = 10;
-const COLUMN_COUNT = 9;
+const COLUMNS = [
+  "Idea No.",
+  "Title",
+  "Submitted By",
+  "My Role",
+  "Purpose",
+  "Submitted Date",
+  "Target Date",
+  "Status",
+  "Pending With",
+  "Days Left",
+];
+const COLUMN_COUNT = COLUMNS.length;
 const OVERDUE_KEY = "overdue";
 const PENDING_KEY = "pending";
 
@@ -35,9 +48,11 @@ const COUNT_BOXES = [
   { key: "Rejected", label: "Rejected" },
 ];
 
-// The viewer's role on the idea (can be both).
+// The viewer's role on the idea (can be both); ideas from the viewer's team
+// that they don't review show as Team Member's Idea.
 const roleLabel = (idea) =>
-  [idea.IsLead && "Reporting Manager", idea.IsFinalApprover && "Final Approver"].filter(Boolean).join(", ");
+  [idea.IsLead && "Reporting Manager", idea.IsFinalApprover && "Final Approver"].filter(Boolean).join(", ") ||
+  (idea.IsTeamIdea ? "Team Member's Idea" : "");
 
 const selectClass =
   "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -69,12 +84,16 @@ const AssignedIdeas = () => {
 
   const [ideas, setIdeas] = useState([]);
   const [purposes, setPurposes] = useState([]);
+  // The viewer's team members, with or without ideas (Submitted By names).
+  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [purpose, setPurpose] = useState("");
+  // SubmittedByID, null = everyone.
+  const [submitter, setSubmitter] = useState(null);
   // "" | PENDING_KEY | OVERDUE_KEY
   const [flag, setFlag] = useState("");
   const [page, setPage] = useState(1);
@@ -86,14 +105,17 @@ const AssignedIdeas = () => {
       try {
         setLoading(true);
         setError("");
-        const [ideaList, purposeList] = await Promise.all([
+        const [ideaList, purposeList, memberList] = await Promise.all([
           getAssignedIdeas(),
           // The table still works without the purpose filter options.
           getIdeaPurposes().catch(() => []),
+          // Or without the team list (Submitted By then lists submitters only).
+          getReviewTeamMembers().catch(() => []),
         ]);
         if (ignore) return;
         setIdeas(ideaList || []);
         setPurposes(purposeList || []);
+        setTeamMembers(memberList || []);
       } catch (err) {
         if (!ignore) setError(getIdeaApiError(err, "Failed to load ideas assigned to you.").message);
       } finally {
@@ -121,11 +143,42 @@ const AssignedIdeas = () => {
     [ideas],
   );
 
+  // Submitted By options: the viewer's team members (even with no ideas) plus
+  // anyone else with an idea in the list, by name (type to search by name or
+  // department).
+  const submitterOptions = useMemo(() => {
+    const byId = new Map();
+    teamMembers.forEach((member) => {
+      byId.set(member.UserID, {
+        value: member.UserID,
+        label: member.FullName || "—",
+        description: member.DepartmentName || undefined,
+      });
+    });
+    ideas.forEach((idea) => {
+      if (!byId.has(idea.SubmittedByID)) {
+        byId.set(idea.SubmittedByID, {
+          value: idea.SubmittedByID,
+          label: idea.SubmitterName || "—",
+          description: idea.SubmitterDepartment || undefined,
+        });
+      }
+    });
+    return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [ideas, teamMembers]);
+
+  // The picked person, when they have no ideas on this page at all.
+  const submitterWithoutIdeas = useMemo(() => {
+    if (submitter == null || ideas.some((idea) => idea.SubmittedByID === submitter)) return null;
+    return submitterOptions.find((option) => option.value === submitter) || null;
+  }, [submitter, ideas, submitterOptions]);
+
   const filteredIdeas = useMemo(() => {
     const term = search.trim().toLowerCase();
 
     return ideas
       .filter((idea) => {
+        if (submitter != null && idea.SubmittedByID !== submitter) return false;
         if (status && idea.Status !== status) return false;
         if (flag && !FLAG_FILTERS[flag].matches(idea)) return false;
         if (purpose && idea.Purpose !== purpose) return false;
@@ -136,13 +189,13 @@ const AssignedIdeas = () => {
         );
       })
       .sort(compareIdeas);
-  }, [ideas, search, status, purpose, flag]);
+  }, [ideas, search, status, purpose, submitter, flag]);
 
   const totalPages = Math.max(1, Math.ceil(filteredIdeas.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageIdeas = filteredIdeas.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const hasFilters = Boolean(search || status || purpose || flag);
+  const hasFilters = Boolean(search || status || purpose || submitter != null || flag);
 
   const activeBox = flag ? (status ? null : flag) : status;
 
@@ -159,6 +212,10 @@ const AssignedIdeas = () => {
     setPurpose(value);
     setPage(1);
   };
+  const changeSubmitter = (value) => {
+    setSubmitter(value);
+    setPage(1);
+  };
 
   // Clicking the active box again clears it.
   const selectBox = (key) => {
@@ -173,6 +230,7 @@ const AssignedIdeas = () => {
     setSearch("");
     setStatus("");
     setPurpose("");
+    setSubmitter(null);
     setFlag("");
     setPage(1);
   };
@@ -186,8 +244,8 @@ const AssignedIdeas = () => {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h1 className="text-2xl font-bold text-gray-900">Ideas Review &amp; Approval</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Ideas where you are the reporting manager or the final approver. Ideas waiting for your
-            decision are listed first.
+            Ideas where you are the reporting manager or the final approver, and ideas from your team members, with
+            where each one is pending. Ideas waiting for your decision are listed first.
           </p>
         </div>
 
@@ -214,6 +272,22 @@ const AssignedIdeas = () => {
                 onChange={(e) => changeSearch(e.target.value)}
                 placeholder="Idea number or title"
                 className={selectClass}
+              />
+            </div>
+
+            <div className="flex-1">
+              <label htmlFor="assigned-submitter" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Submitted By
+              </label>
+              <SearchableSelect
+                id="assigned-submitter"
+                options={submitterOptions}
+                value={submitter}
+                onChange={changeSubmitter}
+                placeholder="Type a name"
+                loading={loading}
+                noOptionsText={submitterOptions.length === 0 ? "No team members" : "No matches found"}
+                inputClassName="rounded-xl border-gray-200 focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -296,16 +370,14 @@ const AssignedIdeas = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50/75">
                 <tr>
-                  {["Idea No.", "Title", "Submitted By", "My Role", "Purpose", "Submitted Date", "Target Date", "Status", "Days Left"].map(
-                    (heading) => (
-                      <th
-                        key={heading}
-                        className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
-                      >
-                        {heading}
-                      </th>
-                    ),
-                  )}
+                  {COLUMNS.map((heading) => (
+                    <th
+                      key={heading}
+                      className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -351,6 +423,9 @@ const AssignedIdeas = () => {
                           <div className="mt-1 text-xs font-semibold text-indigo-700">Awaiting your action</div>
                         )}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {idea.PendingWithName || "—"}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <IdeaDaysLeft idea={idea} />
                       </td>
@@ -359,10 +434,20 @@ const AssignedIdeas = () => {
                 ) : (
                   <tr>
                     <td colSpan={COLUMN_COUNT} className="p-0">
-                      {ideas.length === 0 && !error ? (
+                      {submitterWithoutIdeas ? (
+                        <EmptyState
+                          icon={<SearchOffOutlinedIcon sx={{ fontSize: 40 }} />}
+                          title={`${submitterWithoutIdeas.label} has no ideas.`}
+                          action={
+                            <Button size="small" onClick={clearFilters}>
+                              Clear filters
+                            </Button>
+                          }
+                        />
+                      ) : ideas.length === 0 && !error ? (
                         <EmptyState
                           icon={<AssignmentIndOutlinedIcon sx={{ fontSize: 40 }} />}
-                          title="No ideas are assigned to you yet."
+                          title="No ideas to review or track yet."
                           description="Ideas from your team, and ideas sent to you for final approval, will appear here."
                         />
                       ) : (

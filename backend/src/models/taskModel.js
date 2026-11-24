@@ -449,7 +449,8 @@ const getActiveUser = async (db, userId) => {
  * Filter dropdown values:
  *   team - employees: the viewer's direct reports
  *   all  - employees: every active user, plus inactive users who still have
- *          tasks; departments: their departments
+ *          tasks; departments: their departments; projects: active
+ *          projects with their active members' UserIDs
  */
 const getTaskFilterOptions = async (db, { scope, viewerId }) => {
 
@@ -481,7 +482,27 @@ const getTaskFilterOptions = async (db, { scope, viewerId }) => {
 
     const departments = [...new Set(result.recordset.map((row) => row.DepartmentName).filter(Boolean))].sort();
 
-    return { employees: result.recordset, departments };
+    // Project filter: active projects, each with its active members' UserIDs
+    // (narrows the Employee dropdown to that project's members).
+    const projectResult = await db.request().query(`
+        SELECT p.ProjectID, p.ProjectName, pm.UserID
+        FROM dbo.Projects p
+        LEFT JOIN dbo.ProjectMembers pm
+            ON pm.ProjectID = p.ProjectID
+           AND pm.IsActive = 1
+        WHERE p.IsActive = 1
+        ORDER BY p.ProjectName, p.ProjectID;
+    `);
+
+    const projectMap = new Map();
+    projectResult.recordset.forEach((row) => {
+        if (!projectMap.has(row.ProjectID)) {
+            projectMap.set(row.ProjectID, { ProjectID: row.ProjectID, ProjectName: row.ProjectName, MemberIDs: [] });
+        }
+        if (row.UserID != null) projectMap.get(row.ProjectID).MemberIDs.push(row.UserID);
+    });
+
+    return { employees: result.recordset, departments, projects: [...projectMap.values()] };
 };
 
 /**

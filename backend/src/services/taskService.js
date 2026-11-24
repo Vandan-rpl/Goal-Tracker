@@ -446,16 +446,18 @@ const TASK_REPORT_STATUSES = ["Not Started", "In Progress", "Overdue", "Complete
  * CFO Reports & Analytics for tasks (see utils/moduleReport for the team /
  * organisation views and filters). Every task counts, personal and
  * project, in the fiscal year it was assigned (or added).
- * Completion % = Completed / all tasks.
+ * Completion % = Completed / all tasks. Total Projects = active projects,
+ * limited to the selected department (creator or an active member in it).
  */
 const getReport = async (user, query) => {
     assertBusinessHead(user, "Task reports are available to the CFO only.");
 
     const reportQuery = parseReportQuery(query);
     const pool = await poolPromise;
-    const [rows, team] = await Promise.all([
+    const [rows, team, totalProjects] = await Promise.all([
         taskModel.listReportTasks(pool),
         reportQuery.scope === "team" ? getBusinessHeadTeam(pool, user.userId) : [],
+        projectModel.countActiveProjects(pool, reportQuery.departmentId),
     ]);
 
     const { rows: tasks, ...report } = buildReport({
@@ -481,6 +483,8 @@ const getReport = async (user, query) => {
             overdue: counts.Overdue,
             completed: counts.Completed,
             highPriority: tasks.filter((task) => task.Priority === "High").length,
+            // Active projects, narrowed to the selected department if any.
+            projects: totalProjects,
             assigned: countSource("Assigned"),
             project: countSource("Project"),
             selfAdded: countSource("Self-added"),
@@ -583,13 +587,13 @@ const getMyProjects = async (user) => {
 
 /**
  * Assign Task's Project column: active projects the employee is an active
- * member of.
+ * member of or created.
  */
 const getEmployeeProjects = async (userIdParam, user) => {
     assertBusinessHead(user, "Only the Business Head can assign tasks.");
     const userId = parseId(userIdParam, "user id");
     const pool = await poolPromise;
-    return await projectModel.listUserProjects(pool, userId);
+    return await projectModel.listAssignableProjects(pool, userId);
 };
 
 /**
@@ -800,7 +804,7 @@ const MAX_BULK_ASSIGN = 100;
  * Assign several tasks at once (Business Head, Assign Task page).
  * body.tasks = [{ employeeId, projectId, taskName, priority, dueDate,
  * cfoRemarks }], one employee per row. projectId (optional) = a project the
- * employee is an active member of; the task is then a project task with
+ * employee is an active member of or created; the task is then a project task with
  * them as Responsible Person, like an assignment from the project page. All rows are saved in one transaction (none if any
  * row is invalid); then one "New task assigned" email per task.
  */
@@ -849,10 +853,12 @@ const assignTasks = async (body = {}, user) => {
 
         for (const [index, { employeeId, projectId }] of inputs.entries()) {
             if (!projectId) continue;
-            if (!(await projectModel.getProject(transaction, projectId))) {
+            const selectedProject = await projectModel.getProject(transaction, projectId);
+            if (!selectedProject) {
                 throw validationError([`Row ${index + 1}: The selected project no longer exists.`]);
             }
-            if (!(await projectModel.isActiveMember(transaction, projectId, employeeId))) {
+            if (selectedProject.CreatedBy !== employeeId
+                && !(await projectModel.isActiveMember(transaction, projectId, employeeId))) {
                 throw validationError([`Row ${index + 1}: The employee is not a member of the selected project.`]);
             }
         }

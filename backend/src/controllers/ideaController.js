@@ -316,6 +316,26 @@ exports.getAssignedIdeas = async (req, res) => {
 };
 
 /**
+ * Ideas Review & Approval Team Members (Submitted By names)
+ * GET /api/v1/ideas/assigned/team-members
+ */
+exports.getReviewTeamMembers = async (req, res) => {
+
+    try {
+
+        const members = await ideaService.getReviewTeamMembers(req.user);
+
+        return successResponse(res, 200, "Team members fetched successfully.", members);
+
+    } catch (error) {
+
+        return handleError(res, error, "Get Review Team Members", "Failed to fetch team members.");
+
+    }
+
+};
+
+/**
  * Manager Approve Idea
  * POST /api/v1/ideas/:ideaId/manager-approve
  */
@@ -615,42 +635,3 @@ exports.getAllIdeaFilterOptions = async (req, res) => {
 
 };
 
-/**
- * Track Idea Search
- * GET /api/v1/ideas/track?ideaNumber=&submittedDate=&initiatedBy=&page=&pageSize=
- */
-exports.trackIdeas = async (req, res) => {
-
-    try {
-
-        const result = await ideaService.trackIdeas(req.user, req.query);
-
-        return successResponse(res, 200, "Ideas fetched successfully.", result);
-
-    } catch (error) {
-
-        return handleError(res, error, "Track Ideas", "Failed to search ideas.");
-
-    }
-
-};
-
-/**
- * Track Idea Initiated By Options
- * GET /api/v1/ideas/track/initiators
- */
-exports.getTrackIdeaInitiators = async (req, res) => {
-
-    try {
-
-        const initiators = await ideaService.getTrackIdeaInitiators(req.user);
-
-        return successResponse(res, 200, "Employees fetched successfully.", initiators);
-
-    } catch (error) {
-
-        return handleError(res, error, "Get Track Idea Initiators", "Failed to fetch employees.");
-
-    }
-
-};
