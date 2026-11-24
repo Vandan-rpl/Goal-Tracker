@@ -12,6 +12,8 @@ import {
 import {
   getCompletionRejectionRemark,
   getGoalStatusLabel,
+  getGoalDisplayStatus,
+  getGoalStatusLabelOf,
   formatGoalStartDate,
   isGoalActiveForOwner,
   isGoalAwaitingStart,
@@ -357,6 +359,8 @@ const ViewGoal = () => {
       return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
     if (status === "Completion Submitted")
       return "bg-sky-50 text-sky-700 border-sky-200/60";
+    if (status === "Completion Rejected")
+      return "bg-rose-50 text-rose-700 border-rose-200/60";
     if (isApproved)
       return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
     if (status === "Submitted")
@@ -399,9 +403,9 @@ const ViewGoal = () => {
               />
             )}
             <span
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg border shadow-xs ${getStatusBadgeStyle(goal.GoalStatus)}`}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg border shadow-xs ${getStatusBadgeStyle(getGoalDisplayStatus(goal))}`}
             >
-              {getGoalStatusLabel(goal.GoalStatus)}
+              {getGoalStatusLabelOf(goal)}
             </span>
             <span className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 shadow-xs">
               Priority:{" "}

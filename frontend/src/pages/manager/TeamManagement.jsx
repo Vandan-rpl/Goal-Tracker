@@ -9,7 +9,7 @@ import {
 import useAuth from "../../hooks/useAuth";
 import CompletionRequests from "../../components/GoalCompletion/CompletionRequests";
 import { formatDisplayDate } from "../../utils/dateTime";
-import { getGoalStatusLabel } from "../../utils/goalStatus";
+import { getGoalDisplayStatus, getGoalStatusLabelOf } from "../../utils/goalStatus";
 import { getRoleLabel } from "../../utils/roleLabel";
 import { getGoalReviewActions } from "../../utils/goalReviewActions";
 import api from "../../services/api";
@@ -32,6 +32,7 @@ const STATUS_BADGE_CLASSES = {
   Completed: "bg-emerald-100 text-emerald-800",
   Postpone: "bg-orange-100 text-orange-800",
   Rejected: "bg-red-100 text-red-800",
+  "Completion Rejected": "bg-rose-100 text-rose-800",
   Cancelled: "bg-gray-200 text-gray-700",
 };
 const DEFAULT_STATUS_BADGE_CLASS = "bg-gray-100 text-gray-800";
@@ -550,10 +551,10 @@ const TeamManagement = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              STATUS_BADGE_CLASSES[goal.GoalStatus] || DEFAULT_STATUS_BADGE_CLASS
+                              STATUS_BADGE_CLASSES[getGoalDisplayStatus(goal)] || DEFAULT_STATUS_BADGE_CLASS
                             }`}
                           >
-                            {getGoalStatusLabel(goal.GoalStatus)}
+                            {getGoalStatusLabelOf(goal)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">

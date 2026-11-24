@@ -56,8 +56,22 @@ const GOAL_STATUSES_WITHOUT_DUE_REMINDER = Object.freeze([
   "Cancelled",
 ]);
 
+// Display labels for goal statuses (same as the frontend's
+// utils/goalStatus.js). Stored values are unchanged.
+const GOAL_STATUS_LABELS = {
+  Approved: "Final Approved",
+  "Completion Submitted": "Pending Completion Approval",
+  Completed: "Completion Approved",
+  "Business Head Approved": "CFO Approved",
+  "Review By Business Head": "Review By CFO",
+};
+
+const getGoalStatusLabel = (status) =>
+  GOAL_STATUS_LABELS[status] || status || "Draft";
+
 module.exports = {
   GoalMailEvent,
+  getGoalStatusLabel,
   GoalWindow,
   GoalWindowReminderStage,
   GoalDueReminderStages,

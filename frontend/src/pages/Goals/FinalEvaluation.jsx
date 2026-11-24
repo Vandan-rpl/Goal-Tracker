@@ -10,7 +10,7 @@ import {
   formatScorePercent,
   toSummaryQuarters,
 } from '../../utils/yearlyPerformance';
-import { getGoalStatusLabel } from "../../utils/goalStatus";
+import { getGoalStatusLabelOf } from "../../utils/goalStatus";
 
 // Final Evaluation shows the categories, the Quarter Score and the Year Score.
 const FINAL_EVALUATION_COLUMNS = EVALUATION_COLUMNS;
@@ -334,7 +334,7 @@ const FinalEvaluation = () => {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="px-2.5 py-1 inline-flex text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                          {getGoalStatusLabel(g.GoalStatus)}
+                          {getGoalStatusLabelOf(g)}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-700">

@@ -2,6 +2,7 @@ const { poolPromise, sql } = require("../config/db");
 const { notifyUser } = require("../services/notifyService");
 const { canApproveOrRejectGoal } = require("./goalController");
 const { isGoLiveOpenQuarter } = require("../utils/fiscalQuarter");
+const { getGoalStatusLabel } = require("../constants/goalConstants");
 
 // Goals waiting for approval (submitted, not yet finally approved). Drives
 // the dot on Goal Review & Approval.
@@ -242,8 +243,8 @@ const updateStatus = async (req, res) => {
             userId: employee.UserID,
             title: isApproved ? "Goal Approved" : "Goal Rejected",
             message: isApproved
-              ? `Your goal "${goalTitle}" has been approved (status: ${goalStatus}).`
-              : `Your goal "${goalTitle}" has been rejected (status: ${goalStatus}).`,
+              ? `Your goal "${goalTitle}" has been approved (status: ${getGoalStatusLabel(goalStatus)}).`
+              : `Your goal "${goalTitle}" has been rejected (status: ${getGoalStatusLabel(goalStatus)}).`,
             type: isApproved ? "GOAL_APPROVED" : "GOAL_REJECTED",
             referenceId: Number(goalId),
             referenceType: "Goal",

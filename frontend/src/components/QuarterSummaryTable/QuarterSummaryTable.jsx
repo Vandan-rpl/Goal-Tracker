@@ -28,13 +28,13 @@ function formatPercent(value) {
 const DEFAULT_COLUMNS = [
   { label: "Allocated", getValue: (quarter) => formatPercent(quarter.allocated) },
   {
-    label: "Achieved",
+    label: "Achieved (%)",
     emphasize: true,
     getValue: (quarter) =>
       quarter.isFuture ? "–" : formatPercent(quarter.achieved),
   },
   {
-    label: "Completed",
+    label: "Achieved (Count)",
     getValue: (quarter) =>
       quarter.isFuture
         ? "–"

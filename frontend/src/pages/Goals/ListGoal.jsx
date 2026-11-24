@@ -8,7 +8,10 @@ import api from "../../services/api";
 import { getFiscalQuarterOptions } from "../../utils/fiscalQuarter";
 import { canEditGoal } from "../../utils/goalEditability";
 import {
+  COMPLETION_REJECTED_STATUS,
+  getGoalDisplayStatus,
   getGoalStatusLabel,
+  getGoalStatusLabelOf,
   isGoalActiveForOwner,
 } from "../../utils/goalStatus";
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
@@ -18,11 +21,11 @@ const STATUS_OPTIONS = [
   "Draft",
   "Submitted",
   "HOD Approved",
-  "Business Head Approved",
   "Rejected",
   "Completion Submitted",
   "Completed",
   "Approved",
+  "Completion Rejected",
 ];
 
 const QUARTER_OPTIONS = getFiscalQuarterOptions();
@@ -280,12 +283,13 @@ const ListGoal = () => {
                                 ? "bg-sky-100 text-sky-800"
                                 : goal.GoalStatus === "Submitted"
                                   ? "bg-indigo-100 text-indigo-800"
-                                  : goal.GoalStatus === "Rejected"
+                                  : goal.GoalStatus === "Rejected" ||
+                                      getGoalDisplayStatus(goal) === COMPLETION_REJECTED_STATUS
                                     ? "bg-red-100 text-red-800"
                                     : "bg-amber-100 text-amber-800"
                           }`}
                         >
-                          {getGoalStatusLabel(goal.GoalStatus)}
+                          {getGoalStatusLabelOf(goal)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">

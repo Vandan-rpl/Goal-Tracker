@@ -5,7 +5,7 @@ import { Button } from "@mui/material";
 import api from "../../services/api";
 import TableLoader from "../../components/loaders/TableLoader";
 import EmptyState from "../../components/EmptyState/EmptyState";
-import { getGoalStatusLabel } from "../../utils/goalStatus";
+import { getGoalStatusLabelOf } from "../../utils/goalStatus";
 
 const JointGoals = () => {
   const [goals, setGoals] = useState([]);
@@ -77,7 +77,7 @@ const JointGoals = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {getGoalStatusLabel(goal.GoalStatus)}
+                        {getGoalStatusLabelOf(goal)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Link to={`/goals/view/${goal.GoalID}`} className="text-indigo-600 hover:text-indigo-900 font-semibold">View</Link>

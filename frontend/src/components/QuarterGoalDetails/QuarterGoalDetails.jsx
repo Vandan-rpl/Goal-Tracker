@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { getQuarterGoalDetails } from "../../services/dashboardService";
-import { getGoalStatusLabel } from "../../utils/goalStatus";
+import { getGoalStatusLabelOf } from "../../utils/goalStatus";
 import { formatDateForDisplay } from "../../utils/goalWorksheet";
 import { formatFiscalQuarterLabel } from "../../utils/fiscalQuarter";
 
@@ -85,7 +85,7 @@ function GoalSection({ title, goals, section, footer, emptyMessage, onOpenGoal }
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                     {goal.endDate ? formatDateForDisplay(goal.endDate) : "–"}
                   </td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{getGoalStatusLabel(goal.status)}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{getGoalStatusLabelOf({ GoalStatus: goal.status, CompletionRemark: goal.completionRemark })}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                     {goal.totalSubGoals
                       ? `${goal.completedSubGoals}/${goal.totalSubGoals} steps done`

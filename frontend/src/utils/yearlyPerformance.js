@@ -27,7 +27,7 @@ const formatWeightPercent = (value) =>
   `${Number(Number(value || 0).toFixed(2))}%`;
 
 export const QUARTER_SCORE_FORMULA =
-  "(Achieved + Brought Forward Achieved + Brought Forward Overdue Achieved + Overdue Achieved) ÷ (Allocated + weightage of earlier goals still pending at the start of the quarter) × 100";
+  "((Achieved + Brought Forward Achieved + Brought Forward Overdue Achieved + Overdue Achieved) ÷ (Allocated + weightage of earlier goals still pending at the start of the quarter)) × 100";
 
 export const QUARTER_SCORE_TITLE = `Quarter Score = ${QUARTER_SCORE_FORMULA} for this quarter.`;
 

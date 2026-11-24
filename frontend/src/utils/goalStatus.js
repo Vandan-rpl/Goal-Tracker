@@ -1,5 +1,6 @@
 // Display labels for goal statuses. Statuses not listed here are shown as-is.
 const GOAL_STATUS_LABELS = {
+  Approved: "Final Approved",
   "Completion Submitted": "Pending Completion Approval",
   Completed: "Completion Approved",
   // The Business Head role is shown as "CFO" in the UI; the stored status
@@ -10,6 +11,21 @@ const GOAL_STATUS_LABELS = {
 
 export const getGoalStatusLabel = (status) =>
   GOAL_STATUS_LABELS[status] || status || "Draft";
+
+// Not a stored status: a Final Approved goal whose completion request was
+// rejected (GoalStatus 'Approved' with a CompletionRemark; the remark is
+// cleared when completion is requested again). Shown and filtered as its
+// own status so it isn't mistaken for a plain Final Approved goal.
+export const COMPLETION_REJECTED_STATUS = "Completion Rejected";
+
+export const getGoalDisplayStatus = (goal) =>
+  goal?.GoalStatus === "Approved" && goal?.CompletionRemark
+    ? COMPLETION_REJECTED_STATUS
+    : goal?.GoalStatus;
+
+// Label for a goal row (uses the goal, not just its stored status).
+export const getGoalStatusLabelOf = (goal) =>
+  getGoalStatusLabel(getGoalDisplayStatus(goal));
 
 const pad2 = (value) => String(value).padStart(2, "0");
 

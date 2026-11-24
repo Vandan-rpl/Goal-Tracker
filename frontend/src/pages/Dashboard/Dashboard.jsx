@@ -24,6 +24,8 @@ import {
 import {
   getCompletionRejectionRemark,
   getGoalStatusLabel,
+  getGoalDisplayStatus,
+  getGoalStatusLabelOf,
   formatGoalStartDate,
   isGoalActiveForOwner,
   isGoalAwaitingStart,
@@ -40,9 +42,9 @@ const DASHBOARD_STATUSES = [
   "Draft",
   "Submitted",
   "HOD Approved",
-  "Business Head Approved",
   "Approved",
   "Completion Submitted",
+  "Completion Rejected",
   "Completed",
   "Rejected",
 ];
@@ -63,6 +65,7 @@ const STATUS_STYLES = {
   "Completion Submitted": { bg: "bg-sky-50", text: "text-sky-700", ring: "ring-sky-200", bar: "bg-sky-500", icon: Clock },
   "Completed": { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", bar: "bg-emerald-500", icon: CheckCircle2 },
   "Rejected": { bg: "bg-red-50", text: "text-red-700", ring: "ring-red-200", bar: "bg-red-500", icon: XCircle },
+  "Completion Rejected": { bg: "bg-rose-50", text: "text-rose-700", ring: "ring-rose-200", bar: "bg-rose-500", icon: XCircle },
   "Cancelled": { bg: "bg-gray-100", text: "text-gray-500", ring: "ring-gray-200", bar: "bg-gray-400", icon: XCircle },
   "Postpone": { bg: "bg-amber-50", text: "text-amber-700", ring: "ring-amber-200", bar: "bg-amber-400", icon: AlertTriangle },
 };
@@ -128,7 +131,7 @@ function GoalCard({ goal, onGoalChanged }) {
   const isCompleted = normalizeGoalStatus(goal.GoalStatus) === "completed";
   const style = isCompleted
     ? STATUS_STYLES.Completed
-    : STATUS_STYLES[goal.GoalStatus] || DEFAULT_STATUS_STYLE;
+    : STATUS_STYLES[getGoalDisplayStatus(goal)] || DEFAULT_STATUS_STYLE;
   const StatusIcon = style.icon;
   const totalSubGoals = Number(goal.TotalSubGoalCount || 0);
   const completedSubGoals = Number(goal.CompletedSubGoalCount || 0);
@@ -191,7 +194,7 @@ function GoalCard({ goal, onGoalChanged }) {
               className={`font-medium px-2 py-0.5 rounded-full ${style.bg} ${style.text} flex items-center gap-1`}
             >
               <StatusIcon size={13} />
-              {getGoalStatusLabel(goal.GoalStatus)}
+              {getGoalStatusLabelOf(goal)}
             </span>
             {totalSubGoals > 0 && (
               <span className="text-gray-500">
@@ -323,7 +326,8 @@ export default function GoalDashboard() {
   const statusCounts = useMemo(() => {
     const c = {};
     goals.forEach((g) => {
-      c[g.GoalStatus] = (c[g.GoalStatus] || 0) + 1;
+      const status = getGoalDisplayStatus(g);
+      c[status] = (c[status] || 0) + 1;
     });
     return c;
   }, [goals]);
@@ -374,7 +378,7 @@ export default function GoalDashboard() {
   const filtered =
     statusFilter === "All"
       ? goals
-      : goals.filter((goal) => goal.GoalStatus === statusFilter);
+      : goals.filter((goal) => getGoalDisplayStatus(goal) === statusFilter);
 
   if (loading) {
     return (
@@ -612,7 +616,7 @@ export default function GoalDashboard() {
                         </span>
                       </span>
                       <span className="shrink-0 text-xs font-semibold text-indigo-700">
-                        {getGoalStatusLabel(goal.GoalStatus)}
+                        {getGoalStatusLabelOf(goal)}
                       </span>
                     </Link>
                   </li>

@@ -4,7 +4,7 @@ const jointAccountabilityModel = require("../models/jointAccountabilityModel");
 const goalModel = require("../models/goalModel");
 const { notifyUser } = require("../services/notifyService");
 const { sendGoalMail } = require("../services/goalMailService");
-const { GoalMailEvent } = require("../constants/goalConstants");
+const { GoalMailEvent, getGoalStatusLabel } = require("../constants/goalConstants");
 const { validateSmartGoal } = require("../utils/smartGoalValidator");
 const {
   calculateQuarterAllocationAndAchievement,
@@ -59,6 +59,22 @@ const PENDING_APPROVAL_STATUSES = [
   "Review By Business Head",
   "Business Head Approved",
 ];
+
+// Status filter for goal lists. "Completion Rejected" is not stored: it is
+// a Final Approved goal whose completion request was rejected (remark kept
+// until completion is requested again). "Approved" then means the rest of
+// the Final Approved goals, so each goal matches exactly one filter. Other
+// statuses compare against @Status.
+const COMPLETION_REJECTED_STATUS = "Completion Rejected";
+const goalStatusFilterSql = (alias, status) => {
+  if (status === COMPLETION_REJECTED_STATUS) {
+    return `(${alias}.GoalStatus = 'Approved' AND ${alias}.CompletionRemark IS NOT NULL)`;
+  }
+  if (status === "Approved") {
+    return `(${alias}.GoalStatus = 'Approved' AND ${alias}.CompletionRemark IS NULL)`;
+  }
+  return `${alias}.GoalStatus = @Status`;
+};
 
 const MAX_GOALS_PER_QUARTER = 8;
 const MIN_GOAL_WEIGHTAGE = 5;
@@ -584,7 +600,7 @@ const getGoals = async (req, res) => {
     }
 
     if (status) {
-      query += ` AND g.GoalStatus = @Status`;
+      query += ` AND ${goalStatusFilterSql("g", status)}`;
       request.input("Status", sql.VarChar, status);
     }
 
@@ -1045,7 +1061,7 @@ const getAllEmployeeGoals = async (req, res) => {
 
     let query = `
             SELECT u.UserID, u.FirstName, u.LastName, u.Designation, u.Role,
-                   g.GoalID, g.GoalTitle, g.GoalStatus, g.CreatedDate, g.ModifiedDate, g.ApprovedDate, g.Quarter,
+                   g.GoalID, g.GoalTitle, g.GoalStatus, g.CompletionRemark, g.CreatedDate, g.ModifiedDate, g.ApprovedDate, g.Quarter,
                      CASE WHEN @RequesterRole IN ('CFO', 'ADMIN') OR (
                        u.BusinessHeadID = @ManagerID
                        AND (
@@ -1075,7 +1091,7 @@ const getAllEmployeeGoals = async (req, res) => {
     }
 
     if (status) {
-      query += ` AND g.GoalStatus = @Status`;
+      query += ` AND ${goalStatusFilterSql("g", status)}`;
       request.input("Status", sql.VarChar, status);
     }
 
@@ -1144,7 +1160,7 @@ const getTeamGoals = async (req, res) => {
     }
 
     if (status) {
-      query += ` AND g.GoalStatus = @Status`;
+      query += ` AND ${goalStatusFilterSql("g", status)}`;
       request.input("Status", sql.VarChar, status);
     }
 
@@ -2447,7 +2463,7 @@ const getSheetGoalAccessError = async (
   if (goal.GoalStatus !== "Draft") {
     return {
       status: 400,
-      message: `This goal is already ${goal.GoalStatus}; only Draft goals can be edited here. Reload the page.`,
+      message: `This goal is already ${getGoalStatusLabel(goal.GoalStatus)}; only Draft goals can be edited here. Reload the page.`,
     };
   }
   return {
@@ -3376,8 +3392,8 @@ const changeGoalStatus = async (req, res) => {
             userId: employee.UserID,
             title: isApproved ? "Goal Approved" : "Goal Rejected",
             message: isApproved
-              ? `Your goal "${goalTitle}" has been approved (status: ${goalStatus}).`
-              : `Your goal "${goalTitle}" has been rejected (status: ${goalStatus}).`,
+              ? `Your goal "${goalTitle}" has been approved (status: ${getGoalStatusLabel(goalStatus)}).`
+              : `Your goal "${goalTitle}" has been rejected (status: ${getGoalStatusLabel(goalStatus)}).`,
             type: isApproved ? "GOAL_APPROVED" : "GOAL_REJECTED",
             referenceId: Number(id),
             referenceType: "Goal",
@@ -3395,7 +3411,7 @@ const changeGoalStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Goal status updated to ${goalStatus} successfully.`,
+      message: `Goal status updated to ${getGoalStatusLabel(goalStatus)} successfully.`,
     });
   } catch (error) {
     if (transaction._aborted === false && transaction._acquiredConnection) {
@@ -3642,7 +3658,7 @@ const submitGoalReview = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Feedback submitted successfully. Goal status updated to '${newStatus}'.`,
+      message: `Feedback submitted successfully. Goal status updated to '${getGoalStatusLabel(newStatus)}'.`,
     });
   } catch (error) {
     if (transaction._aborted === false && transaction._acquiredConnection) {
@@ -3739,7 +3755,7 @@ const loadSubGoalForStatusChange = async (
   if (COMPLETION_STATUSES.includes(goal.GoalStatus)) {
     return {
       status: 400,
-      message: `Sub-goals are read-only while the goal is '${goal.GoalStatus}'.`,
+      message: `Sub-goals are read-only while the goal is '${getGoalStatusLabel(goal.GoalStatus)}'.`,
     };
   }
 
@@ -3957,7 +3973,7 @@ const loadGoalForCompletionDecision = async (transaction, goalId, userId) => {
   if (goal.GoalStatus !== "Completion Submitted") {
     return {
       status: 400,
-      message: `This goal is not awaiting completion approval (current status: ${goal.GoalStatus}).`,
+      message: `This goal is not awaiting completion approval (current status: ${getGoalStatusLabel(goal.GoalStatus)}).`,
     };
   }
 
@@ -4057,7 +4073,7 @@ const requestGoalCompletion = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: `Only Approved goals can be submitted for completion (current status: ${goal.GoalStatus}).`,
+        message: `Only Final Approved goals can be submitted for completion (current status: ${getGoalStatusLabel(goal.GoalStatus)}).`,
       });
     }
 

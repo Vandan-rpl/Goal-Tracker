@@ -4,7 +4,7 @@ const { sendEmail } = require("./notifyService");
 const logger = require("../utils/logger");
 const { PORTAL_NAME } = require("../constants/portalConstants");
 const { getFiscalQuarterBoundsFromLabel } = require("../utils/fiscalQuarter");
-const { GoalMailEvent, GoalWindow } = require("../constants/goalConstants");
+const { GoalMailEvent, GoalWindow, getGoalStatusLabel } = require("../constants/goalConstants");
 
 /**
  * ============================================================
@@ -252,7 +252,7 @@ const buildHtml = (definition, goal, context, recipient, testRecipient) => {
         ["Goal", goal.GoalTitle],
         ["Quarter", formatQuarter(goal.Quarter)],
         ["Goal owner", goal.OwnerName],
-        ["Current status", goal.GoalStatus],
+        ["Current status", getGoalStatusLabel(goal.GoalStatus)],
       ]
     : [];
   const rows = [...goalRows, ...definition.details(goal, context)].filter(

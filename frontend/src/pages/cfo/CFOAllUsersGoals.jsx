@@ -8,7 +8,11 @@ import {
 import { canEditGoal } from "../../utils/goalEditability";
 import useAuth from "../../hooks/useAuth";
 import { formatDisplayDate } from "../../utils/dateTime";
-import { getGoalStatusLabel } from "../../utils/goalStatus";
+import {
+  getGoalDisplayStatus,
+  getGoalStatusLabel,
+  getGoalStatusLabelOf,
+} from "../../utils/goalStatus";
 
 const statusBadgeClass = (status) => {
   if (status === "Completed") return "bg-blue-100 text-blue-700";
@@ -31,8 +35,8 @@ const STATUS_OPTIONS = [
   "Manager Approved",
   "Reviewed By HOD",
   "Review By Business Head",
-  "Business Head Approved",
   "Approved",
+  "Completion Rejected",
   "Completion Submitted",
   "Completed",
 ];
@@ -339,9 +343,9 @@ const CFOAllUsersGoals = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(goal.GoalStatus)}`}
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(getGoalDisplayStatus(goal))}`}
                       >
-                        {getGoalStatusLabel(goal.GoalStatus)}
+                        {getGoalStatusLabelOf(goal)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
