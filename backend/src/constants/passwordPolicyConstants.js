@@ -4,8 +4,8 @@
  * ============================================================
  */
 
-const PASSWORD_MIN_LENGTH = 12;
-const PASSWORD_MAX_LENGTH = 64;
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 15;
 
 // bcrypt ignores everything after the first 72 bytes (UTF-8).
 const PASSWORD_MAX_BYTES = 72;

@@ -5,8 +5,8 @@
 // current password and the last 3 passwords. Keep these definitions in
 // step with it.
 
-export const PASSWORD_MIN_LENGTH = 12;
-export const PASSWORD_MAX_LENGTH = 64;
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 15;
 export const PASSWORD_MIN_CHAR_TYPES = 3;
 
 export const CHAR_TYPES = [

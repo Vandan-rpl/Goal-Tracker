@@ -561,14 +561,19 @@ const TeamManagement = () => {
                           {(() => {
                             const actions = getGoalReviewActions(goal, role);
                             const busy = actionGoalId === goal.GoalID;
+                            // Edit / Approve / Reject available: no View link
+                            // (Edit opens the goal anyway).
+                            const showView = !(actions.canEdit && actions.canApproveReject);
                             return (
                               <>
-                                <Link
-                                  to={`/goals/view/${goal.GoalID}`}
-                                  className="text-indigo-600 hover:text-indigo-900 font-semibold"
-                                >
-                                  View
-                                </Link>
+                                {showView && (
+                                  <Link
+                                    to={`/goals/view/${goal.GoalID}`}
+                                    className="text-indigo-600 hover:text-indigo-900 font-semibold"
+                                  >
+                                    View
+                                  </Link>
+                                )}
                                 {actions.canEdit && (
                                   <Link
                                     to={`/goals/edit/${goal.GoalID}`}

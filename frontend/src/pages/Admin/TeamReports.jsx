@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   BarChart,
   Bar,
@@ -379,10 +379,33 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
 // renderDepartmentChart(departmentId): optional chart shown under the
 // summary cards (the Business Head's "Goals by Department").
 const TeamReports = ({ renderDepartmentChart }) => {
+  // Filters live in the URL (?fiscalYear=&departmentId=&employeeId=) so that
+  // coming back from Final Evaluation (or a goal) reopens the same view.
+  const [searchParams, setSearchParams] = useSearchParams();
   // null = the server's current fiscal year (it owns "today").
-  const [fiscalYear, setFiscalYear] = useState(null);
-  const [employeeId, setEmployeeId] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
+  const fiscalYearParam = Number(searchParams.get("fiscalYear"));
+  const fiscalYear = Number.isInteger(fiscalYearParam) && fiscalYearParam > 0 ? fiscalYearParam : null;
+  const employeeId = searchParams.get("employeeId") || "";
+  const departmentId = searchParams.get("departmentId") || "";
+  const updateFilters = useCallback(
+    (changes) =>
+      setSearchParams(
+        (params) => {
+          const next = new URLSearchParams(params);
+          Object.entries(changes).forEach(([key, value]) => {
+            if (value === "" || value == null) next.delete(key);
+            else next.set(key, String(value));
+          });
+          // The expanded quarter belongs to the previous view.
+          next.delete("quarter");
+          return next;
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  );
+  const setEmployeeId = (id) => updateFilters({ employeeId: id });
+  const setFiscalYear = (year) => updateFilters({ fiscalYear: year });
   const [report, setReport] = useState(null);
   const [filterOptions, setFilterOptions] = useState({
     employees: [],
@@ -449,10 +472,9 @@ const TeamReports = ({ renderDepartmentChart }) => {
 
   // Clears the employee when they are not in the new department.
   const selectDepartment = (id) => {
-    setDepartmentId(id);
-    if (id && selectedEmployee && String(selectedEmployee.DepartmentID) !== id) {
-      setEmployeeId("");
-    }
+    const clearEmployee =
+      id && selectedEmployee && String(selectedEmployee.DepartmentID) !== id;
+    updateFilters(clearEmployee ? { departmentId: id, employeeId: "" } : { departmentId: id });
   };
 
   return (
@@ -561,7 +583,8 @@ const TeamReports = ({ renderDepartmentChart }) => {
               </div>
             )}
 
-            {renderDepartmentChart?.(departmentId)}
+            {/* Department chart only for the team view, not one employee. */}
+            {!employeeId && renderDepartmentChart?.(departmentId)}
 
             {employeeId && selectedEmployee && report.YearlyPerformance ? (
               <IndividualView
