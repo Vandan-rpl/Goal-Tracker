@@ -139,6 +139,7 @@ const getDepartmentStats = async (req, res) => {
         // its owner's department.
         const query = `
             SELECT
+                d.DepartmentID AS departmentId,
                 d.DepartmentName AS department,
                 COUNT(g.GoalID) AS totalGoals,
                 SUM(CASE WHEN g.GoalStatus = 'Completed' THEN 1 ELSE 0 END) AS completedGoals

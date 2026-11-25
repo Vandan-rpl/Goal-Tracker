@@ -376,7 +376,9 @@ const IndividualView = ({ employee, yearlyPerformance }) => {
   );
 };
 
-const TeamReports = () => {
+// renderDepartmentChart(departmentId): optional chart shown under the
+// summary cards (the Business Head's "Goals by Department").
+const TeamReports = ({ renderDepartmentChart }) => {
   // null = the server's current fiscal year (it owns "today").
   const [fiscalYear, setFiscalYear] = useState(null);
   const [employeeId, setEmployeeId] = useState("");
@@ -558,6 +560,8 @@ const TeamReports = () => {
                 />
               </div>
             )}
+
+            {renderDepartmentChart?.(departmentId)}
 
             {employeeId && selectedEmployee && report.YearlyPerformance ? (
               <IndividualView

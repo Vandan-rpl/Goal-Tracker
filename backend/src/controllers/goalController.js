@@ -631,6 +631,9 @@ const getGoals = async (req, res) => {
 // the user marked it complete, not as Achieved in its own quarter.
 // Overdue: this quarter's goals whose End Date has passed and that are not
 // marked complete (count and weightage).
+// Overdue achieved / Brought forward overdue achieved: weightage of goals
+// completed in this quarter in those Final Evaluation categories
+// (evaluationCategory), so they match the Final Evaluation figures.
 // "Earlier" is decided by QuarterEndDate, never by comparing quarter labels.
 const getMyQuarterSummary = async (req, res) => {
   const userId = req.user?.UserID || req.user?.userId;
@@ -668,7 +671,9 @@ const getMyQuarterSummary = async (req, res) => {
              ISNULL(own.CountedGoalCount, 0) AS CountedGoalCount,
              ISNULL(broughtForward.Achieved, 0) AS BroughtForwardAchieved,
              ISNULL(overdue.OverdueCount, 0) AS OverdueCount,
-             ISNULL(overdue.OverdueWeightage, 0) AS OverdueWeightage
+             ISNULL(overdue.OverdueWeightage, 0) AS OverdueWeightage,
+             ISNULL(lateCompleted.OverdueAchieved, 0) AS OverdueAchieved,
+             ISNULL(lateCompleted.BroughtForwardOverdueAchieved, 0) AS BroughtForwardOverdueAchieved
       FROM FiscalQuarters q
       -- Rules: constants/goalQuarterRules.js
       OUTER APPLY (
@@ -694,6 +699,17 @@ const getMyQuarterSummary = async (req, res) => {
           AND g.Quarter = q.Label
           AND ${isOverdueGoal("g", "@Today")}
       ) overdue
+      OUTER APPLY (
+        SELECT SUM(CASE WHEN c.Category = 'OverdueAchieved' THEN c.Weightage ELSE 0 END) AS OverdueAchieved,
+               SUM(CASE WHEN c.Category = 'BroughtForwardOverdue' THEN c.Weightage ELSE 0 END) AS BroughtForwardOverdueAchieved
+        FROM dbo.Goals g
+        CROSS APPLY (
+          SELECT ${evaluationCategory("g", "q.StartDate")} AS Category,
+                 COALESCE(g.AchievedWeightage, g.Weightage, 0) AS Weightage
+        ) c
+        WHERE g.UserID = @UserID
+          AND ${isCompletedWithin("g", "q.StartDate", "q.EndDate")}
+      ) lateCompleted
       ORDER BY q.EndDate
     `);
 
@@ -718,6 +734,8 @@ const getMyQuarterSummary = async (req, res) => {
             countedGoalCount: row.CountedGoalCount,
             overdueCount: row.OverdueCount,
             overdueWeightage: roundPercent(row.OverdueWeightage),
+            overdueAchieved: roundPercent(row.OverdueAchieved),
+            broughtForwardOverdueAchieved: roundPercent(row.BroughtForwardOverdueAchieved),
           };
         }),
       },

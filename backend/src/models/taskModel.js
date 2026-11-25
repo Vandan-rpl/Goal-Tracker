@@ -745,7 +745,8 @@ const listDashboardTasks = async (db, userId) => {
 /**
  * CFO Reports & Analytics: every task (personal and project), any owner,
  * any year; utils/moduleReport filters and counts them. FiscalYear is the
- * fiscal year the task was assigned (or added, for self-added tasks).
+ * fiscal year the task was assigned (or added, for self-added tasks),
+ * ReportMonth its calendar month (1-12).
  * ReportStatus groups (never overlapping): Completed, else Overdue
  * (IS_OVERDUE), else Not Started, else In Progress (Started / In Progress).
  * Source: Project (ProjectID set), Self-added (AssignedBy NULL), Assigned.
@@ -773,6 +774,7 @@ const listReportTasks = async (db) => {
             ${fullName("assigner")} AS AssignedByName,
             ${addedOn} AS AddedDate,
             ${sqlFiscalYear(addedOn)} AS FiscalYear,
+            MONTH(${addedOn}) AS ReportMonth,
             CASE
                 WHEN t.ProjectID IS NOT NULL THEN N'Project'
                 WHEN t.AssignedBy IS NULL THEN N'Self-added'

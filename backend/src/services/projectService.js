@@ -364,7 +364,7 @@ const assignProjectTask = async (projectIdParam, body = {}, user) => {
         assigneeId = id;
     }
 
-    const input = checkAssignInput(body, errors);
+    const input = checkAssignInput(body, errors, { byBusinessHead: isBusinessHead(user) });
 
     if (errors.length > 0) throw validationError(errors);
 

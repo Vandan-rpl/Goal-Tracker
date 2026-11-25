@@ -33,8 +33,6 @@ const normalizedStatus = (status) =>
 const STATUS_OPTIONS = [
   "HOD Approved",
   "Manager Approved",
-  "Reviewed By HOD",
-  "Review By Business Head",
   "Approved",
   "Completion Rejected",
   "Completion Submitted",

@@ -1221,7 +1221,8 @@ const listDashboardIdeas = async (db, userId) => {
 /**
  * CFO Reports & Analytics: every submitted idea (Drafts left out), any
  * owner, any year; utils/moduleReport filters and counts them. FiscalYear
- * is the fiscal year the idea was submitted in. ReportStatus groups (never
+ * is the fiscal year the idea was submitted in, ReportMonth its calendar
+ * month (1-12). ReportStatus groups (never
  * overlapping):
  *   HOD/Manager approval pending     Submitted
  *   Final approval pending (by IT Team)           Pending Final Approval
@@ -1251,6 +1252,7 @@ const listReportIdeas = async (db) => {
             submitterDept.DepartmentName,
             ${fullName("lead")} AS ReportingManagerName,
             ${sqlFiscalYear(submittedOn)} AS FiscalYear,
+            MONTH(${submittedOn}) AS ReportMonth,
             CASE
                 WHEN i.Status = N'${IdeaStatus.SUBMITTED}' THEN N'HOD/Manager approval pending'
                 WHEN i.Status = N'${IdeaStatus.PENDING_FINAL_APPROVAL}' THEN N'Final approval pending (by IT Team)'

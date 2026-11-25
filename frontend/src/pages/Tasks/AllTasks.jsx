@@ -16,7 +16,7 @@ const AllTasks = () => {
       barSubtitle="Organization overview"
       description={
         isBusinessHead
-          ? "Every employee's tasks. Type a CFO's Remark on any task and press Submit to email it to the employee."
+          ? "Every employee's tasks. Type a CFO's Remark on any task and press Submit to email it to the employee. Tasks you assign get the CFO's Remark \"Assigned by CFO\" by default."
           : "Every employee's tasks (view only)."
       }
       footer={`${isBusinessHead ? "Use Assign Task to assign new tasks. " : ""}The Overdue box shows only overdue tasks; click it again to show all.`}

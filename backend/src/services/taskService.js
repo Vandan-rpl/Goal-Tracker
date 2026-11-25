@@ -739,14 +739,21 @@ const mailResult = (result) => ({
         : `The change was saved, but the email to the employee could not be sent (${result.reason}).`,
 });
 
-// Task Name / Priority / Due Date / CFO's Remarks of a Business Head
-// assignment (Assign Task and project assignments). Pushes to `errors`.
-const checkAssignInput = (body, errors) => ({
-    taskName: checkTaskName(body.taskName, errors),
-    priority: checkPriority(body.priority, errors),
-    dueDate: checkDueDate(body.dueDate, errors, { notPast: true }),
-    cfoRemarks: checkRemarks(body.cfoRemarks, "CFO's Remarks", errors),
-});
+// CFO's Remarks of a task the CFO (Business Head) assigns with none typed.
+const DEFAULT_CFO_ASSIGN_REMARKS = "Assigned by CFO";
+
+// Task Name / Priority / Due Date / CFO's Remarks of an assignment (Assign
+// Task and project assignments). Pushes to `errors`. byBusinessHead: blank
+// remarks become DEFAULT_CFO_ASSIGN_REMARKS.
+const checkAssignInput = (body, errors, { byBusinessHead = false } = {}) => {
+    const cfoRemarks = checkRemarks(body.cfoRemarks, "CFO's Remarks", errors);
+    return {
+        taskName: checkTaskName(body.taskName, errors),
+        priority: checkPriority(body.priority, errors),
+        dueDate: checkDueDate(body.dueDate, errors, { notPast: true }),
+        cfoRemarks: cfoRemarks ?? (byBusinessHead ? DEFAULT_CFO_ASSIGN_REMARKS : null),
+    };
+};
 
 /**
  * Insert one Business Head assignment and its Assigned log row, inside the
@@ -799,7 +806,7 @@ const assignTask = async (body = {}, user) => {
     if (!employeeId) errors.push("Employee is required.");
     else if (employeeId === businessHeadId) errors.push("You cannot assign a task to yourself.");
 
-    const input = checkAssignInput(body, errors);
+    const input = checkAssignInput(body, errors, { byBusinessHead: true });
 
     if (errors.length > 0) throw validationError(errors);
 
@@ -855,7 +862,7 @@ const assignTasks = async (body = {}, user) => {
             else rowErrors.push("Invalid project.");
         }
 
-        const input = checkAssignInput(safeRow, rowErrors);
+        const input = checkAssignInput(safeRow, rowErrors, { byBusinessHead: true });
         rowErrors.forEach((message) => errors.push(`Row ${index + 1}: ${message}`));
         return { employeeId, projectId, input };
     });

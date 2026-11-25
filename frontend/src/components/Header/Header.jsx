@@ -272,10 +272,6 @@ const Header = () => {
               <TrackChangesOutlinedIcon fontSize="small" />
               Goal Tracker
             </ToggleButton>
-            <ToggleButton value="ideas">
-              <LightbulbOutlinedIcon fontSize="small" />
-              Innovation Ideas
-            </ToggleButton>
             <ToggleButton value="tasks">
               <AssignmentTurnedInOutlinedIcon fontSize="small" />
               <Badge
@@ -286,6 +282,10 @@ const Header = () => {
               >
                 Task Tracker
               </Badge>
+            </ToggleButton>
+            <ToggleButton value="ideas">
+              <LightbulbOutlinedIcon fontSize="small" />
+              Innovation Ideas
             </ToggleButton>
           </ToggleButtonGroup>
           )}

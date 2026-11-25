@@ -44,36 +44,106 @@ const PageLayout = ({ subtitle, children }) => (
 // Departments left out of the Business Head's "Goals by Department" chart.
 const BUSINESS_HEAD_HIDDEN_DEPARTMENTS = ["human resources", "hr"];
 
-// Admin / CFO organisation view. Also the Business Head's "Organisation
-// overview" tab, which passes hiddenDepartments.
-const OrganisationReports = ({ hiddenDepartments = [] }) => {
-  const [dashboardStats, setDashboardStats] = useState(null);
+// "Goals by Department" bar chart, with its own fetch. Shown on the
+// Admin / CFO organisation view and inside the Business Head's team report
+// (which passes hiddenDepartments and the selected departmentId: "" = all
+// departments, else only that one).
+const DepartmentGoalsChart = ({ hiddenDepartments = [], departmentId = "" }) => {
   const [departmentStats, setDepartmentStats] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const hiddenKey = hiddenDepartments.join("|");
+
+  useEffect(() => {
+    let ignore = false;
+    const hidden = hiddenKey ? hiddenKey.split("|") : [];
+
+    api
+      .get("analytics/department-stats")
+      .then((res) => {
+        if (ignore || !res.data.success) return;
+        setDepartmentStats(
+          (res.data.data || []).filter(
+            (row) =>
+              !hidden.includes(String(row.department || "").trim().toLowerCase()),
+          ),
+        );
+      })
+      .catch((err) => {
+        console.error("Failed to load department stats", err);
+        if (!ignore) {
+          setError(err.response?.data?.message || "Failed to load department data.");
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [hiddenKey]);
+
+  const chartData = departmentId
+    ? departmentStats.filter((row) => String(row.departmentId) === String(departmentId))
+    : departmentStats;
+
+  return (
+    <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h2 className="text-lg font-bold text-gray-800 mb-4">
+        Goals by Department
+      </h2>
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium mb-4">
+          {error}
+        </div>
+      )}
+      {loading ? (
+        <div className="text-sm text-gray-500 text-center py-12">Loading...</div>
+      ) : chartData.length > 0 ? (
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData} maxBarSize={80}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+            <XAxis dataKey="department" tick={{ fontSize: 12 }} />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Legend />
+            <Bar
+              dataKey="totalGoals"
+              name="Total Goals"
+              fill="#526198"
+              radius={[4, 4, 0, 0]}
+            />
+            <Bar
+              dataKey="completedGoals"
+              name="Completed"
+              fill="#059669"
+              radius={[4, 4, 0, 0]}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="text-sm text-gray-500 text-center py-12 border border-dashed border-gray-200 rounded-xl">
+          No department data available.
+        </div>
+      )}
+    </section>
+  );
+};
+
+// Admin / CFO organisation view.
+const OrganisationReports = () => {
+  const [dashboardStats, setDashboardStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchAll = async () => {
+    const fetchStats = async () => {
       try {
         setLoading(true);
         setError("");
-
-        const [statsRes, breakdownRes] = await Promise.all([
-          api.get("analytics/dashboard-stats"),
-          api.get("analytics/department-stats"),
-        ]);
-
+        const statsRes = await api.get("analytics/dashboard-stats");
         if (statsRes.data.success) setDashboardStats(statsRes.data.data);
-        if (breakdownRes.data.success) {
-          setDepartmentStats(
-            (breakdownRes.data.data || []).filter(
-              (row) =>
-                !hiddenDepartments.includes(
-                  String(row.department || "").trim().toLowerCase(),
-                ),
-            ),
-          );
-        }
       } catch (err) {
         console.error("Failed to load reports", err);
         setError(
@@ -84,7 +154,7 @@ const OrganisationReports = ({ hiddenDepartments = [] }) => {
       }
     };
 
-    fetchAll();
+    fetchStats();
   }, []);
 
   if (loading) {
@@ -133,92 +203,25 @@ const OrganisationReports = ({ hiddenDepartments = [] }) => {
         </div>
       )}
 
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">
-          Goals by Department
-        </h2>
-        {departmentStats.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={departmentStats}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-              <XAxis dataKey="department" tick={{ fontSize: 12 }} />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Legend />
-              <Bar
-                dataKey="totalGoals"
-                name="Total Goals"
-                fill="#526198"
-                radius={[4, 4, 0, 0]}
-              />
-              <Bar
-                dataKey="completedGoals"
-                name="Completed"
-                fill="#059669"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="text-sm text-gray-500 text-center py-12 border border-dashed border-gray-200 rounded-xl">
-            No department data available.
-          </div>
-        )}
-      </section>
+      <DepartmentGoalsChart />
     </>
   );
 };
 
-const BUSINESS_HEAD_TABS = [
-  {
-    key: "team",
-    label: "Team performance",
-    subtitle:
-      "Team goal progress by member, limited to active employees under you.",
-  },
-  {
-    key: "organisation",
-    label: "Organisation overview",
-    subtitle: "Organization-wide goal reporting and completion trends.",
-  },
-];
-
-// Business Head: the Manager/HOD team report, with the original
-// organisation view kept as a second tab.
-const BusinessHeadReports = () => {
-  const [activeTab, setActiveTab] = useState("team");
-  const tab = BUSINESS_HEAD_TABS.find((t) => t.key === activeTab);
-
-  return (
-    <PageLayout subtitle={tab.subtitle}>
-      <div className="flex gap-2 border-b border-gray-200" role="tablist">
-        {BUSINESS_HEAD_TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={t.key === activeTab}
-            onClick={() => setActiveTab(t.key)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${
-              t.key === activeTab
-                ? "border-indigo-600 text-indigo-700"
-                : "border-transparent text-gray-500 hover:text-gray-800"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {activeTab === "team" ? (
-        <TeamReports />
-      ) : (
-        <OrganisationReports
+// Business Head: the Manager/HOD team report with the "Goals by
+// Department" chart under its summary cards, following its department filter.
+const BusinessHeadReports = () => (
+  <PageLayout subtitle="Team goal progress by member, limited to active employees under you.">
+    <TeamReports
+      renderDepartmentChart={(departmentId) => (
+        <DepartmentGoalsChart
           hiddenDepartments={BUSINESS_HEAD_HIDDEN_DEPARTMENTS}
+          departmentId={departmentId}
         />
       )}
-    </PageLayout>
-  );
-};
+    />
+  </PageLayout>
+);
 
 const Reports = () => {
   const { user } = useAuth();

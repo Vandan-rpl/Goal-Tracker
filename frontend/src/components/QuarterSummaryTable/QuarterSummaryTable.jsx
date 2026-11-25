@@ -11,8 +11,8 @@ import { formatFiscalQuarterLabel } from "../../utils/fiscalQuarter";
 // visiting a goal and coming back.
 //
 // quarters: [{ quarter, isFuture, allocated, achieved, completedCount,
-//              countedGoalCount, overdueCount, overdueWeightage,
-//              broughtForwardAchieved }]
+//              countedGoalCount, overdueAchieved,
+//              broughtForwardOverdueAchieved, broughtForwardAchieved }]
 // employeeId / achievementRule: passed to QuarterGoalDetails.
 // children: extra rows rendered after the quarters (e.g. a yearly average).
 // columns: optional [{ label, title, getValue(quarter), emphasize }] replacing
@@ -41,15 +41,17 @@ const DEFAULT_COLUMNS = [
         : `${quarter.completedCount} of ${quarter.countedGoalCount}`,
   },
   {
-    label: "Overdue",
-    title:
-      "This quarter's goals whose End Date has passed and that are not marked complete.",
+    label: "Overdue achieved",
+    title: "Goals ending in their own quarter, completed in this later quarter.",
     getValue: (quarter) =>
-      quarter.isFuture
-        ? "–"
-        : Number(quarter.overdueCount || 0) === 0
-          ? "0"
-          : `${quarter.overdueCount} (${formatPercent(quarter.overdueWeightage)})`,
+      quarter.isFuture ? "–" : formatPercent(quarter.overdueAchieved),
+  },
+  {
+    label: "Brought forward overdue achieved",
+    title:
+      "Goals whose End Date is in a later quarter, completed in this quarter, after their End Date's quarter.",
+    getValue: (quarter) =>
+      quarter.isFuture ? "–" : formatPercent(quarter.broughtForwardOverdueAchieved),
   },
   {
     label: "Brought forward achieved",

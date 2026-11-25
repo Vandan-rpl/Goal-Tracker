@@ -26,19 +26,18 @@ import { DASHBOARD_COLORS as C, dashboardCellClass as cellClass, dashboardHeadCl
 import { formatFiscalYearLabel } from "../../utils/fiscalQuarter";
 
 // CFO Reports & Analytics for the Innovation Ideas and Task Tracker modules:
-// the same two views as the Goal Tracker's Business Head report.
-//   Team performance       active employees under the CFO, by member, with
-//                          a click-through to one member's ideas / tasks
-//   Organisation overview  every employee, by department
+// team performance: active employees under the CFO, by member, with a
+// click-through to one member's ideas / tasks.
 // Every number comes from the module's GET /reports (utils/moduleReport on
 // the backend). Each page passes its labels, colours and item columns.
 
-const TABS = [
-  { key: "team", label: "Team performance" },
-  { key: "organisation", label: "Organisation overview" },
-];
-
 const fiscalYearLabel = formatFiscalYearLabel;
+
+// Months of a fiscal year (Apr - Mar, named by its end year), in order.
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const FISCAL_MONTHS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
+const monthLabel = (month, fiscalYear) =>
+  `${MONTH_NAMES[month - 1]} ${month >= 4 ? fiscalYear - 1 : fiscalYear}`;
 
 // Table of count rows (team members or departments): name, total, one
 // column per status, completion %. onSelect makes rows clickable.
@@ -156,15 +155,16 @@ const ModuleReports = ({
 }) => {
   const snapshotColors = { [completion.status]: C.green, Remaining: C.slate };
   const Plural = nounPlural.charAt(0).toUpperCase() + nounPlural.slice(1);
-  const [scope, setScope] = useState("team");
   // null = the server's current fiscal year.
   const [fiscalYear, setFiscalYear] = useState(null);
+  // "" = the whole fiscal year, else a calendar month (1-12).
+  const [month, setMonth] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   // The last response and the filters it was for; loading while the
   // filters have changed since.
   const [result, setResult] = useState({ key: null, report: null, error: "" });
-  const requestKey = JSON.stringify([scope, fiscalYear, departmentId, employeeId]);
+  const requestKey = JSON.stringify([fiscalYear, month, departmentId, employeeId]);
   const loading = result.key !== requestKey;
   const { report, error } = result;
 
@@ -172,10 +172,11 @@ const ModuleReports = ({
     let ignore = false;
 
     fetchReport({
-      scope,
+      scope: "team",
       fiscalYear: fiscalYear ?? undefined,
+      month: month || undefined,
       departmentId: departmentId || undefined,
-      employeeId: scope === "team" ? employeeId || undefined : undefined,
+      employeeId: employeeId || undefined,
     })
       .then((data) => {
         if (!ignore) setResult({ key: requestKey, report: data, error: "" });
@@ -193,23 +194,14 @@ const ModuleReports = ({
     return () => {
       ignore = true;
     };
-  }, [fetchReport, getApiError, noun, requestKey, scope, fiscalYear, departmentId, employeeId]);
+  }, [fetchReport, getApiError, noun, requestKey, fiscalYear, month, departmentId, employeeId]);
 
-  const isTeam = scope === "team";
   const statuses = report?.Statuses || [];
   const employees = report?.Employees || [];
   const departmentEmployees = departmentId
     ? employees.filter((employee) => String(employee.DepartmentID) === departmentId)
     : employees;
   const selectedEmployee = employees.find((employee) => String(employee.UserID) === employeeId);
-
-  // Department lists differ per tab, so a department filter does not carry over.
-  const changeScope = (next) => {
-    if (next === scope) return;
-    setScope(next);
-    setDepartmentId("");
-    setEmployeeId("");
-  };
 
   // Clears the employee when they are not in the new department.
   const selectDepartment = (id) => {
@@ -227,19 +219,17 @@ const ModuleReports = ({
     counts: member.counts,
     completionPercent: member.completionPercent,
   }));
-  const departmentRows = (report?.DepartmentBreakdown || []).map((row) => ({
-    key: row.department,
-    name: row.department,
-    total: row.total,
-    counts: row.counts,
-    completionPercent: row.completionPercent,
-  }));
   const chartMembers = memberRows.filter((row) => row.total > 0);
   const hasItems = (report?.Summary?.total || 0) > 0;
 
-  const description = isTeam
-    ? `${Plural} of the active employees under you, by team member.`
-    : `${Plural} across the organisation, by department.`;
+  const selectedFiscalYear = fiscalYear ?? report?.CurrentFiscalYear ?? null;
+  const periodLabel = report
+    ? report.Month
+      ? monthLabel(report.Month, report.FiscalYear)
+      : fiscalYearLabel(report.FiscalYear)
+    : "";
+
+  const description = `${Plural} of the active employees under you, by team member.`;
 
   const filters = (
     <>
@@ -254,19 +244,17 @@ const ModuleReports = ({
           ))}
         </select>
       </label>
-      {isTeam && (
-        <label>
-          <span className={taskFilterLabelClass}>Employee</span>
-          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={taskFilterControlClass}>
-            <option value="">All team members</option>
-            {departmentEmployees.map((employee) => (
-              <option key={employee.UserID} value={String(employee.UserID)}>
-                {employee.employeeName}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      <label>
+        <span className={taskFilterLabelClass}>Employee</span>
+        <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={taskFilterControlClass}>
+          <option value="">All team members</option>
+          {departmentEmployees.map((employee) => (
+            <option key={employee.UserID} value={String(employee.UserID)}>
+              {employee.employeeName}
+            </option>
+          ))}
+        </select>
+      </label>
       <label>
         <span className={taskFilterLabelClass}>Fiscal year</span>
         <select
@@ -283,6 +271,23 @@ const ModuleReports = ({
           ))}
         </select>
       </label>
+      <label>
+        <span className={taskFilterLabelClass}>Month</span>
+        <select
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          disabled={!selectedFiscalYear}
+          className={taskFilterControlClass}
+        >
+          <option value="">All months</option>
+          {selectedFiscalYear &&
+            FISCAL_MONTHS.map((m) => (
+              <option key={m} value={String(m)}>
+                {monthLabel(m, selectedFiscalYear)}
+              </option>
+            ))}
+        </select>
+      </label>
     </>
   );
 
@@ -295,25 +300,6 @@ const ModuleReports = ({
       filters={filters}
       footer={footer}
     >
-      <div className="mb-5 flex gap-2 overflow-x-auto overflow-y-hidden border-b border-[#cbd4e2]" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            aria-selected={tab.key === scope}
-            onClick={() => changeScope(tab.key)}
-            className={`-mb-px shrink-0 cursor-pointer whitespace-nowrap border-b-2 px-3 py-2 sm:px-4 text-sm font-semibold ${
-              tab.key === scope
-                ? "border-[#2c3e82] text-[#2c3e82]"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       <DashboardError message={error} />
 
       {loading ? (
@@ -321,7 +307,7 @@ const ModuleReports = ({
       ) : (
         report && (
           <div className="space-y-6">
-            {isTeam && selectedEmployee && (
+            {selectedEmployee && (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-lg font-bold text-[#30415f]">{selectedEmployee.employeeName}</h2>
                 <button type="button" onClick={() => setEmployeeId("")} className={taskSecondaryButtonClass}>
@@ -357,12 +343,12 @@ const ModuleReports = ({
               />
             ) : (
               <DashboardEmptyState
-                title={`No ${nounPlural} in ${fiscalYearLabel(report.FiscalYear)}`}
-                description="Try another fiscal year or department."
+                title={`No ${nounPlural} in ${periodLabel}`}
+                description="Try another month, fiscal year or department."
               />
             )}
 
-            {isTeam && !selectedEmployee && (
+            {!selectedEmployee && (
               <>
                 {chartMembers.length > 0 && (
                   <StackedStatusChart
@@ -393,26 +379,7 @@ const ModuleReports = ({
               </>
             )}
 
-            {!isTeam && departmentRows.length > 0 && (
-              <>
-                <StackedStatusChart
-                  title={`${Plural} by department`}
-                  rows={departmentRows}
-                  statuses={statuses}
-                  statusColors={statusColors}
-                />
-                <CountsTable
-                  title="Departments"
-                  nameLabel="Department"
-                  rows={departmentRows}
-                  statuses={statuses}
-                  statusColors={statusColors}
-                  completionLabel={completion.label}
-                />
-              </>
-            )}
-
-            {isTeam && selectedEmployee && hasItems && (
+            {selectedEmployee && hasItems && (
               <DashboardListTable title={`${selectedEmployee.employeeName}'s ${nounPlural}`}>
                 <thead>
                   <tr>

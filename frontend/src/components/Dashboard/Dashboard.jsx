@@ -20,10 +20,11 @@ import { dashboardCellClass, dashboardHeadClass } from "./dashboardStyles";
 const panelTitleClass =
   "border-b border-[#cbd4e2] bg-[#f4f6fa] px-4 py-2.5 text-sm font-bold text-[#30415f] wrap-break-word";
 
-export const SummaryCard = ({ label, value, accent }) => (
+// className: extra classes (e.g. rounded corners on the Goal Tracker dashboard).
+export const SummaryCard = ({ label, value, accent, className = "" }) => (
   // min-w-0 + overflow-wrap keep long labels ("Implementation %") and
   // values inside narrow cards instead of spilling past the border.
-  <div className="flex min-w-0 flex-col justify-between border border-[#cbd4e2] bg-[#f4f6fa] px-3 py-3 sm:px-4 sm:py-4">
+  <div className={`flex min-w-0 flex-col justify-between border border-[#cbd4e2] bg-[#f4f6fa] px-3 py-3 sm:px-4 sm:py-4 ${className}`}>
     <p className="text-[11px] font-bold uppercase leading-tight tracking-wide text-[#30415f] wrap-break-word [overflow-wrap:anywhere]">
       {label}
     </p>

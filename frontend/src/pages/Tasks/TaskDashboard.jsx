@@ -94,13 +94,12 @@ const TaskDashboard = () => {
       ) : summary && (
         <div className="space-y-6">
           <SummaryCards
-            gridClassName="grid-cols-2 md:grid-cols-3 xl:grid-cols-5"
+            gridClassName="grid-cols-2 xl:grid-cols-4"
             cards={[
               { label: "Total Tasks", value: summary.total, accent: "text-[#2c3e82]" },
               { label: "Completed", value: summary.completed, accent: "text-[#1f9d6b]" },
               { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
               { label: "High Priority", value: summary.highPriority, accent: "text-[#b3403f]" },
-              { label: "Completion %", value: `${summary.completionPercent}%`, accent: "text-[#2c3e82]" },
             ]}
           />
 

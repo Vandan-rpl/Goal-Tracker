@@ -33,6 +33,10 @@ import {
 import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 import QuarterSummaryTable from "../../components/QuarterSummaryTable/QuarterSummaryTable";
 import { formatDisplayDate } from "../../utils/dateTime";
+import TaskWorkbookFrame, {
+  taskFilterControlClass,
+} from "../../components/TaskWorkbookFrame/TaskWorkbookFrame";
+import { ChartPanel, SummaryCard } from "../../components/Dashboard/Dashboard";
 
 const MAX_GOALS_PER_QUARTER = 8;
 // One status card per goal status, in lifecycle order (same statuses as the
@@ -70,6 +74,27 @@ const STATUS_STYLES = {
   "Postpone": { bg: "bg-amber-50", text: "text-amber-700", ring: "ring-amber-200", bar: "bg-amber-400", icon: AlertTriangle },
 };
 const DEFAULT_STATUS_STYLE = STATUS_STYLES["Draft"];
+
+// Number colour of each status card, in the Ideas / Tasks dashboard palette.
+const STATUS_ACCENTS = {
+  "Draft": "text-[#7c8ba3]",
+  "Submitted": "text-[#d08a1c]",
+  "HOD Approved": "text-[#d08a1c]",
+  "Manager Approved": "text-[#d08a1c]",
+  "Approved": "text-[#2c3e82]",
+  "Completion Submitted": "text-[#d08a1c]",
+  "Completion Rejected": "text-[#b3403f]",
+  "Completed": "text-[#1f9d6b]",
+  "Rejected": "text-[#b3403f]",
+};
+const DEFAULT_STATUS_ACCENT = "text-[#2c3e82]";
+
+// Rounded corners for the dashboard panels (title strip clipped to them).
+const PANEL_RADIUS = "overflow-hidden rounded-xl";
+
+// Empty-state note inside a panel.
+const panelEmptyClass =
+  "rounded-lg border border-dashed border-[#cbd4e2] bg-[#f8fafc] p-4 text-sm text-slate-500";
 
 const PRIORITY_STYLES = {
   High: "bg-orange-100 text-orange-700",
@@ -359,9 +384,6 @@ export default function GoalDashboard() {
   const currentQuarterAchieved = Math.round(
     Number(currentQuarterAllocation.achieved || 0),
   );
-  const currentQuarterUnallocated = Math.round(
-    Number(currentQuarterAllocation.unallocated || 0),
-  );
 
   // Every status card: the fixed lifecycle list, then any other status the
   // user's goals are in.
@@ -410,35 +432,28 @@ export default function GoalDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <TaskWorkbookFrame
+      barLabel="GOAL TRACKER"
+      barSubtitle="Dashboard"
+      badge="DASHBOARD"
+      title="My Goals"
+      description="Your goals for the current fiscal year."
+    >
+      <div className="space-y-6">
 
-        <div>
-          <p className="text-xs font-medium text-gray-400 mb-1">Your goals</p>
-          <h1 className="text-2xl font-bold text-gray-900">My Goals</h1>
-        </div>
-
-        <section
-          className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm"
-          aria-label={`${formatFiscalQuarterLabel(currentQuarterAllocation.quarter)} progress`}
+        <ChartPanel
+          className={PANEL_RADIUS}
+          title={`${formatFiscalQuarterLabel(currentQuarterAllocation.quarter)} progress · ${currentQuarterAllocation.goalCount} of ${MAX_GOALS_PER_QUARTER} goals`}
         >
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-sm font-semibold text-gray-800">
-              {formatFiscalQuarterLabel(currentQuarterAllocation.quarter)} progress
-            </p>
-            <p className="shrink-0 text-xs font-medium text-gray-500">
-              {currentQuarterAllocation.goalCount} of {MAX_GOALS_PER_QUARTER} goals
-            </p>
-          </div>
 
           {currentQuarterAllocation.goalCount === 0 ? (
-            <p className="mt-4 text-sm text-gray-400">
+            <p className={panelEmptyClass}>
               No goals added for this quarter yet
             </p>
           ) : (
             <>
               <div
-                className="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-100"
+                className="h-3 overflow-hidden rounded-full bg-[#e3e9f2]"
                 role="progressbar"
                 aria-label="Quarterly goal weightage allocated"
                 aria-valuemin={0}
@@ -447,13 +462,13 @@ export default function GoalDashboard() {
                 aria-valuetext={`Allocated ${currentQuarterAllocated}%, achieved ${currentQuarterAchieved}%`}
               >
                 <div
-                  className="relative h-full rounded-full bg-indigo-200 transition-all"
+                  className="relative h-full rounded-full bg-[#9fb0d6] transition-all"
                   style={{
                     width: `${Math.max(0, Math.min(100, currentQuarterAllocation.allocated))}%`,
                   }}
                 >
                   <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-indigo-600 transition-all"
+                    className="absolute inset-y-0 left-0 rounded-full bg-[#1f9d6b] transition-all"
                     style={{
                       width: `${Math.max(
                         0,
@@ -466,14 +481,14 @@ export default function GoalDashboard() {
                   />
                 </div>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-[#30415f]">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-indigo-200" />
+                  <span className="size-2.5 rounded-full bg-[#9fb0d6]" />
                   Allocated {currentQuarterAllocated}%
                 </span>
                 <span aria-hidden="true">·</span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-indigo-600" />
+                  <span className="size-2.5 rounded-full bg-[#1f9d6b]" />
                   Achieved {currentQuarterAchieved}%
                 </span>
                 {/* {currentQuarterAllocation.performancePercentage != null && (
@@ -487,85 +502,65 @@ export default function GoalDashboard() {
                     </span>
                   </>
                 )} */}
-                <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-gray-100 ring-1 ring-gray-200" />
-                  {currentQuarterUnallocated}% unallocated
-                </span>
               </div>
             </>
           )}
-        </section>
+        </ChartPanel>
 
         {/* Q1–Q4 of the current fiscal year, calculated on the server. */}
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-800">Quarter summary</h2>
+        <ChartPanel className={PANEL_RADIUS} title="Quarter summary">
           {quarterSummary?.quarters?.length ? (
-            <div className="mt-4">
-              <QuarterSummaryTable
-                quarters={quarterSummary.quarters}
-                currentQuarter={currentQuarterLabel}
-              />
-            </div>
+            <QuarterSummaryTable
+              quarters={quarterSummary.quarters}
+              currentQuarter={currentQuarterLabel}
+            />
           ) : (
-            <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+            <p className={panelEmptyClass}>
               Quarter summary will appear when you have goals.
             </p>
           )}
-        </section>
+        </ChartPanel>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-800">Goal status</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <ChartPanel className={PANEL_RADIUS} title="Goal status">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {statusCards.map((status) => (
                 <a
                   key={status}
                   href="#goal-list"
                   onClick={() => setStatusFilter(status)}
-                  className="rounded-xl border border-gray-100 bg-gray-50 p-3 transition hover:border-indigo-200 hover:bg-indigo-50"
+                  className="grid min-w-0 rounded-lg transition hover:brightness-95"
                 >
-                  <span className="block text-xs text-gray-500">{getGoalStatusLabel(status)}</span>
-                  <span className="mt-1 block text-xl font-bold text-gray-900">
-                    {statusCounts[status] || 0}
-                  </span>
+                  <SummaryCard
+                    label={getGoalStatusLabel(status)}
+                    value={statusCounts[status] || 0}
+                    accent={STATUS_ACCENTS[status] || DEFAULT_STATUS_ACCENT}
+                    className="rounded-lg"
+                  />
                 </a>
               ))}
             </div>
             {goals.length === 0 && (
-              <p className="mt-3 text-xs text-gray-400">No goals to summarize yet.</p>
+              <p className="mt-3 text-xs text-slate-500">No goals to summarize yet.</p>
             )}
-          </section>
+          </ChartPanel>
 
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-800">
-              Sub-goal progress · {formatFiscalQuarterLabel(currentQuarterLabel)}
-            </h2>
+          <ChartPanel className={PANEL_RADIUS} title={`Sub-goal progress · ${formatFiscalQuarterLabel(currentQuarterLabel)}`}>
             {currentQuarterGoalCount === 0 ? (
-              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+              <p className={panelEmptyClass}>
                 No goals in this quarter yet.
               </p>
             ) : (
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                {[
-                  ["Completed", subGoalStatusCounts.completed, "text-emerald-700"],
-                  ["Pending", subGoalStatusCounts.pending, "text-gray-600"],
-                ].map(([label, count, color]) => (
-                  <div key={label} className="rounded-xl bg-gray-50 p-3">
-                    <span className="block text-xs text-gray-500">{label}</span>
-                    <span className={`mt-1 block text-xl font-bold ${color}`}>
-                      {count}
-                    </span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-3">
+                <SummaryCard label="Completed" value={subGoalStatusCounts.completed} accent="text-[#1f9d6b]" className="rounded-lg" />
+                <SummaryCard label="Pending" value={subGoalStatusCounts.pending} accent="text-[#d08a1c]" className="rounded-lg" />
               </div>
             )}
-          </section>
+          </ChartPanel>
 
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-800">Needs attention (Overdue goals)</h2>
+          <ChartPanel className={PANEL_RADIUS} title="Needs attention (Overdue goals)">
             {dashboardSummary?.needsAttention?.length ? (
-              <ul className="mt-3 divide-y divide-gray-100">
+              <ul className="divide-y divide-[#e3e9f2]">
                 {dashboardSummary.needsAttention.map((goal) => (
                   <li key={goal.GoalID} className="py-2.5 first:pt-0 last:pb-0">
                     <Link
@@ -575,12 +570,12 @@ export default function GoalDashboard() {
                       <span className="truncate font-medium text-gray-800">
                         {goal.GoalTitle}
                       </span>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
                         goal.AttentionReason === "Rejected"
-                          ? "bg-red-50 text-red-700"
+                          ? "border border-[#b3403f]/30 bg-[#b3403f]/10 text-[#b3403f]"
                           : goal.AttentionReason === "Overdue"
-                            ? "bg-amber-50 text-amber-700"
-                            : "bg-gray-100 text-gray-600"
+                            ? "border border-[#d08a1c]/30 bg-[#d08a1c]/10 text-[#a86d12]"
+                            : "border border-[#cbd4e2] bg-[#f4f6fa] text-[#30415f]"
                       }`}>
                         {goal.AttentionReason}
                       </span>
@@ -589,16 +584,15 @@ export default function GoalDashboard() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+              <p className={panelEmptyClass}>
                 No goals need attention.
               </p>
             )}
-          </section>
+          </ChartPanel>
 
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-800">Upcoming deadlines</h2>
+          <ChartPanel className={PANEL_RADIUS} title="Upcoming deadlines">
             {dashboardSummary?.upcomingDeadlines?.length ? (
-              <ul className="mt-3 divide-y divide-gray-100">
+              <ul className="divide-y divide-[#e3e9f2]">
                 {dashboardSummary.upcomingDeadlines.map((goal) => (
                   <li key={goal.GoalID} className="py-2.5 first:pt-0 last:pb-0">
                     <Link
@@ -615,7 +609,7 @@ export default function GoalDashboard() {
                             : `${goal.DaysUntilDeadline}d left`}
                         </span>
                       </span>
-                      <span className="shrink-0 text-xs font-semibold text-indigo-700">
+                      <span className="shrink-0 text-xs font-semibold text-[#2c3e82]">
                         {getGoalStatusLabelOf(goal)}
                       </span>
                     </Link>
@@ -623,30 +617,30 @@ export default function GoalDashboard() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-400">
+              <p className={panelEmptyClass}>
                 No deadlines in the next 14 days.
               </p>
             )}
-          </section>
+          </ChartPanel>
 
         </div>
 
         {/* Goal list */}
         <div id="goal-list" className="space-y-4 scroll-mt-6">
-          <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-xl border border-[#cbd4e2] bg-[#f4f6fa] p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-gray-800">Your goals</h2>
-              <p className="mt-1 text-xs text-gray-400">
+              <h2 className="text-sm font-bold text-[#30415f]">Your goals</h2>
+              <p className="mt-1 text-xs text-slate-500">
                 {filtered.length} {filtered.length === 1 ? "goal" : "goals"}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Filter size={14} className="shrink-0 text-gray-400" />
+              <Filter size={14} className="shrink-0 text-[#30415f]" />
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 aria-label="Filter goals by status"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-indigo-500 sm:w-auto"
+                className={`${taskFilterControlClass} rounded-lg sm:w-auto`}
               >
                 <option value="All">All statuses ({goals.length})</option>
                 {statusCards.map((status) => (
@@ -661,10 +655,10 @@ export default function GoalDashboard() {
             <GoalCard key={goal.GoalID} goal={goal} onGoalChanged={fetchGoals} />
           ))}
           {filtered.length === 0 && (
-            <div className="text-center py-16 text-gray-400 text-sm">No goals match this filter.</div>
+            <div className="text-center py-16 text-slate-500 text-sm">No goals match this filter.</div>
           )}
         </div>
       </div>
-    </div>
+    </TaskWorkbookFrame>
   );
 }

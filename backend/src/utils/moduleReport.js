@@ -10,10 +10,12 @@ const { getFiscalQuarter } = require("./fiscalQuarter");
  *   team          active employees under the CFO (Users.BusinessHeadID),
  *                 filterable by department and employee
  *   organisation  every employee, filterable by department
- * Both are for one fiscal year (Apr - Mar, named by its end year).
+ * Both are for one fiscal year (Apr - Mar, named by its end year),
+ * optionally narrowed to one calendar month of it.
  *
  * Each module's model returns one row per idea / task with UserID,
- * EmployeeName, DepartmentID, DepartmentName, FiscalYear, ReportStatus and
+ * EmployeeName, DepartmentID, DepartmentName, FiscalYear, ReportMonth (1-12),
+ * ReportStatus and
  * its category column; buildReport counts everything from those rows, so
  * cards, charts and tables always agree.
  * ============================================================
@@ -39,7 +41,7 @@ const parseOptionalId = (value, label) => {
 };
 
 /**
- * ?scope=team|organisation&fiscalYear=YYYY&departmentId=N&employeeId=N
+ * ?scope=team|organisation&fiscalYear=YYYY&month=1-12&departmentId=N&employeeId=N
  * (all optional; employeeId only applies to the team view)
  */
 const parseReportQuery = (query = {}) => {
@@ -56,9 +58,18 @@ const parseReportQuery = (query = {}) => {
         fiscalYear = Number(query.fiscalYear);
     }
 
+    let month = null;
+    if (query.month != null && query.month !== "") {
+        if (!/^\d{1,2}$/.test(String(query.month)) || Number(query.month) < 1 || Number(query.month) > 12) {
+            throw new AppError("Month must be a number from 1 to 12.", StatusCodes.BAD_REQUEST);
+        }
+        month = Number(query.month);
+    }
+
     return {
         scope,
         fiscalYear,
+        month,
         departmentId: parseOptionalId(query.departmentId, "Department ID"),
         employeeId: scope === "team" ? parseOptionalId(query.employeeId, "Employee ID") : null,
     };
@@ -130,7 +141,7 @@ const buildReport = ({
     completedStatus,
     completionBase,
 }) => {
-    const { scope, fiscalYear, departmentId, employeeId } = query;
+    const { scope, fiscalYear, month = null, departmentId, employeeId } = query;
     const currentFiscalYear = getCurrentFiscalYear();
     const isTeam = scope === "team";
 
@@ -151,6 +162,7 @@ const buildReport = ({
     const inDepartment = (row) => departmentId == null || Number(row.DepartmentID) === departmentId;
     const filteredRows = scopedRows.filter((row) =>
         Number(row.FiscalYear) === fiscalYear
+        && (month == null || Number(row.ReportMonth) === month)
         && inDepartment(row)
         && (employeeId == null || Number(row.UserID) === employeeId));
 
@@ -205,6 +217,7 @@ const buildReport = ({
     return {
         Scope: scope,
         FiscalYear: fiscalYear,
+        Month: month,
         CurrentFiscalYear: currentFiscalYear,
         FiscalYearOptions: fiscalYearOptions,
         Departments: departments,
