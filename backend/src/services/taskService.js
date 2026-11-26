@@ -441,13 +441,13 @@ const assertBusinessHead = (user, message = "Only the Business Head can do this.
 
 const getMyTasks = (user, query) => listTasks("my", user, query);
 
-const DASHBOARD_STATUSES = ["Completed", "Overdue", "In Progress"];
+const DASHBOARD_STATUSES = ["Completed", "Overdue", "In Progress", "Not Started"];
 
 /**
  * Dashboard of the logged-in user's own tasks (every role). The cards,
  * breakdown tables and charts are all counted here from the same rows as
  * the task list, so they always agree:
- * Completed + Overdue + In Progress = Total.
+ * Completed + Overdue + In Progress + Not Started = Total.
  */
 const getDashboard = async (user) => {
     const pool = await poolPromise;
@@ -469,6 +469,7 @@ const getDashboard = async (user) => {
             completed,
             overdue: statusCount("Overdue"),
             inProgress: statusCount("In Progress"),
+            notStarted: statusCount("Not Started"),
             highPriority: priorityBreakdown.find((row) => row.label === "High").count,
             completionPercent: total === 0 ? 0 : Math.round((completed / total) * 100),
         },

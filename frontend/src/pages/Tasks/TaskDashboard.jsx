@@ -21,6 +21,7 @@ const STATUS_COLORS = {
   Completed: C.green,
   Overdue: C.red,
   "In Progress": C.navy,
+  "Not Started": C.slate,
 };
 
 const PRIORITY_COLORS = {
@@ -38,12 +39,13 @@ const STATUS_TAG_CLASSES = {
   Completed: "bg-emerald-100 text-emerald-800 border-emerald-200",
   Overdue: "bg-red-100 text-red-800 border-red-200",
   "In Progress": "bg-blue-100 text-blue-800 border-blue-200",
+  "Not Started": "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 /**
- * Task Tracker Dashboard: the logged-in user's own tasks (self-added or
- * assigned by the Business Head; no project tasks). Only Completed,
- * In Progress and Overdue tasks are counted. Read-only. Every number comes
+ * Task Tracker Dashboard: every task of the logged-in user (self-added,
+ * assigned by the CFO or a project Manager, project tasks included),
+ * whatever its status. Read-only. Every number comes
  * from the backend (GET /tasks/dashboard), so cards, tables and charts
  * always match. Layout pieces are shared with the Ideas dashboard
  * (components/Dashboard).
@@ -84,8 +86,8 @@ const TaskDashboard = () => {
       barSubtitle="Dashboard"
       badge="DASHBOARD"
       title="My Dashboard"
-      description="Your own tasks and tasks assigned to you by the CFO. Project tasks are not included."
-      footer="Only Completed, In Progress and Overdue tasks are counted. A task that is not Completed and is past its due date counts as Overdue only."
+      description="Your tasks added or assigned this month: added by you, assigned to you by the CFO, and project tasks."
+      footer="Every task is counted once: Completed, else Overdue (not Completed and past its due date), else Not Started, else In Progress (Started or In Progress)."
     >
       <DashboardError message={error} />
 
@@ -106,7 +108,7 @@ const TaskDashboard = () => {
           {!hasTasks ? (
             <DashboardEmptyState
               title="No tasks to show yet"
-              description="Tasks that are In Progress, Completed or Overdue will show up here. Add tasks in My Tasks."
+              description="Tasks added or assigned to you this month will show up here. Add tasks in My Tasks."
             />
           ) : (
             <>
@@ -121,6 +123,7 @@ const TaskDashboard = () => {
                   <tr>
                     <th className={`${headClass} w-14 text-center`}>Sr.No.</th>
                     <th className={headClass}>Task Name</th>
+                    <th className={headClass}>Project</th>
                     <th className={headClass}>Priority</th>
                     <th className={headClass}>Due Date</th>
                     <th className={headClass}>Status</th>
@@ -133,6 +136,7 @@ const TaskDashboard = () => {
                     <tr key={task.TaskID} className="hover:bg-[#f7f9fc]">
                       <td className={`${cellClass} text-center bg-[#f4f6fa]`}>{index + 1}</td>
                       <td className={`${cellClass} whitespace-pre-wrap wrap-break-word`}>{task.TaskName}</td>
+                      <td className={`${cellClass} whitespace-pre-wrap wrap-break-word`}>{task.ProjectName || "—"}</td>
                       <td className={cellClass}>
                         <span className={`${tagClass} ${getTaskPriorityClasses(task.Priority)}`}>{task.Priority}</span>
                       </td>

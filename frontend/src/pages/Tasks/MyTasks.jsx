@@ -239,7 +239,7 @@ const MyTasks = () => {
           )}
         </>
       }
-      footer="Tasks added or assigned in the selected months are listed in the order they were added. New tasks can be added only when the range ends in the current month; each month starts with a fresh sheet. On tasks assigned by the CFO you can change only Status and User's Remarks. CFO's Remarks are added by the CFO."
+      footer="Tasks added or assigned in the selected months are listed in the order they were added. New tasks can be added only when the range ends in the current month; each month starts with a fresh sheet. Project tasks are listed here too, with their project name. On tasks assigned to you (by the CFO or a project Manager) you can change only Status and User's Remarks. CFO's Remarks are added by the CFO."
     >
       {error && (
         <div className="mb-4 border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>

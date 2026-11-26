@@ -244,7 +244,7 @@ const AssignedIdeas = () => {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h1 className="text-2xl font-bold text-gray-900">Ideas Review &amp; Approval</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Ideas where you are the reporting manager or the final approver, and ideas from your team members, with
+            Ideas where you are the reporting manager or the final approver, with
             where each one is pending. Ideas waiting for your decision are listed first.
           </p>
         </div>

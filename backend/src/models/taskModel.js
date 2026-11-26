@@ -1,5 +1,5 @@
 const { sql } = require("../config/db");
-const { TaskStatus, TASK_DONE_RECENT_DAYS, TASK_BUSINESS_HEAD_ROLE } = require("../constants/taskConstants");
+const { TaskStatus, TASK_DONE_RECENT_DAYS } = require("../constants/taskConstants");
 const { sqlFiscalYear } = require("../utils/moduleReport");
 
 /**
@@ -256,8 +256,9 @@ const buildTaskListWhere = ({ scope, viewerId, filters }) => {
     const params = [["ViewerID", sql.Int, viewerId]];
 
     if (scope === "my") {
-        // Project tasks are listed only in their project, not in My Tasks
-        conditions.push("t.UserID = @ViewerID AND t.ProjectID IS NULL");
+        // Every task of the user, project tasks included (they are also
+        // listed on their project's page).
+        conditions.push("t.UserID = @ViewerID");
     } else if (scope === "team") {
         conditions.push(DIRECT_REPORT_CONDITION("owner"));
     }
@@ -370,8 +371,7 @@ const countUnseenTasks = async (db, userId) => {
             FROM dbo.Tasks
             WHERE UserID = @UserID
               AND IsSeenByUser = 0
-              AND IsDeleted = 0
-              AND ProjectID IS NULL;
+              AND IsDeleted = 0;
         `);
 
     return result.recordset[0].UnseenCount;
@@ -692,18 +692,18 @@ const listAssignedByMonth = async (db, { assignerId, from, to }) => {
 };
 
 /**
- * Dashboard (every user, own tasks only): the user's personal tasks that
- * they added themselves or the Business Head assigned to them. Project
- * tasks are left out. Only Completed, In Progress and Overdue tasks
- * (IS_OVERDUE, any open status past its due date) are returned, each with
- * one DashboardStatus so the three never overlap: Completed, else Overdue,
- * else In Progress. No 30-day limit on Completed tasks.
+ * Dashboard (every user, own tasks only): every task of the user added or
+ * assigned in the current month (like My Tasks' default view), self-added
+ * or assigned (by the CFO or a project Manager), project tasks included,
+ * whatever their status. Each gets one DashboardStatus so the groups never
+ * overlap: Completed, else Overdue (IS_OVERDUE, any open status past its
+ * due date), else Not Started, else In Progress (Started / In Progress).
+ * No 30-day limit on Completed tasks.
  */
 const listDashboardTasks = async (db, userId) => {
 
     const result = await db.request()
         .input("UserID", sql.Int, userId)
-        .input("BusinessHeadRole", sql.NVarChar(50), TASK_BUSINESS_HEAD_ROLE)
         .query(`
             SELECT
                 t.TaskID,
@@ -714,24 +714,23 @@ const listDashboardTasks = async (db, userId) => {
                 t.CFORemarks,
                 t.UserRemarks,
                 t.CompletedDate,
+                p.ProjectName,
                 ${IS_OVERDUE} AS IsOverdue,
                 CASE
                     WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN N'Completed'
                     WHEN ${IS_OVERDUE} = 1 THEN N'Overdue'
+                    WHEN t.Status = N'${TaskStatus.NOT_STARTED}' THEN N'Not Started'
                     ELSE N'In Progress'
                 END AS DashboardStatus
             FROM dbo.Tasks t
-            LEFT JOIN dbo.Users assigner
-                ON assigner.UserID = t.AssignedBy
+            LEFT JOIN dbo.Projects p
+                ON p.ProjectID = t.ProjectID
             WHERE t.UserID = @UserID
               AND t.IsDeleted = 0
-              AND t.ProjectID IS NULL
-              AND (t.AssignedBy IS NULL OR UPPER(assigner.Role) = @BusinessHeadRole)
-              AND (
-                    t.Status = N'${TaskStatus.COMPLETED}'
-                 OR t.Status = N'${TaskStatus.IN_PROGRESS}'
-                 OR ${IS_OVERDUE} = 1
-              )
+              -- Current month only: added or assigned this month (same date
+              -- as the My Tasks month sheet).
+              AND COALESCE(t.AssignedDate, t.CreatedDate) >= CAST(DATEFROMPARTS(YEAR(${TODAY}), MONTH(${TODAY}), 1) AS DATETIME2)
+              AND COALESCE(t.AssignedDate, t.CreatedDate) <  CAST(DATEADD(MONTH, 1, DATEFROMPARTS(YEAR(${TODAY}), MONTH(${TODAY}), 1)) AS DATETIME2)
             ORDER BY
                 CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN 1 ELSE 0 END,
                 CASE WHEN t.Status = N'${TaskStatus.COMPLETED}' THEN NULL ELSE t.DueDate END,
