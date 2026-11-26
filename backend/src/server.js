@@ -12,6 +12,8 @@ const { logTaskMailMode } = require('./services/taskMailService');
 const { logGoalMailMode } = require('./services/goalMailService');
 const { startGoalDueReminderJob } = require('./jobs/goalDueReminderJob');
 const { startGoalWindowReminderJob } = require('./jobs/goalWindowReminderJob');
+const { logGoalEntryOverrideMode } = require('./utils/fiscalQuarter');
+const logger = require('./utils/logger');
 
 // Forgot Password OTPs and reset tokens are hashed with OTP_SECRET; refuse to
 // start without it rather than store weak hashes.
@@ -25,6 +27,7 @@ try {
 logAuthMailMode();
 logTaskMailMode();
 logGoalMailMode();
+logGoalEntryOverrideMode(logger);
 
 // Import Routers
 const authRoutes = require('./routes/authRoutes');

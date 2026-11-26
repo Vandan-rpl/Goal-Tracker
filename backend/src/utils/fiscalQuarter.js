@@ -235,11 +235,88 @@ function isGoLiveOpenQuarter(label, date = new Date()) {
   return getGoLiveOpenQuarters(date).some((quarter) => quarter.label === label);
 }
 
+// Temporary goal-entry override. Opens goal entry for ONE quarter between two
+// dates (inclusive), outside the normal window. Read here only, like the
+// go-live switch above; it only adds a quarter to getOpenGoalEntryQuarters
+// (no approval-window exemption). Outside its dates, or when off, the normal
+// window applies with no change needed.
+//   GOAL_ENTRY_OVERRIDE_ENABLED=true
+//   GOAL_ENTRY_OVERRIDE_QUARTER=Q4        (or a full label, e.g. Q4-2027)
+//   GOAL_ENTRY_OVERRIDE_START=2026-11-27  (YYYY-MM-DD, inclusive)
+//   GOAL_ENTRY_OVERRIDE_END=2026-11-28    (YYYY-MM-DD, inclusive)
+// "Q4" alone = the first Q4 that has not ended by the start date. Dates are
+// compared as calendar days in the server's time zone, the same clock as the
+// normal windows. An invalid setting turns the override off.
+function readGoalEntryOverride() {
+  const env = (name) => String(process.env[name] || "").trim();
+  if (env("GOAL_ENTRY_OVERRIDE_ENABLED").toLowerCase() !== "true") {
+    return { enabled: false };
+  }
+
+  const startKey = toDateKey(env("GOAL_ENTRY_OVERRIDE_START"));
+  const endKey = toDateKey(env("GOAL_ENTRY_OVERRIDE_END"));
+  if (!startKey || !endKey || startKey > endKey) {
+    return {
+      enabled: false,
+      error: "GOAL_ENTRY_OVERRIDE_START / GOAL_ENTRY_OVERRIDE_END must be YYYY-MM-DD dates, start on or before end.",
+    };
+  }
+
+  const quarterSetting = env("GOAL_ENTRY_OVERRIDE_QUARTER").toUpperCase();
+  let bounds = null;
+  if (/^Q[1-4]-\d{4}$/.test(quarterSetting)) {
+    bounds = getFiscalQuarterBoundsFromLabel(quarterSetting);
+  } else if (/^Q[1-4]$/.test(quarterSetting)) {
+    // The first quarter with that number that ends on or after the start date.
+    let candidate = getFiscalQuarterBounds(startKey);
+    for (let i = 0; i < 4 && !candidate.label.startsWith(`${quarterSetting}-`); i += 1) {
+      candidate = getFiscalQuarterBoundsFromLabel(
+        getNextFiscalQuarter(toDate(candidate.endKey)).label,
+      );
+    }
+    bounds = candidate;
+  }
+  if (!bounds) {
+    return {
+      enabled: false,
+      error: `GOAL_ENTRY_OVERRIDE_QUARTER "${quarterSetting}" must be Q1-Q4 or a label such as Q4-2027.`,
+    };
+  }
+
+  return { enabled: true, quarter: bounds, startKey, endKey };
+}
+
+// The override's quarter bounds while today is within its dates, else null.
+function getGoalEntryOverrideQuarter(date = new Date()) {
+  const override = readGoalEntryOverride();
+  if (!override.enabled) return null;
+  const todayKey = formatLocalDateKey(toDate(date));
+  return todayKey >= override.startKey && todayKey <= override.endKey
+    ? override.quarter
+    : null;
+}
+
+// Called once at startup (server.js).
+function logGoalEntryOverrideMode(logger = console) {
+  const override = readGoalEntryOverride();
+  if (override.error) {
+    logger.error(`[GOAL ENTRY OVERRIDE] Ignored: ${override.error}`);
+  } else if (override.enabled) {
+    logger.warn(`[GOAL ENTRY OVERRIDE] Goal entry for ${override.quarter.label} is open from ${override.startKey} to ${override.endKey} (inclusive).`);
+  }
+}
+
 // Quarters goals can be entered for now, in order: the go-live quarters,
-// plus the normal target quarter (the one after the current quarter) while
-// the normal goal-creation window is open.
+// the override quarter while its dates are current, plus the normal target
+// quarter (the one after the current quarter) while the normal
+// goal-creation window is open. A quarter opened by more than one rule is
+// listed once.
 function getOpenGoalEntryQuarters(date = new Date()) {
   const quarters = [...getGoLiveOpenQuarters(date)];
+  const overrideQuarter = getGoalEntryOverrideQuarter(date);
+  if (overrideQuarter && !quarters.some((quarter) => quarter.label === overrideQuarter.label)) {
+    quarters.push(overrideQuarter);
+  }
   if (getGoalCreationWindow(date).isOpen) {
     const target = getFiscalQuarterBoundsFromLabel(
       getNextFiscalQuarter(getFiscalQuarter(date).quarterEndDate).label,
@@ -268,4 +345,6 @@ module.exports = {
   getGoLiveOpenQuarters,
   isGoLiveOpenQuarter,
   getOpenGoalEntryQuarters,
+  getGoalEntryOverrideQuarter,
+  logGoalEntryOverrideMode,
 };
