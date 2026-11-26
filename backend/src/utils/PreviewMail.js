@@ -78,6 +78,7 @@ const sampleGoal = {
     GoalNumber: 101,
     GoalTitle: "Cut month-end close time from 8 to 5 days",
     Quarter: "Q4-2027",
+    OwnerID: 7,
     OwnerName: "Rahul Shah",
     GoalStatus: "Approved",
 };
@@ -194,13 +195,6 @@ const GOAL_MAILS = [
         to: "The goal owner",
         status: STATUS.ACTIVE,
     },
-    {
-        event: GoalMailEvent.FINAL_EVALUATION_GENERATED,
-        title: "Final evaluation available",
-        when: "Final Evaluation is finalized for a user.",
-        to: "The employee",
-        status: STATUS.ACTIVE,
-    },
 ];
 
 const AUTH_MAILS = [
@@ -262,10 +256,14 @@ const buildModules = async () => {
             ...mail,
             previews: contexts.map(([variant, extra]) => {
                 const context = { ...sampleContext, ...extra };
+                // Mails to the goal owner go to the owner (no "Goal owner" row).
+                const recipient = mail.to === "The goal owner"
+                    ? { ...sampleRecipient, userId: sampleGoal.OwnerID }
+                    : sampleRecipient;
                 return {
                     variant,
                     subject: finalSubject(buildGoalSubject(def, goal, context)),
-                    html: buildGoalHtml(def, goal, context, sampleRecipient, testRecipient),
+                    html: buildGoalHtml(def, goal, context, recipient, testRecipient),
                 };
             }),
         };

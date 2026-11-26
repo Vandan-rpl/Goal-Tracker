@@ -1,7 +1,5 @@
 const { poolPromise, sql } = require('../config/db');
 const { notifyUser } = require('../services/notifyService');
-const { sendGoalMail } = require('../services/goalMailService');
-const { GoalMailEvent } = require('../constants/goalConstants');
 const {
     getFiscalQuarter,
     getFiscalQuarterBounds,
@@ -560,13 +558,6 @@ const finalizeFinalEvaluation = async (req, res) => {
                 referenceId: targetUserId,
                 referenceType: 'Evaluation',
                 createdBy: requesterId,
-            });
-            sendGoalMail(GoalMailEvent.FINAL_EVALUATION_GENERATED, {
-                recipientId: targetUserId,
-                userId: targetUserId,
-                fiscalYear: evaluation.YearlyPerformance.FiscalYear,
-                weightedScore: evaluation.WeightedScore,
-                status: evaluation.GoalCompletionStatus,
             });
         } catch (notifyErr) {
             console.error(`[NOTIF FAILED] finalizeFinalEvaluation notify step. targetUserId=${targetUserId}:`, notifyErr);

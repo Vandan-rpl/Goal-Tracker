@@ -542,10 +542,9 @@ export default function TaskSheet({
       (isNewRow && isAssignMode) || (task?.IsAssignedByBusinessHead && draft.dueDate !== task.DueDate) ? today : undefined;
     // The Project column shows it instead when there is one.
     const projectTag = !project && !showProjectColumn && task?.ProjectName;
-    // My Tasks shows "Assigned by ..." in the CFO's Remarks cell, other sheets above the task name.
-    const showAssignerTag = Boolean(task?.IsAssignedByBusinessHead) && !nested;
-    const assignerInRemarks = showAssignerTag && !isAssignMode && !project;
-    const assignerInName = showAssignerTag && !assignerInRemarks;
+    // "Assigned by ..." tag above the task name on Assign Task and project sheets. My Tasks shows
+    // no tag: the CFO's Remark already reads "Assigned by CFO" by default.
+    const assignerInName = Boolean(task?.IsAssignedByBusinessHead) && !nested && (isAssignMode || Boolean(project));
 
     const rowBackground = isNew ? "bg-blue-50" : nested ? "bg-[#fafbfd]" : "bg-white";
 
@@ -706,13 +705,6 @@ export default function TaskSheet({
 
           {showCfoRemarks && (
           <td className={`${cellClass} min-w-[220px]`}>
-            {assignerInRemarks && (
-              <div className="flex flex-wrap gap-1 px-2 pt-1.5">
-                <span className={`${tagClass} border-blue-200 bg-blue-50 text-[#2c3e82]`}>
-                  Assigned by {getAssignerLabel(task)}
-                </span>
-              </div>
-            )}
             {editable.cfoRemarks ? (
               <textarea
                 rows={1}

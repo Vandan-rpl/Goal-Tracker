@@ -18,7 +18,6 @@ const GoalMailEvent = Object.freeze({
   COMPLETION_REJECTED: "completionRejected",
   QUARTERLY_UPDATE_SUBMITTED: "quarterlyUpdateSubmitted",
   HOD_RATING_SUBMITTED: "hodRatingSubmitted",
-  FINAL_EVALUATION_GENERATED: "finalEvaluationGenerated",
   DUE_REMINDER: "dueReminder",
   WINDOW_REMINDER: "windowReminder",
 });

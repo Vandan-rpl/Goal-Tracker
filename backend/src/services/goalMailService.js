@@ -4,7 +4,7 @@ const { sendEmail } = require("./notifyService");
 const logger = require("../utils/logger");
 const { PORTAL_NAME } = require("../constants/portalConstants");
 const { getFiscalQuarterBoundsFromLabel } = require("../utils/fiscalQuarter");
-const { GoalMailEvent, GoalWindow, getGoalStatusLabel } = require("../constants/goalConstants");
+const { GoalMailEvent, GoalWindow } = require("../constants/goalConstants");
 
 /**
  * ============================================================
@@ -158,19 +158,6 @@ const GOAL_MAIL_EVENTS = Object.freeze({
       ["Feedback", noComment(context.feedback, "No feedback provided")],
     ],
   },
-  [GoalMailEvent.FINAL_EVALUATION_GENERATED]: {
-    needsGoal: false,
-    purpose: "Final evaluation available",
-    actionRequired: false,
-    subjectTitle: (context) => `FY${context.fiscalYear}`,
-    message: (goal, context) => `Your final evaluation for FY${context.fiscalYear} has been generated.`,
-    details: (goal, context) => [
-      ["Weighted score", context.weightedScore ?? "N/A"],
-      ["Status", context.status],
-    ],
-    link: (context) => `/goals/final-evaluation/${context.userId}`,
-    linkText: "View Evaluation",
-  },
   // Sent by jobs/goalWindowReminderJob.js the day before a goal window opens
   // and 2 days before it closes. context: { window, stage ("opening" |
   // "closing"), startDate, endDate (display text), targetQuarter }.
@@ -211,7 +198,6 @@ const ACTION_REQUIRED_NOTE =
 
 const INFORMATION_NOTE = "This email is for your information only. No action is needed.";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -228,12 +214,17 @@ const appLink = (path) => {
   return `${baseUrl}${path}`;
 };
 
-// "Q1-2027" (fiscal year end year) -> "Q1 (Apr–Jun 2026)", same as the frontend.
+const FULL_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// "Q4-2027" (fiscal year end year) -> "March Quarter F.Y. 2026-27": the
+// quarter is named after its last month.
 const formatQuarter = (label) => {
   const bounds = getFiscalQuarterBoundsFromLabel(label);
   if (!bounds) return label || "";
-  const [startYear, startMonth] = bounds.startKey.split("-").map(Number);
-  return `${String(label).slice(0, 2)} (${MONTHS[startMonth - 1]}–${MONTHS[startMonth + 1]} ${startYear})`;
+  const [, startMonth] = bounds.startKey.split("-").map(Number);
+  const fyEndYear = Number(String(label).split("-")[1]);
+  const fiscalYear = `${fyEndYear - 1}-${String(fyEndYear % 100).padStart(2, "0")}`;
+  return `${FULL_MONTHS[(startMonth + 1) % 12]} Quarter F.Y. ${fiscalYear}`;
 };
 
 const buildSubject = (definition, goal, context) =>
@@ -247,12 +238,15 @@ const buildSubject = (definition, goal, context) =>
  * test-mode banner naming who would have received it.
  */
 const buildHtml = (definition, goal, context, recipient, testRecipient) => {
+  // The owner row only helps approvers; the owner's own emails (approved,
+  // rejected, due reminder, completion result...) leave it out.
+  const recipientIsOwner =
+    goal && recipient.userId != null && Number(recipient.userId) === Number(goal.OwnerID);
   const goalRows = goal
     ? [
         ["Goal", goal.GoalTitle],
         ["Quarter", formatQuarter(goal.Quarter)],
-        ["Goal owner", goal.OwnerName],
-        ["Current status", getGoalStatusLabel(goal.GoalStatus)],
+        ...(recipientIsOwner ? [] : [["Goal owner", goal.OwnerName]]),
       ]
     : [];
   const rows = [...goalRows, ...definition.details(goal, context)].filter(
@@ -304,10 +298,10 @@ const buildHtml = (definition, goal, context, recipient, testRecipient) => {
  * @param {object} context
  * @param {number} context.recipientId   UserID who gets the email
  * @param {number} [context.goalId]      the goal (every event except
- *                                       FINAL_EVALUATION_GENERATED)
+ *                                       WINDOW_REMINDER)
  * @param {*} [context.rating] / comment / remark / quarter /
- *            progressPercentage / feedback / fiscalYear / weightedScore /
- *            status / userId            event-specific values
+ *            progressPercentage / feedback / window / stage /
+ *            startDate / endDate / daysLeft  event-specific values
  * @returns {Promise<{ sent: boolean, reason?: string }>}
  */
 const sendGoalMail = async (event, context = {}) => {
@@ -348,6 +342,7 @@ const sendGoalMail = async (event, context = {}) => {
     }
 
     const recipient = {
+      userId: context.recipientId,
       firstName: user.FirstName,
       name: user.FullName,
       email: String(user.Email || "").trim(),

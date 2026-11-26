@@ -50,9 +50,6 @@ const actorLabel = (role, name) =>
 const actorSentence = (role, name) =>
     String(role || "").toUpperCase() === "MANAGER" ? actorLabel(role, name) : "The CFO";
 
-// Project tasks call the remarks "Manager / CFO Remarks".
-const remarksLabel = (task) => (task.ProjectName ? "Manager / CFO Remarks" : "CFO's Remarks");
-
 /**
  * Event -> subject, opening line and detail rows ([label, value]; empty
  * values are left out). Project tasks also name the project, and the
@@ -71,7 +68,7 @@ const TASK_MAIL_EVENTS = Object.freeze({
             ["Due Date", formatDate(task.DueDate)],
             // Individual (non-project) task mails leave out the Responsible Person
             ["Responsible Person", task.ProjectName ? task.ResponsiblePersonName : null],
-            [remarksLabel(task), task.CFORemarks],
+            // Remarks are left out of the assigned mail; the remark mail still carries them.
         ],
     },
     [TaskMailEvent.CFO_REMARK]: {

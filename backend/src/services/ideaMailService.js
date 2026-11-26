@@ -177,7 +177,6 @@ const buildHtml = (definition, idea, context, recipient, testRecipient) => {
         ["Idea number", idea.IdeaNumber],
         ["Title", idea.Title],
         ["Submitted by", idea.SubmitterName],
-        ["Current status", idea.Status],
         ...definition.details(idea, context),
     ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
 
