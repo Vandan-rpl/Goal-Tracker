@@ -121,7 +121,7 @@ const buildHtml = (definition, task, testRecipient) => {
                 <table style="border-collapse: collapse; margin: 12px 0;">${rowHtml}
                 </table>
                 <a href="${escapeHtml(myTasksLink())}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Open My Tasks</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+                <p style="margin-top: 20px;">Regards,<br/>Automation Team</p>
             </div>
         `;
 };

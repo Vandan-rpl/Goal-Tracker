@@ -86,7 +86,7 @@ const IDEA_MAIL_EVENTS = Object.freeze({
         purpose: "Closure approval required",
         actionRequired: true,
         message: (idea) =>
-            `${idea.SubmitterName} has requested to close this idea (mark it as Implemented).`,
+            `${idea.SubmitterName} has requested to close this idea.`,
         details: (idea, context) => [["Closure remark", context.remark]],
     },
     [IdeaMailEvent.CLOSURE_APPROVED]: {
@@ -205,7 +205,7 @@ const buildHtml = (definition, idea, context, recipient, testRecipient) => {
                 </table>
                 ${note}
                 <a href="${escapeHtml(ideaLink(idea.IdeaID))}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Idea Details</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+                <p style="margin-top: 20px;">Regards,<br/>Automation Team</p>
             </div>
         `;
 };

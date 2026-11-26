@@ -285,7 +285,7 @@ const buildHtml = (definition, goal, context, recipient, testRecipient) => {
                 </table>
                 ${note}
                 <a href="${escapeHtml(link)}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">${escapeHtml(linkText)}</a>
-                <p style="margin-top: 20px;">Regards,<br/>Rubamin Pvt. Ltd.</p>
+                <p style="margin-top: 20px;">Regards,<br/>Automation Team</p>
             </div>
         `;
 };

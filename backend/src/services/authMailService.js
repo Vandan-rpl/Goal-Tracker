@@ -159,7 +159,7 @@ const sendWelcomeMail = ({ user, temporaryPassword }) => {
                 </p>
                 <p>For your security, you will be asked to change this password when you log in for the first time.</p>
                 <p>Please do not share your password with anyone.</p>
-                <p>Regards,<br>Rubamin Pvt. Ltd.</p>
+                <p>Regards,<br/>Automation Team</p>
         `,
     });
 };
