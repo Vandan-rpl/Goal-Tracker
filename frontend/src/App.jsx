@@ -38,6 +38,7 @@ import IdeaReports from './pages/Ideas/IdeaReports';
 import TaskReports from './pages/Tasks/TaskReports';
 import { IDEAS_DASHBOARD_PATH, IDEAS_HOME_PATH } from './utils/ideasMenu';
 import TasksRoute from './components/TasksRoute';
+import GoalsRoute from './components/GoalsRoute';
 import MyTasks from './pages/Tasks/MyTasks';
 import TaskDashboard from './pages/Tasks/TaskDashboard';
 import TeamTasks from './pages/Tasks/TeamTasks';
@@ -69,6 +70,8 @@ function App() {
           {/* Protected Layout Routes Wrapped with ProtectedRoute Guard */}
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
+              {/* Goal Tracker: grade 303 and above only (GoalsRoute sends others to the Task Tracker). */}
+              <Route element={<GoalsRoute />}>
               <Route path="/dashboard" element={<DashboardRoute />} />
               <Route path="/goals" element={<ListGoal />} />
               <Route path="/goals/joint" element={<JointGoals />} />
@@ -77,6 +80,7 @@ function App() {
               <Route path="/goals/view/:id" element={<ViewGoal />} />
               <Route path="/goals/final-evaluation" element={<FinalEvaluation />} />
               <Route path="/goals/final-evaluation/:userId" element={<FinalEvaluation />} />
+              </Route>
               {/* Admin-only pages: anyone else who types the URL is sent to the dashboard */}
               <Route element={<ProtectedRoute allowedRoles={ADMIN_ROLES} />}>
                 <Route path="/admin/add-employees" element={<AddEmployees />} />
@@ -84,6 +88,7 @@ function App() {
                 <Route path="/admin/upload-excel" element={<EmployeeExcelUpload />} />
                 <Route path="/admin/employees-list" element={<ListEmployees />} />
               </Route>
+              <Route element={<GoalsRoute />}>
               <Route element={<ProtectedRoute allowedRoles={MANAGEMENT_ROLES} />}>
                 <Route path="/admin/reports" element={<Reports />} />
               </Route>
@@ -99,6 +104,7 @@ function App() {
               {/* CFO Route */}
               <Route element={<ProtectedRoute allowedRoles={BUSINESS_HEAD_ROLES} />}>
                 <Route path="/cfo/all-goals" element={<CFOAllUsersGoals />} />
+              </Route>
               </Route>
 
               <Route path="/setting" element={<Setting />} />

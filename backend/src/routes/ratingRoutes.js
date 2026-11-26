@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { submitQuarterlyUpdate, submitHODRating, getQuarterlyUpdates } = require('../controllers/ratingController');
 const { verifyToken, verifyRole } = require('../middleware/authMiddleware');
+const { requireGoalAccess } = require('../middleware/goalAccessMiddleware');
 const Roles = require('../constants/roles');
 
 // NOTE ON ROLE MIDDLEWARE:
@@ -14,17 +15,17 @@ const Roles = require('../constants/roles');
 // This is flagged in my response — worth fixing/consolidating separately.
 
 // Employee submits their own quarterly progress update.
-router.post('/quarterly-update', verifyToken, verifyRole([Roles.EMPLOYEE]), submitQuarterlyUpdate);
+router.post('/quarterly-update', verifyToken, requireGoalAccess, verifyRole([Roles.EMPLOYEE]), submitQuarterlyUpdate);
 
 // HOD (or Business Head, who can also sit above an HOD) submits a rating + feedback.
 // Fine-grained "is this actually the goal owner's HOD/manager" check happens
 // inside the controller itself, since that requires looking up the specific goal.
-router.post('/hod-rating', verifyToken, verifyRole([Roles.HOD, Roles.BUSINESS_HEAD]), submitHODRating);
+router.post('/hod-rating', verifyToken, requireGoalAccess, verifyRole([Roles.HOD, Roles.BUSINESS_HEAD]), submitHODRating);
 
 // Quarterly update history for a specific goal — no route existed for this
 // before (the frontend had nothing to fetch a goal's history from). Open to
 // any authenticated role; the controller itself restricts the response to
 // the goal owner or their HOD/reporting manager.
-router.get('/quarterly-updates/:goalId', verifyToken, getQuarterlyUpdates);
+router.get('/quarterly-updates/:goalId', verifyToken, requireGoalAccess, getQuarterlyUpdates);
 
 module.exports = router;

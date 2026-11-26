@@ -4,6 +4,10 @@
  * ============================================================
  */
 
+// Goal Tracker is open only to grade 303 and above (lower number = more
+// senior, so level <= 303). See utils/goalAccess.js.
+const GOAL_TRACKER_MAX_GRADE = 303;
+
 // Goal email events. Recipient, subject and body text for each live in
 // GOAL_MAIL_EVENTS (services/goalMailService.js).
 const GoalMailEvent = Object.freeze({
@@ -69,6 +73,7 @@ const getGoalStatusLabel = (status) =>
   GOAL_STATUS_LABELS[status] || status || "Draft";
 
 module.exports = {
+  GOAL_TRACKER_MAX_GRADE,
   GoalMailEvent,
   getGoalStatusLabel,
   GoalWindow,

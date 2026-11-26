@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const passwordHistoryModel = require("../models/passwordHistoryModel");
 const { validateNewPassword, passwordErrorMessage } = require("../validations/passwordValidation");
 const withTransaction = require("../utils/withTransaction");
+const { hasGoalTrackerAccess } = require("../utils/goalAccess");
 const {
   BCRYPT_SALT_ROUNDS,
   MAX_FAILED_LOGINS,
@@ -111,7 +112,7 @@ const login = async (req, res) => {
       .request()
       .input("Email", sql.VarChar, email).query(`
                 SELECT TOP 1
-                    UserID, Username, FirstName, LastName, PasswordHash, Email, Role, IsPasswordChanged,
+                    UserID, Username, FirstName, LastName, PasswordHash, Email, Role, Grade, IsPasswordChanged,
                     DefaultPasswordFlag,
                     CAST(CASE WHEN LockoutUntil > GETDATE() THEN 1 ELSE 0 END AS BIT) AS IsLockedOut
                 FROM Users
@@ -182,6 +183,8 @@ const login = async (req, res) => {
         lastName: user.LastName || "",
         fullName,
         FullName: fullName,
+        // Goal Tracker is for grade 303 and above; the frontend hides it otherwise.
+        hasGoalAccess: hasGoalTrackerAccess({ role: user.Role, grade: user.Grade }),
       },
     });
   } catch (error) {
@@ -282,7 +285,26 @@ const forceResetPassword = async (req, res) => {
   }
 };
 
+// GET /auth/access - { hasGoalAccess } for the logged-in user, from the DB.
+const getAccess = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("UserID", sql.Int, req.user.userId)
+      .query("SELECT Role, Grade FROM dbo.Users WHERE UserID = @UserID AND IsActive = 1");
+    const user = result.recordset[0];
+    return res.status(200).json({
+      success: true,
+      data: { hasGoalAccess: Boolean(user) && hasGoalTrackerAccess({ role: user.Role, grade: user.Grade }) },
+    });
+  } catch (error) {
+    console.error("Get Access Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to check access." });
+  }
+};
+
 module.exports = {
   login,
   forceResetPassword,
+  getAccess,
 };

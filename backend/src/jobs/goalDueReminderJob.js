@@ -8,6 +8,7 @@ const {
   GoalDueReminderStages,
   GOAL_STATUSES_WITHOUT_DUE_REMINDER,
 } = require("../constants/goalConstants");
+const { goalAccessSql } = require("../utils/goalAccess");
 
 /**
  * ============================================================
@@ -72,6 +73,7 @@ const getGoalsDueForStage = async (pool, stage, minDaysLeft) => {
     FROM dbo.Goals g
     INNER JOIN dbo.Users u ON u.UserID = g.UserID
     WHERE u.IsActive = 1
+      AND ${goalAccessSql("u")} -- Goal Tracker users only (grade 303 and above)
       AND g.GoalStatus NOT IN (${statusParams.join(", ")})
       AND DATEDIFF(DAY, CAST(GETDATE() AS DATE), g.Timeline) > @MinDays
       AND DATEDIFF(DAY, CAST(GETDATE() AS DATE), g.Timeline) <= @MaxDays

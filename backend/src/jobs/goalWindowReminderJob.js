@@ -15,6 +15,7 @@ const {
   GoalWindow,
   GoalWindowReminderStage,
 } = require("../constants/goalConstants");
+const { goalAccessSql } = require("../utils/goalAccess");
 
 /**
  * ============================================================
@@ -138,6 +139,7 @@ const getRecipients = async (pool, reminder, notificationType, referenceId) => {
       SELECT u.UserID
       FROM dbo.Users u
       WHERE u.IsActive = 1
+        AND ${goalAccessSql("u")} -- Goal Tracker users only (grade 303 and above)
         ${recipientFilter(reminder.window.key)}
         AND NOT EXISTS (
           SELECT 1 FROM dbo.Notifications n

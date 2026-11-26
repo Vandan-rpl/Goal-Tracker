@@ -39,6 +39,7 @@ import { IDEAS_DASHBOARD_PATH, isIdeasPath } from "../../utils/ideasMenu";
 import { TASKS_DASHBOARD_PATH, isTasksPath } from "../../utils/tasksMenu";
 import { isAdminUser } from "../../utils/adminHome";
 import useAuth from "../../hooks/useAuth";
+import { hasGoalAccess } from "../../utils/goalAccess";
 
 import { GatiWordmark, PORTAL_PILLARS, PORTAL_TITLE } from "../PortalBrand/PortalBrand";
 import rubaminLogo from "../../assets/images/rubamin-logo.png";
@@ -58,6 +59,7 @@ const Header = () => {
   // The Admin only manages the app: no module switch.
   const { user: authUser } = useAuth();
   const showModuleSwitch = !isAdminUser(authUser);
+  const canUseGoals = hasGoalAccess(authUser);
 
   // const { user } = useSelector((state) => state.auth);
 
@@ -93,9 +95,11 @@ const Header = () => {
   // Module switch: derived from the URL, so it's correct after a refresh or
   // a direct link. Ideas pages live under /ideas, Tasks under /tasks,
   // everything else is the goal tracker (the default after login).
+  // Without Goal Tracker access, shared pages (Settings, Profile...) count
+  // as Task Tracker.
   const activeModule = isIdeasPath(location.pathname)
     ? "ideas"
-    : isTasksPath(location.pathname)
+    : isTasksPath(location.pathname) || !canUseGoals
       ? "tasks"
       : "goals";
 
@@ -268,10 +272,13 @@ const Header = () => {
               },
             }}
           >
+          {/* Goal Tracker: grade 303 and above only. */}
+          {canUseGoals && (
           <ToggleButton value="goals">
               <TrackChangesOutlinedIcon fontSize="small" />
               Goal Tracker
             </ToggleButton>
+          )}
             <ToggleButton value="tasks">
               <AssignmentTurnedInOutlinedIcon fontSize="small" />
               <Badge

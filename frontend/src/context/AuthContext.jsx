@@ -50,11 +50,13 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let ignore = false;
     const storedUser = localStorage.getItem("user");
     const token = localStorage.getItem("token");
+    let restored = null;
     if (storedUser && token && isTokenValid(token)) {
       try {
-        setUser(normalizeUser(JSON.parse(storedUser)));
+        restored = normalizeUser(JSON.parse(storedUser));
       } catch {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
@@ -64,14 +66,39 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
     }
-    setLoading(false);
+
+    if (!restored) {
+      setLoading(false);
+    } else {
+      // Module access (Goal Tracker = grade 303 and above) is re-read from
+      // the backend on every app load, so a saved session never shows or
+      // hides a module based on an old answer. On failure the saved value
+      // stays (the backend still checks every goal request).
+      axiosInstance
+        .get("/auth/access")
+        .then((response) => {
+          const access = response.data?.data;
+          if (access && typeof access.hasGoalAccess === "boolean") {
+            restored = { ...restored, hasGoalAccess: access.hasGoalAccess };
+            localStorage.setItem("user", JSON.stringify(restored));
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (ignore) return;
+          setUser(restored);
+          setLoading(false);
+        });
+    }
 
     // The axios interceptor fires this on a 401. Clearing the user makes
     // ProtectedRoute send them to the login page.
     const handleSessionExpired = () => setUser(null);
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
-    return () =>
+    return () => {
+      ignore = true;
       window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
   }, []);
 
   const login = async (email, password) => {

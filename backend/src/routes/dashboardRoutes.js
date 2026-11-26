@@ -3,6 +3,7 @@ const router = express.Router();
 
 const dashboardController = require("../controllers/dashboardController");
 const { verifyToken } = require("../middleware/authMiddleware");
+const { requireGoalAccess } = require("../middleware/goalAccessMiddleware");
 
 // FIX: this used to `require("../middleware/authMiddleware")` and pass the
 // whole module (an object, not a function) straight to router.get as
@@ -24,7 +25,7 @@ const { verifyToken } = require("../middleware/authMiddleware");
  */
 router.get(
     "/summary",
-    verifyToken,
+    verifyToken, requireGoalAccess,
     dashboardController.getDashboardSummary
 );
 
@@ -34,7 +35,7 @@ router.get(
  */
 router.get(
     "/statistics",
-    verifyToken,
+    verifyToken, requireGoalAccess,
     dashboardController.getStatistics
 );
 
@@ -44,7 +45,7 @@ router.get(
  */
 router.get(
     "/goal-progress",
-    verifyToken,
+    verifyToken, requireGoalAccess,
     dashboardController.getGoalProgress
 );
 
@@ -54,7 +55,7 @@ router.get(
  */
 router.get(
     "/pending-approvals",
-    verifyToken,
+    verifyToken, requireGoalAccess,
     dashboardController.getPendingApprovals
 );
 
@@ -64,7 +65,7 @@ router.get(
  */
 router.get(
     "/recent-activities",
-    verifyToken,
+    verifyToken, requireGoalAccess,
     dashboardController.getRecentActivities
 );
 
@@ -74,7 +75,7 @@ router.get(
  */
 router.get(
     "/charts",
-    verifyToken,
+    verifyToken, requireGoalAccess,
     dashboardController.getCharts
 );
 

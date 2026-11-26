@@ -29,8 +29,9 @@ const {
 } = require('../controllers/goalController');
 
 const { verifyToken } = require('../middleware/authMiddleware');
+const { requireGoalAccess } = require('../middleware/goalAccessMiddleware');
 
-router.use(verifyToken);
+router.use(verifyToken, requireGoalAccess);
 
 //get particular employee goals
 router.get('/', getGoals);

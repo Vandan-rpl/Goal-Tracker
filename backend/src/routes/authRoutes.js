@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const passwordResetController = require('../controllers/passwordResetController');
-const { verifyTokenForPasswordChange } = require('../middleware/authMiddleware');
+const { verifyToken, verifyTokenForPasswordChange } = require('../middleware/authMiddleware');
 
 /**
  * ============================================================
@@ -25,5 +25,9 @@ router.post('/forgot-password/legacy-link-opened', passwordResetController.legac
 // Protected route for logged-in user forced reset. The only protected route
 // a user on a temporary password (DefaultPasswordFlag = 1) can reach.
 router.post('/reset-password', verifyTokenForPasswordChange, authController.forceResetPassword);
+
+// Current module access of the logged-in user, read from the DB (the
+// frontend asks on every app load, so a grade change applies without re-login).
+router.get('/access', verifyToken, authController.getAccess);
 
 module.exports = router;

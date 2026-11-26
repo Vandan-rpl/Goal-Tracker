@@ -7,6 +7,7 @@ import TasksSidebarMenu from "./TasksSidebarMenu";
 import ProfileMenu from "../components/ProfileMenu/ProfileMenu";
 import { isIdeasPath } from "../utils/ideasMenu";
 import { isTasksPath } from "../utils/tasksMenu";
+import { hasGoalAccess } from "../utils/goalAccess";
 
 const Sidebar = () => {
   const { user } = useAuth();
@@ -16,7 +17,9 @@ const Sidebar = () => {
   const { pathname } = useLocation();
   const isActive = (path) => pathname === path;
   const isIdeasModule = isIdeasPath(pathname);
-  const isTasksModule = isTasksPath(pathname);
+  // Without Goal Tracker access (below grade 303), shared pages like
+  // Settings / Profile show the Task Tracker menu instead of goal links.
+  const isTasksModule = isTasksPath(pathname) || (!hasGoalAccess(user) && !isIdeasModule);
 
   // Force checking role string (handling both uppercase and lowercase)
   const role = (user?.Role || user?.role || "").toUpperCase();
