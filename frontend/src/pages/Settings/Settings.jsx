@@ -15,6 +15,7 @@ import useAuth from "../../hooks/useAuth";
 import IdeaFinalApproverSettings from "../../components/IdeaFinalApproverSettings/IdeaFinalApproverSettings";
 import ProjectCreatorSettings from "../../components/ProjectCreatorSettings/ProjectCreatorSettings";
 import CreateProjectSettings from "../../components/CreateProjectSettings/CreateProjectSettings";
+import ManageProjectsSettings from "../../components/ManageProjectsSettings/ManageProjectsSettings";
 import useTasksAccess from "../../hooks/useTasksAccess";
 
 // IDs from the API are numbers; <select> values are strings. Compare everything as strings.
@@ -103,6 +104,8 @@ const Settings = () => {
   const isAdmin = String(user?.Role || user?.role || "").toLowerCase() === "admin";
   // Same project-create right the backend checks (CFO or an Admin-added creator).
   const { canCreateProjects } = useTasksAccess();
+  // Bumped after a project is created so Manage Projects reloads.
+  const [projectsRefreshKey, setProjectsRefreshKey] = useState(0);
 
   const [emailNotification, setEmailNotification] = useState(true);
   const [browserNotification, setBrowserNotification] = useState(true);
@@ -304,7 +307,10 @@ const Settings = () => {
           {isAdmin && <ProjectCreatorSettings />}
 
           {/* Only people who may create projects (CFO + Admin-added creators) */}
-          {canCreateProjects && <CreateProjectSettings />}
+          {canCreateProjects && (
+            <CreateProjectSettings onCreated={() => setProjectsRefreshKey((key) => key + 1)} />
+          )}
+          {canCreateProjects && <ManageProjectsSettings refreshKey={projectsRefreshKey} />}
 
           {/* Preferences Section */}
           {/* <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">

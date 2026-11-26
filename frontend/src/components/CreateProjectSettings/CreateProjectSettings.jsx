@@ -19,7 +19,7 @@ const labelClass = "block text-xs font-medium uppercase tracking-wide text-slate
  * anyone Admin added as a project creator); the backend checks the same
  * right on POST /tasks/projects.
  */
-export default function CreateProjectSettings() {
+export default function CreateProjectSettings({ onCreated }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [memberOptions, setMemberOptions] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -57,6 +57,7 @@ export default function CreateProjectSettings() {
       });
       toast.success(`Project "${projectName}" created.`);
       setForm(EMPTY_FORM);
+      onCreated?.();
     } catch (err) {
       const apiError = getTaskApiError(err, "Failed to create the project.");
       setError([apiError.message, ...apiError.details].join(" "));
