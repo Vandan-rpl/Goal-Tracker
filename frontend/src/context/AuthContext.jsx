@@ -74,11 +74,11 @@ export const AuthProvider = ({ children }) => {
       window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     try {
       // Using axiosInstance which already points to http://localhost:5000/api/v1
       const response = await axiosInstance.post("/auth/login", {
-        username,
+        email,
         password,
       });
 

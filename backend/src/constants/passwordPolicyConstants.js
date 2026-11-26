@@ -44,7 +44,7 @@ const PasswordMessages = Object.freeze({
 });
 
 const LoginMessages = Object.freeze({
-    INVALID_CREDENTIALS: "Invalid username/email or password.",
+    INVALID_CREDENTIALS: "Invalid email or password.",
     LOCKED_OUT: `Too many failed attempts. Try again after ${LOCKOUT_MINUTES} minutes or use Forgot Password.`,
 });
 

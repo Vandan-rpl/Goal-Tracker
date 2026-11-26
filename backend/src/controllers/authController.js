@@ -83,13 +83,14 @@ const clearFailedLogins = async (pool, userId) => {
 
 // User Login Controller
 const login = async (req, res) => {
-  const username = req.body.username || req.body.email || req.body.identifier;
+  // Login is by email only (usernames are no longer accepted).
+  const email = String(req.body.email || "").trim();
   const { password } = req.body;
 
-  if (!username) {
+  if (!email) {
     return res.status(400).json({
       success: false,
-      message: "Username or Email is required.",
+      message: "Email is required.",
     });
   }
 
@@ -108,13 +109,13 @@ const login = async (req, res) => {
     // not a lock: locking only comes from the 15-minute lockout.
     const result = await pool
       .request()
-      .input("Identifier", sql.VarChar, username).query(`
+      .input("Email", sql.VarChar, email).query(`
                 SELECT TOP 1
                     UserID, Username, FirstName, LastName, PasswordHash, Email, Role, IsPasswordChanged,
                     DefaultPasswordFlag,
                     CAST(CASE WHEN LockoutUntil > GETDATE() THEN 1 ELSE 0 END AS BIT) AS IsLockedOut
                 FROM Users
-                WHERE (Username = @Identifier OR Email = @Identifier) AND IsActive = 1
+                WHERE Email = @Email AND IsActive = 1
             `);
 
     // Unknown (or deactivated) login: same answer as a wrong password, no DB write.

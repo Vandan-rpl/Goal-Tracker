@@ -34,7 +34,6 @@ const summaryCards = (summary) => [
   { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
   { label: "Completed", value: summary.completed, accent: "text-[#1f9d6b]" },
   { label: "High Priority", value: summary.highPriority, accent: "text-[#b3403f]" },
-  { label: "Completion %", value: `${summary.completionPercent}%`, accent: "text-[#2c3e82]" },
 ];
 
 const sourceLabel = (task) =>
@@ -73,10 +72,10 @@ const TaskReports = () => (
     statusColors={STATUS_COLORS}
     category={{ title: "Priority Breakdown", colors: PRIORITY_COLORS }}
     summaryCards={summaryCards}
-    summaryGridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8"
+    summaryGridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-7"
     itemColumns={ITEM_COLUMNS}
     itemKey="TaskID"
-    footer="Every task counts (self-added, assigned and project tasks), in the fiscal year it was assigned or added. A task that is not Completed and is past its due date counts as Overdue only. Completion % = Completed ÷ all tasks. Total Projects = every active project, whatever the filters."
+    footer="Every task counts (self-added, assigned and project tasks), in the fiscal year it was assigned or added. A task that is not Completed and is past its due date counts as Overdue only. Total Projects = every active project, whatever the filters."
   />
 );
 

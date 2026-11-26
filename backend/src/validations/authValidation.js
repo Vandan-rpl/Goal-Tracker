@@ -66,7 +66,7 @@ const validateLogin = (data) => {
   const errors = [];
 
   if (!data.LoginID || String(data.LoginID).trim() === "") {
-    errors.push("Username or Email is required.");
+    errors.push("Email is required.");
   }
 
   if (!data.Password || String(data.Password).trim() === "") {

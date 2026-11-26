@@ -9,7 +9,7 @@ const Messages = Object.freeze({
   REGISTER_SUCCESS: "User registered successfully.",
 
   INVALID_CREDENTIALS:
-    "Invalid username/email or password.",
+    "Invalid email or password.",
 
   ACCOUNT_INACTIVE:
     "Your account has been deactivated.",

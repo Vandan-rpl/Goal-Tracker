@@ -34,7 +34,6 @@ const summaryCards = (summary) => [
   { label: "Implemented", value: summary.implemented, accent: "text-[#1f9d6b]" },
   { label: "Rejected", value: summary.rejected, accent: "text-[#b3403f]" },
   { label: "Overdue", value: summary.overdue, accent: "text-[#b3403f]" },
-  { label: "Implementation %", value: `${summary.implementationPercent}%`, accent: "text-[#2c3e82]" },
 ];
 
 const ITEM_COLUMNS = [
@@ -74,8 +73,8 @@ const IdeaReports = () => (
     itemColumns={ITEM_COLUMNS}
     itemKey="IdeaID"
     completion={{ label: "Implementation", status: "Implemented" }}
-    summaryGridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8"
-    footer="Ideas are counted in the fiscal year they were submitted; Drafts are left out. Final approval moves an idea straight to In Implementation. The In Implementation card counts every idea being implemented, overdue ones included; in the tables and charts an idea past its target date counts as Overdue only. Implementation % = Implemented ÷ (In Implementation + Overdue + Implemented)."
+    summaryGridClassName="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-7"
+    footer="Ideas are counted in the fiscal year they were submitted; Drafts are left out. Final approval moves an idea straight to In Implementation. The In Implementation card counts every idea being implemented, overdue ones included; in the tables and charts an idea past its target date counts as Overdue only."
   />
 );
 

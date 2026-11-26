@@ -3,11 +3,11 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import { needsPasswordChange, FORCE_RESET_PATH } from '../../utils/passwordChange';
 import { toast } from 'react-toastify';
-import { Eye, EyeOff, Lock, User, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import PortalBrand from '../../components/PortalBrand/PortalBrand';
 
 const Login = () => {
-  const [username, setUsername] = useState(''); // Handles either username or email input
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,9 +39,8 @@ const Login = () => {
     setError('');
     setIsLoading(true);
 
-    // Sends the username/email field to match backend requirement
     try {
-      const res = await login(username, password);
+      const res = await login(email.trim(), password);
 
       if (res.success) {
         // Users on a temporary password (DefaultPasswordFlag = 1) must change it first
@@ -100,27 +99,25 @@ const Login = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Username/Email Input */}
+          {/* Email Input */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-              Username or Email Address
+              Email Address
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <User className="w-5 h-5" />
+                <Mail className="w-5 h-5" />
               </div>
-              <input 
-                type="text" 
+              <input
+                type="email"
                 required
-                value={username} 
-                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 transition duration-200 text-sm"
-                placeholder="e.g. firstname.lastname"
+                placeholder="you@company.com"
               />
             </div>
-            <p className="mt-1.5 text-xs text-slate-500">
-              Your username is your first and last name joined by a dot, e.g. <span className="font-semibold text-slate-600">rahul.sharma</span>
-            </p>
           </div>
 
           {/* Password Input */}

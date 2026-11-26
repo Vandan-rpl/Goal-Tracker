@@ -103,7 +103,7 @@ const getUserByEmail = async (email) => {
 };
 
 /**
- * Find user by Login ID (Username or Email)
+ * Find user by Login ID (Email only)
  */
 const getUserByLogin = async (loginId) => {
   if (!loginId) return null;
@@ -116,7 +116,7 @@ const getUserByLogin = async (loginId) => {
     const result = await request.query(`
       SELECT TOP 1 *
       FROM Users
-      WHERE Username = @LoginId OR Email = @LoginId
+      WHERE Email = @LoginId
     `);
 
     return result.recordset[0];
