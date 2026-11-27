@@ -1,6 +1,7 @@
 const { poolPromise } = require("../config/db");
 const projectModel = require("../models/projectModel");
 const { verifyToken } = require("./authMiddleware");
+const { requireTaskAccess } = require("./goalAccessMiddleware");
 const { errorResponse } = require("../utils/apiResponse");
 
 /**
@@ -20,7 +21,8 @@ const loadProjectCreator = async (req, res, next) => {
     }
 };
 
-// verifyToken followed by loadProjectCreator, for every task route.
-const verifyTaskUser = [verifyToken, loadProjectCreator];
+// verifyToken, the Task Tracker grade gate (303 and above) and
+// loadProjectCreator, for every task route.
+const verifyTaskUser = [verifyToken, requireTaskAccess, loadProjectCreator];
 
 module.exports = { loadProjectCreator, verifyTaskUser };

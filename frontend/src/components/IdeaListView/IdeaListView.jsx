@@ -264,7 +264,7 @@ export default function IdeaListView({ title, description, fetchIdeas, fetchFilt
                 onChange={(e) => updateParams({ status: e.target.value })}
                 className={selectClass}
               >
-                <option value="">All Statuses</option>
+                <option value="">All Status</option>
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
                     {getIdeaStatusLabel(s)}

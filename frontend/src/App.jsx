@@ -39,6 +39,7 @@ import TaskReports from './pages/Tasks/TaskReports';
 import { IDEAS_DASHBOARD_PATH, IDEAS_HOME_PATH } from './utils/ideasMenu';
 import TasksRoute from './components/TasksRoute';
 import GoalsRoute from './components/GoalsRoute';
+import TaskTrackerRoute from './components/TaskTrackerRoute';
 import MyTasks from './pages/Tasks/MyTasks';
 import TaskDashboard from './pages/Tasks/TaskDashboard';
 import TeamTasks from './pages/Tasks/TeamTasks';
@@ -70,7 +71,7 @@ function App() {
           {/* Protected Layout Routes Wrapped with ProtectedRoute Guard */}
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
-              {/* Goal Tracker: grade 303 and above only (GoalsRoute sends others to the Task Tracker). */}
+              {/* Goal Tracker: grade 303 and above only (GoalsRoute sends others away). */}
               <Route element={<GoalsRoute />}>
               <Route path="/dashboard" element={<DashboardRoute />} />
               <Route path="/goals" element={<ListGoal />} />
@@ -140,8 +141,10 @@ function App() {
               {/* Any other /ideas URL goes to My Ideas */}
               <Route path="/ideas/*" element={<Navigate to={IDEAS_HOME_PATH} replace />} />
 
-              {/* Task Tracker module. Every /tasks URL highlights the Tasks
+              {/* Task Tracker module: grade 303 and above only (TaskTrackerRoute
+                  sends others away). Every /tasks URL highlights the Tasks
                   switch in the header and shows the Tasks sidebar. */}
+              <Route element={<TaskTrackerRoute />}>
               <Route path="/tasks" element={<Navigate to={TASKS_DASHBOARD_PATH} replace />} />
               <Route path="/tasks/dashboard" element={<TaskDashboard />} />
               <Route path="/tasks/my-tasks" element={<MyTasks />} />
@@ -162,6 +165,7 @@ function App() {
               </Route>
               {/* Any other /tasks URL goes to My Tasks */}
               <Route path="/tasks/*" element={<Navigate to={TASKS_HOME_PATH} replace />} />
+              </Route>
 
             </Route>
           </Route>

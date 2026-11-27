@@ -13,8 +13,6 @@ const FIELD_LABELS = {
   Weightage: "Weightage",
   Priority: "Priority",
   Timeline: "Timeline",
-  MeetPerformance: "Meet Performance",
-  ExceedPerformance: "Exceed Performance",
   ValidationSource: "Validation Source",
   CrossFunctionalGoal: "Cross-Functional Goal",
   GoalCategory: "Category",

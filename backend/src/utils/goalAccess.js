@@ -2,10 +2,10 @@ const { GOAL_TRACKER_MAX_GRADE } = require("../constants/goalConstants");
 
 /**
  * ============================================================
- * Goal Tracker access by grade
+ * Goal Tracker / Task Tracker access by grade
  *
- * Only users of grade 303 and above may use the Goal Tracker; Ideas and
- * Task Tracker are open to everyone. Grades are stored as text like
+ * Only users of grade 303 and above may use the Goal Tracker and the Task
+ * Tracker (same rule for both); Ideas is open to everyone. Grades are stored as text like
  * "303-303": the number before the "-" is the level, and a LOWER number is
  * a MORE senior grade (CFO / HOD 201, Managers 202-204, ...). So "303 and
  * above" = level <= GOAL_TRACKER_MAX_GRADE.
@@ -27,9 +27,12 @@ const hasGoalTrackerAccess = ({ role, grade } = {}) => {
     return level !== null && level <= GOAL_TRACKER_MAX_GRADE;
 };
 
+// The Task Tracker uses the same grade rule as the Goal Tracker.
+const hasTaskTrackerAccess = hasGoalTrackerAccess;
+
 /**
  * The same rule as a SQL condition on a dbo.Users alias, for jobs that pick
- * goal email recipients. Admin is not special-cased here: goal reminders
+ * goal email recipients and for the Task Tracker's employee lists. Admin is not special-cased here: goal reminders
  * never go to Admin.
  */
 const goalAccessSql = (alias = "u") => `
@@ -38,5 +41,6 @@ const goalAccessSql = (alias = "u") => `
 module.exports = {
     gradeLevel,
     hasGoalTrackerAccess,
+    hasTaskTrackerAccess,
     goalAccessSql,
 };

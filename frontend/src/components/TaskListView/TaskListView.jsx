@@ -596,7 +596,7 @@ export default function TaskListView({
             onChange={(e) => changeFilter("status", e.target.value)}
             className={selectClass}
           >
-            <option value="">All Statuses</option>
+            <option value="">All Status</option>
             {TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>

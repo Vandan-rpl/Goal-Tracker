@@ -39,7 +39,7 @@ import { IDEAS_DASHBOARD_PATH, isIdeasPath } from "../../utils/ideasMenu";
 import { TASKS_DASHBOARD_PATH, isTasksPath } from "../../utils/tasksMenu";
 import { isAdminUser } from "../../utils/adminHome";
 import useAuth from "../../hooks/useAuth";
-import { hasGoalAccess } from "../../utils/goalAccess";
+import { hasGoalAccess, hasTaskAccess } from "../../utils/goalAccess";
 
 import { GatiWordmark, PORTAL_PILLARS, PORTAL_TITLE } from "../PortalBrand/PortalBrand";
 import rubaminLogo from "../../assets/images/rubamin-logo.png";
@@ -60,6 +60,7 @@ const Header = () => {
   const { user: authUser } = useAuth();
   const showModuleSwitch = !isAdminUser(authUser);
   const canUseGoals = hasGoalAccess(authUser);
+  const canUseTasks = hasTaskAccess(authUser);
 
   // const { user } = useSelector((state) => state.auth);
 
@@ -96,12 +97,16 @@ const Header = () => {
   // a direct link. Ideas pages live under /ideas, Tasks under /tasks,
   // everything else is the goal tracker (the default after login).
   // Without Goal Tracker access, shared pages (Settings, Profile...) count
-  // as Task Tracker.
+  // as Task Tracker, or as Ideas when the user has neither tracker.
   const activeModule = isIdeasPath(location.pathname)
     ? "ideas"
-    : isTasksPath(location.pathname) || !canUseGoals
+    : isTasksPath(location.pathname)
       ? "tasks"
-      : "goals";
+      : canUseGoals
+        ? "goals"
+        : canUseTasks
+          ? "tasks"
+          : "ideas";
 
   const MODULE_HOME = { goals: "/dashboard", ideas: IDEAS_DASHBOARD_PATH, tasks: TASKS_DASHBOARD_PATH };
 
@@ -116,8 +121,8 @@ const Header = () => {
   const taskUnseenCount = useSelector((state) => state.task.unseenCount);
 
   useEffect(() => {
-    dispatch(fetchTaskUnseenCount());
-  }, [dispatch, location.pathname]);
+    if (canUseTasks) dispatch(fetchTaskUnseenCount());
+  }, [dispatch, location.pathname, canUseTasks]);
 
   // Real unread count + notification list, replacing the old hardcoded
   // badgeContent={0}. notificationCount is kept live afterwards by
@@ -279,6 +284,8 @@ const Header = () => {
               Goal Tracker
             </ToggleButton>
           )}
+          {/* Task Tracker: grade 303 and above only. */}
+          {canUseTasks && (
             <ToggleButton value="tasks">
               <AssignmentTurnedInOutlinedIcon fontSize="small" />
               <Badge
@@ -290,6 +297,7 @@ const Header = () => {
                 Task Tracker
               </Badge>
             </ToggleButton>
+          )}
             <ToggleButton value="ideas">
               <LightbulbOutlinedIcon fontSize="small" />
               Innovation Ideas

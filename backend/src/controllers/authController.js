@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const passwordHistoryModel = require("../models/passwordHistoryModel");
 const { validateNewPassword, passwordErrorMessage } = require("../validations/passwordValidation");
 const withTransaction = require("../utils/withTransaction");
-const { hasGoalTrackerAccess } = require("../utils/goalAccess");
+const { hasGoalTrackerAccess, hasTaskTrackerAccess } = require("../utils/goalAccess");
 const {
   BCRYPT_SALT_ROUNDS,
   MAX_FAILED_LOGINS,
@@ -183,8 +183,10 @@ const login = async (req, res) => {
         lastName: user.LastName || "",
         fullName,
         FullName: fullName,
-        // Goal Tracker is for grade 303 and above; the frontend hides it otherwise.
+        // Goal Tracker and Task Tracker are for grade 303 and above; the
+        // frontend hides them otherwise.
         hasGoalAccess: hasGoalTrackerAccess({ role: user.Role, grade: user.Grade }),
+        hasTaskAccess: hasTaskTrackerAccess({ role: user.Role, grade: user.Grade }),
       },
     });
   } catch (error) {
@@ -285,7 +287,7 @@ const forceResetPassword = async (req, res) => {
   }
 };
 
-// GET /auth/access - { hasGoalAccess } for the logged-in user, from the DB.
+// GET /auth/access - { hasGoalAccess, hasTaskAccess } for the logged-in user, from the DB.
 const getAccess = async (req, res) => {
   try {
     const pool = await poolPromise;
@@ -295,7 +297,10 @@ const getAccess = async (req, res) => {
     const user = result.recordset[0];
     return res.status(200).json({
       success: true,
-      data: { hasGoalAccess: Boolean(user) && hasGoalTrackerAccess({ role: user.Role, grade: user.Grade }) },
+      data: {
+        hasGoalAccess: Boolean(user) && hasGoalTrackerAccess({ role: user.Role, grade: user.Grade }),
+        hasTaskAccess: Boolean(user) && hasTaskTrackerAccess({ role: user.Role, grade: user.Grade }),
+      },
     });
   } catch (error) {
     console.error("Get Access Error:", error);

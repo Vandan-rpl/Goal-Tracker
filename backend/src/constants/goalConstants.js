@@ -4,8 +4,8 @@
  * ============================================================
  */
 
-// Goal Tracker is open only to grade 303 and above (lower number = more
-// senior, so level <= 303). See utils/goalAccess.js.
+// Goal Tracker and Task Tracker are open only to grade 303 and above (lower
+// number = more senior, so level <= 303). See utils/goalAccess.js.
 const GOAL_TRACKER_MAX_GRADE = 303;
 
 // Goal email events. Recipient, subject and body text for each live in

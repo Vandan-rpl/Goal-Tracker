@@ -70,18 +70,21 @@ export const AuthProvider = ({ children }) => {
     if (!restored) {
       setLoading(false);
     } else {
-      // Module access (Goal Tracker = grade 303 and above) is re-read from
-      // the backend on every app load, so a saved session never shows or
-      // hides a module based on an old answer. On failure the saved value
-      // stays (the backend still checks every goal request).
+      // Module access (Goal Tracker and Task Tracker = grade 303 and above)
+      // is re-read from the backend on every app load, so a saved session
+      // never shows or hides a module based on an old answer. On failure the
+      // saved values stay (the backend still checks every goal/task request).
       axiosInstance
         .get("/auth/access")
         .then((response) => {
           const access = response.data?.data;
           if (access && typeof access.hasGoalAccess === "boolean") {
             restored = { ...restored, hasGoalAccess: access.hasGoalAccess };
-            localStorage.setItem("user", JSON.stringify(restored));
           }
+          if (access && typeof access.hasTaskAccess === "boolean") {
+            restored = { ...restored, hasTaskAccess: access.hasTaskAccess };
+          }
+          if (access) localStorage.setItem("user", JSON.stringify(restored));
         })
         .catch(() => {})
         .finally(() => {

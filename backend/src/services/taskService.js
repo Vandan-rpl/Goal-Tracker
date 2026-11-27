@@ -813,7 +813,7 @@ const assignTask = async (body = {}, user) => {
 
     const taskId = await withTransaction(async (transaction) => {
         if (!(await taskModel.getActiveUser(transaction, employeeId))) {
-            throw validationError(["Selected employee must be an active user."]);
+            throw validationError(["Selected employee must be an active user with Task Tracker access (grade 303 and above)."]);
         }
 
         return await insertAssignedTask(transaction, { employeeId, input, businessHeadId });
@@ -875,7 +875,7 @@ const assignTasks = async (body = {}, user) => {
         for (const [index, { employeeId }] of inputs.entries()) {
             if (names.has(employeeId)) continue;
             const employee = await taskModel.getActiveUser(transaction, employeeId);
-            if (!employee) throw validationError([`Row ${index + 1}: Selected employee must be an active user.`]);
+            if (!employee) throw validationError([`Row ${index + 1}: Selected employee must be an active user with Task Tracker access (grade 303 and above).`]);
             names.set(employeeId, employee.FullName);
         }
 

@@ -1,6 +1,7 @@
 const { sql } = require("../config/db");
 const { TaskStatus, TASK_DONE_RECENT_DAYS } = require("../constants/taskConstants");
 const { sqlFiscalYear } = require("../utils/moduleReport");
+const { goalAccessSql } = require("../utils/goalAccess");
 
 /**
  * ============================================================
@@ -419,8 +420,8 @@ const hasDirectReports = async (db, viewerId) => {
 };
 
 /**
- * Active users, for the Assign Task employee dropdown (the Business Head
- * themselves left out)
+ * Active users with Task Tracker access (grade 303 and above), for the
+ * Assign Task employee dropdown (the Business Head themselves left out)
  */
 const getAssignableEmployees = async (db, excludeUserId) => {
 
@@ -438,6 +439,7 @@ const getAssignableEmployees = async (db, excludeUserId) => {
                 ON d.DepartmentID = u.DepartmentID
             WHERE u.IsActive = 1
               AND u.UserID <> @UserID
+              AND ${goalAccessSql("u")}
             ORDER BY u.FirstName, u.LastName;
         `);
 
@@ -445,7 +447,8 @@ const getAssignableEmployees = async (db, excludeUserId) => {
 };
 
 /**
- * Active user by id ({ UserID, FullName }), or null
+ * Active user with Task Tracker access (grade 303 and above) by id
+ * ({ UserID, FullName }), or null. Used to check a task's assignee.
  */
 const getActiveUser = async (db, userId) => {
 
@@ -455,7 +458,8 @@ const getActiveUser = async (db, userId) => {
             SELECT u.UserID, ${fullName("u")} AS FullName
             FROM dbo.Users u
             WHERE u.UserID = @UserID
-              AND u.IsActive = 1;
+              AND u.IsActive = 1
+              AND ${goalAccessSql("u")};
         `);
 
     return result.recordset[0] || null;
@@ -522,8 +526,8 @@ const getTaskFilterOptions = async (db, { scope, viewerId }) => {
 };
 
 /**
- * Every active user with their task counts (deleted tasks left out), for
- * the All Tasks Employees view. Users with no tasks are included.
+ * Every active user with Task Tracker access (grade 303 and above) with
+ * their task counts (deleted tasks left out), for the All Tasks Employees view. Users with no tasks are included.
  *   OpenCount     - not Done
  *   OverdueCount  - not Done and DueDate before today
  *   DoneRecentCount - Done in the last TASK_DONE_RECENT_DAYS days
@@ -560,6 +564,7 @@ const getEmployeeTaskSummary = async (db) => {
               AND t.IsDeleted = 0
         ) c
         WHERE u.IsActive = 1
+          AND ${goalAccessSql("u")}
         ORDER BY u.FirstName, u.LastName;
     `);
 

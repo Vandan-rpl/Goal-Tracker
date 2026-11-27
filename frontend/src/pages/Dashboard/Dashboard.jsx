@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
-  ChevronDown,
+  ChevronRight,
   Calendar,
   Users,
   CheckCircle2,
@@ -26,11 +26,7 @@ import {
   getGoalStatusLabel,
   getGoalDisplayStatus,
   getGoalStatusLabelOf,
-  formatGoalStartDate,
-  isGoalActiveForOwner,
-  isGoalAwaitingStart,
 } from "../../utils/goalStatus";
-import MarkCompleteButton from "../../components/GoalCompletion/MarkCompleteButton";
 import QuarterSummaryTable from "../../components/QuarterSummaryTable/QuarterSummaryTable";
 import { formatDisplayDate } from "../../utils/dateTime";
 import TaskWorkbookFrame, {
@@ -151,8 +147,7 @@ function formatDate(dateStr) {
 // ---------------------------------------------------------------------------
 // GOAL CARD
 // ---------------------------------------------------------------------------
-function GoalCard({ goal, onGoalChanged }) {
-  const [open, setOpen] = useState(false);
+function GoalCard({ goal }) {
   const isCompleted = normalizeGoalStatus(goal.GoalStatus) === "completed";
   const style = isCompleted
     ? STATUS_STYLES.Completed
@@ -161,23 +156,17 @@ function GoalCard({ goal, onGoalChanged }) {
   const totalSubGoals = Number(goal.TotalSubGoalCount || 0);
   const completedSubGoals = Number(goal.CompletedSubGoalCount || 0);
   const completionRejectionRemark = getCompletionRejectionRemark(goal);
-  // My Goals lists only the user's own goals, so the owner check is implicit.
-  const canWorkOnGoal = goal.IsGoalOwner !== false && isGoalActiveForOwner(goal);
-  // Mark Complete for any finally Approved, started goal, with or without
-  // sub-goals (pending sub-goals keep their status). Ticking the last
-  // sub-goal on the goal page still submits it too.
-  const canMarkComplete = canWorkOnGoal;
   const displayedTimeline = goal.DashboardTimeline || goal.Timeline;
   const days = daysUntil(displayedTimeline);
   const normalizedStatus = normalizeGoalStatus(goal.GoalStatus);
   const overdue = days !== null && days < 0 && !["completed", "cancelled"].includes(normalizedStatus);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full text-left p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 cursor-pointer"
-      >
+    <Link
+      to={`/goals/view/${goal.GoalID}`}
+      className="block bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
+    >
+      <div className="w-full text-left p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <span className="text-xs font-semibold text-gray-400">#{goal.GoalNumber}</span>
@@ -227,69 +216,10 @@ function GoalCard({ goal, onGoalChanged }) {
               </span>
             )}
           </div>
-          <ChevronDown
-            size={18}
-            className={`text-gray-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          />
+          <ChevronRight size={18} className="text-gray-400 shrink-0" />
         </div>
-      </button>
-
-      {open && (
-        <div className="px-5 sm:px-6 pb-6 pt-1 border-t border-gray-100 space-y-5">
-          {goal.GoalDescription && (
-            <p className="text-sm text-gray-600 leading-relaxed">{goal.GoalDescription}</p>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-xs font-semibold text-gray-400 mb-1">Meet target</p>
-              <p className="text-sm text-gray-800">{goal.MeetPerformance || "—"}</p>
-            </div>
-            <div className="bg-indigo-50/60 rounded-xl p-4">
-              <p className="text-xs font-semibold text-indigo-400 mb-1">Exceed target</p>
-              <p className="text-sm text-gray-800">{goal.ExceedPerformance || "—"}</p>
-            </div>
-          </div>
-
-          {goal.Measurability && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <p className="text-xs font-semibold text-gray-400 mb-1">Measurability</p>
-              <p className="text-sm text-gray-800">{goal.Measurability}</p>
-              {goal.ValidationSource && (
-                <p className="text-xs text-gray-400 mt-2">Source: {goal.ValidationSource}</p>
-              )}
-            </div>
-          )}
-
-          {goal.CrossFunctionalGoal && goal.JointAccountability && (
-            <p className="text-xs text-gray-500 flex items-center gap-1">
-              <Users size={12} /> Joint accountability: {goal.JointAccountability}
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {goal.IsGoalOwner !== false && isGoalAwaitingStart(goal) && (
-              <span className="mr-auto text-xs text-amber-700">
-                Starts {formatGoalStartDate(goal)} — completion opens then.
-              </span>
-            )}
-            <Link
-              to={`/goals/view/${goal.GoalID}`}
-              className="inline-flex items-center justify-center px-4 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold transition"
-            >
-              {canWorkOnGoal && totalSubGoals > 0 ? "Update sub-goals" : "View goal"}
-            </Link>
-            {canMarkComplete && (
-              <MarkCompleteButton
-                goalId={goal.GoalID}
-                goalTitle={goal.GoalTitle}
-                onCompleted={onGoalChanged}
-              />
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
+    </Link>
   );
 }
 
@@ -642,7 +572,7 @@ export default function GoalDashboard() {
                 aria-label="Filter goals by status"
                 className={`${taskFilterControlClass} rounded-lg sm:w-auto`}
               >
-                <option value="All">All statuses ({goals.length})</option>
+                <option value="All">All Status ({goals.length})</option>
                 {statusCards.map((status) => (
                   <option key={status} value={status}>
                     {getGoalStatusLabel(status)} ({statusCounts[status] || 0})
@@ -652,7 +582,7 @@ export default function GoalDashboard() {
             </div>
           </div>
           {filtered.map((goal) => (
-            <GoalCard key={goal.GoalID} goal={goal} onGoalChanged={fetchGoals} />
+            <GoalCard key={goal.GoalID} goal={goal} />
           ))}
           {filtered.length === 0 && (
             <div className="text-center py-16 text-slate-500 text-sm">No goals match this filter.</div>

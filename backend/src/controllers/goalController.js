@@ -206,8 +206,6 @@ const TRACKED_GOAL_FIELDS = [
   "Weightage",
   "Priority",
   "Timeline",
-  "MeetPerformance",
-  "ExceedPerformance",
   "ValidationSource",
   "CrossFunctionalGoal",
   "GoalCategory",
@@ -1487,8 +1485,6 @@ const insertGoalRow = async (transaction, goal) => {
     .input("Timeline", sql.Date, goal.Timeline)
     .input("Quarter", sql.VarChar, goal.Quarter)
     .input("QuarterEndDate", sql.Date, goal.QuarterEndDate)
-    .input("MeetPerformance", sql.NVarChar, goal.MeetPerformance || null)
-    .input("ExceedPerformance", sql.NVarChar, goal.ExceedPerformance || null)
     .input("ValidationSource", sql.NVarChar, goal.ValidationSource || null)
     .input("CrossFunctionalGoal", sql.Bit, goal.CrossFunctionalGoal ? 1 : 0)
     .input("GoalCategory", sql.NVarChar, goal.GoalCategory || null)
@@ -1500,15 +1496,15 @@ const insertGoalRow = async (transaction, goal) => {
     ).query(`
             INSERT INTO dbo.Goals (
                 UserID, GoalNumber, GoalTitle, GoalDescription, Measurability,
-                JointAccountability, Weightage, Priority, StartDate, Timeline, Quarter, QuarterEndDate, MeetPerformance,
-                ExceedPerformance, ValidationSource, CrossFunctionalGoal, GoalCategory,
+                JointAccountability, Weightage, Priority, StartDate, Timeline, Quarter, QuarterEndDate,
+                ValidationSource, CrossFunctionalGoal, GoalCategory,
                 GoalStatus, DraftVersion, SubmittedDate, CreatedDate
             )
             OUTPUT INSERTED.GoalID
             VALUES (
                 @UserID, @GoalNumber, @GoalTitle, @GoalDescription, @Measurability,
-                @JointAccountability, @Weightage, @Priority, @StartDate, @Timeline, @Quarter, @QuarterEndDate, @MeetPerformance,
-                @ExceedPerformance, @ValidationSource, @CrossFunctionalGoal, @GoalCategory,
+                @JointAccountability, @Weightage, @Priority, @StartDate, @Timeline, @Quarter, @QuarterEndDate,
+                @ValidationSource, @CrossFunctionalGoal, @GoalCategory,
                 @GoalStatus, 1, @SubmittedDate, GETDATE()
             )
         `);
@@ -1657,8 +1653,6 @@ const createGoal = async (req, res) => {
     Priority,
     StartDate,
     Timeline,
-    MeetPerformance,
-    ExceedPerformance,
     ValidationSource,
     CrossFunctionalGoal,
     GoalCategory,
@@ -1742,8 +1736,6 @@ const createGoal = async (req, res) => {
         GoalTitle,
         GoalDescription,
         Measurability,
-        MeetPerformance,
-        ExceedPerformance,
         Weightage,
         GoalCategory,
         Timeline: timelineKey,
@@ -1826,8 +1818,6 @@ const createGoal = async (req, res) => {
       Timeline: timelineKey,
       Quarter: goalQuarter,
       QuarterEndDate: goalQuarterEndDate,
-      MeetPerformance,
-      ExceedPerformance,
       ValidationSource,
       CrossFunctionalGoal,
       GoalCategory,
@@ -1902,8 +1892,6 @@ const updateGoal = async (req, res) => {
     Priority,
     StartDate,
     Timeline,
-    MeetPerformance,
-    ExceedPerformance,
     ValidationSource,
     CrossFunctionalGoal,
     GoalCategory,
@@ -2120,14 +2108,6 @@ const updateGoal = async (req, res) => {
         : existingGoal.Measurability;
     const finalWeightage = Weightage;
     const finalPriority = Priority;
-    const finalMeetPerf =
-      canEditAllFields && MeetPerformance !== undefined
-        ? MeetPerformance
-        : existingGoal.MeetPerformance;
-    const finalExceedPerf =
-      canEditAllFields && ExceedPerformance !== undefined
-        ? ExceedPerformance
-        : existingGoal.ExceedPerformance;
     const finalValidation = canEditAllFields
       ? ValidationSource
       : existingGoal.ValidationSource;
@@ -2215,8 +2195,6 @@ const updateGoal = async (req, res) => {
           GoalTitle: finalGoalTitle,
           GoalDescription: finalGoalDesc,
           Measurability: finalMeasurability,
-          MeetPerformance: finalMeetPerf,
-          ExceedPerformance: finalExceedPerf,
           Weightage: finalWeightage,
           GoalCategory: finalCategory,
           Timeline: timelineKey || Timeline,
@@ -2258,12 +2236,6 @@ const updateGoal = async (req, res) => {
     updateRequest.input("Priority", sql.VarChar, finalPriority);
     updateRequest.input("StartDate", sql.Date, startDateKey);
     updateRequest.input("Timeline", sql.Date, timelineKey || Timeline);
-    updateRequest.input("MeetPerformance", sql.NVarChar, finalMeetPerf || null);
-    updateRequest.input(
-      "ExceedPerformance",
-      sql.NVarChar,
-      finalExceedPerf || null,
-    );
     updateRequest.input(
       "ValidationSource",
       sql.NVarChar,
@@ -2280,8 +2252,8 @@ const updateGoal = async (req, res) => {
     UPDATE dbo.Goals SET 
         GoalNumber = @GoalNumber, GoalTitle = @GoalTitle, GoalDescription = @GoalDescription,
         Measurability = @Measurability, JointAccountability = @JointAccountability, Weightage = @Weightage,
-        Priority = @Priority, StartDate = @StartDate, Timeline = @Timeline, MeetPerformance = @MeetPerformance,
-        ExceedPerformance = @ExceedPerformance, ValidationSource = @ValidationSource,
+        Priority = @Priority, StartDate = @StartDate, Timeline = @Timeline,
+        ValidationSource = @ValidationSource,
         CrossFunctionalGoal = @CrossFunctionalGoal, GoalCategory = @GoalCategory, 
         GoalStatus = @GoalStatus,
         Quarter = @Quarter,
@@ -2315,8 +2287,6 @@ const updateGoal = async (req, res) => {
       Priority: finalPriority,
       StartDate: startDateKey,
       Timeline: timelineKey || Timeline,
-      MeetPerformance: finalMeetPerf,
-      ExceedPerformance: finalExceedPerf,
       ValidationSource: finalValidation,
       CrossFunctionalGoal: finalCrossFunc,
       GoalCategory: finalCategory,
@@ -2515,8 +2485,8 @@ const getGoalSheet = async (req, res) => {
       .input("UserID", sql.Int, userId)
       .input("Quarter", sql.VarChar, bounds.label).query(`
         SELECT GoalID, GoalNumber, GoalTitle, GoalDescription, Measurability,
-               Weightage, Priority, StartDate, Timeline, MeetPerformance,
-               ExceedPerformance, ValidationSource, CrossFunctionalGoal,
+               Weightage, Priority, StartDate, Timeline,
+               ValidationSource, CrossFunctionalGoal,
                GoalCategory, GoalStatus
         FROM dbo.Goals
         WHERE UserID = @UserID
@@ -2544,8 +2514,6 @@ const getGoalSheet = async (req, res) => {
           Priority: goal.Priority,
           StartDate: toDateKey(goal.StartDate),
           Timeline: toDateKey(goal.Timeline),
-          MeetPerformance: goal.MeetPerformance,
-          ExceedPerformance: goal.ExceedPerformance,
           ValidationSource: goal.ValidationSource,
           CrossFunctionalGoal: Boolean(goal.CrossFunctionalGoal),
           GoalCategory: goal.GoalCategory,
@@ -2736,8 +2704,6 @@ const saveGoalSheet = async (req, res) => {
             GoalTitle: goal.GoalTitle,
             GoalDescription: goal.GoalDescription,
             Measurability: goal.Measurability,
-            MeetPerformance: goal.MeetPerformance,
-            ExceedPerformance: goal.ExceedPerformance,
             Weightage: goal.Weightage,
             GoalCategory: goal.GoalCategory,
             Timeline: timelineKey,
@@ -2806,14 +2772,6 @@ const saveGoalSheet = async (req, res) => {
         Priority: goal.Priority,
         StartDate: startDateKey,
         Timeline: timelineKey,
-        MeetPerformance:
-          goal.MeetPerformance !== undefined
-            ? goal.MeetPerformance || null
-            : existing?.MeetPerformance ?? null,
-        ExceedPerformance:
-          goal.ExceedPerformance !== undefined
-            ? goal.ExceedPerformance || null
-            : existing?.ExceedPerformance ?? null,
         ValidationSource:
           goal.ValidationSource !== undefined
             ? goal.ValidationSource || null
@@ -2848,8 +2806,6 @@ const saveGoalSheet = async (req, res) => {
           .input("Timeline", sql.Date, values.Timeline)
           .input("Quarter", sql.VarChar, quarter)
           .input("QuarterEndDate", sql.Date, quarterEndDate)
-          .input("MeetPerformance", sql.NVarChar, values.MeetPerformance)
-          .input("ExceedPerformance", sql.NVarChar, values.ExceedPerformance)
           .input("ValidationSource", sql.NVarChar, values.ValidationSource)
           .input("CrossFunctionalGoal", sql.Bit, values.CrossFunctionalGoal)
           .input("GoalCategory", sql.NVarChar, values.GoalCategory)
@@ -2858,8 +2814,8 @@ const saveGoalSheet = async (req, res) => {
                 GoalNumber = @GoalNumber, GoalTitle = @GoalTitle, GoalDescription = @GoalDescription,
                 Measurability = @Measurability, JointAccountability = @JointAccountability, Weightage = @Weightage,
                 Priority = @Priority, StartDate = @StartDate, Timeline = @Timeline,
-                Quarter = @Quarter, QuarterEndDate = @QuarterEndDate, MeetPerformance = @MeetPerformance,
-                ExceedPerformance = @ExceedPerformance, ValidationSource = @ValidationSource,
+                Quarter = @Quarter, QuarterEndDate = @QuarterEndDate,
+                ValidationSource = @ValidationSource,
                 CrossFunctionalGoal = @CrossFunctionalGoal, GoalCategory = @GoalCategory,
                 GoalStatus = @GoalStatus,
                 SubmittedDate = CASE WHEN @GoalStatus = 'Submitted' THEN GETDATE() ELSE SubmittedDate END,

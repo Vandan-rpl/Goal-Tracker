@@ -180,7 +180,7 @@ const MyIdeas = () => {
               onChange={(e) => changeStatus(e.target.value)}
               className={selectClass}
             >
-              <option value="">All Statuses</option>
+              <option value="">All Status</option>
               {IDEA_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {getIdeaStatusLabel(s)}

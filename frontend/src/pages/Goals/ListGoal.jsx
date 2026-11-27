@@ -173,7 +173,7 @@ const ListGoal = () => {
               onChange={(e) => setStatus(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">All Statuses</option>
+              <option value="">All Status</option>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
                   {getGoalStatusLabel(s)}
